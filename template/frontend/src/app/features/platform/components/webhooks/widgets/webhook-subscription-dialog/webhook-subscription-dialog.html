@@ -119,7 +119,7 @@
                 </label>
               </div>
               @if (eventTypesLoading()) {
-                <app-list-loading class="ps-5" [rows]="3" checkbox />
+                <app-list-loading class="ps-5" [rows]="3" [lines]="1" checkbox />
               } @else if (eventTypesError(); as error) {
                 <p role="alert" class="text-sm">
                   {{ error }}

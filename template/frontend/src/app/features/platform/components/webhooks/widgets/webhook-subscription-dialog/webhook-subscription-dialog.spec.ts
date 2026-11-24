@@ -128,10 +128,18 @@ describe('WebhookSubscriptionDialog', () => {
     expect(events.querySelector('app-list-loading')).not.toBeNull();
     expect(events.querySelector('hlm-spinner')).toBeNull();
     expect(content.offsetHeight).toBe(height);
+    // 事件项是单行勾选：骨架每行一个勾选框加一行文字，勾选框与最终的事件勾选框同一缩进
+    const skeletonRows = [...events.querySelectorAll('app-list-loading [aria-hidden="true"]')];
+    expect(skeletonRows.length).toBeGreaterThan(0);
+    for (const row of skeletonRows)
+      expect(row.querySelectorAll('[hlmSkeleton]:not(.size-4)')).toHaveLength(1);
+    const skeletonLeft = skeletonRows[0].querySelector('.size-4')!.getBoundingClientRect().left;
 
     fixture.componentRef.setInput('eventTypesLoading', false);
     await fixture.whenStable();
-    expect(content.querySelector('[id="webhook-event-user.created"]')).not.toBeNull();
+    const eventCheckbox = content.querySelector('[id="webhook-event-user.created"]')!;
+    expect(eventCheckbox).not.toBeNull();
+    expect(eventCheckbox.getBoundingClientRect().left).toBe(skeletonLeft);
     expect(content.offsetHeight).toBe(height);
   });
 

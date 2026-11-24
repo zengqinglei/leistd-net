@@ -275,6 +275,21 @@ describe('ExternalLoginProviders', () => {
     expect(stateOf('github')).toBe(text('off', 'Off'));
   });
 
+  // 重试在途时只有加载态：上一次的失败说明先撤下，不与状态骨架同屏
+  it('drops the previous failure as soon as a retry starts', async () => {
+    await render(throwError(() => new Error('The status service is unavailable.')));
+    expect(host().querySelector('[data-testid="external-login-status-error"]')).not.toBeNull();
+
+    getStatus.mockReturnValue(new Subject<ExternalLoginStatusOutputDto>());
+    host().querySelector<HTMLButtonElement>('[data-testid="external-login-status-retry"]')!.click();
+    await settle();
+
+    expect(host().querySelector('[data-testid="external-login-status-error"]')).toBeNull();
+    expect(
+      cardOf('github').querySelector('[data-testid="external-login-state-loading"]'),
+    ).not.toBeNull();
+  });
+
   it('shows each provider as off with its callback URL when none is enabled', async () => {
     await render({
       providers: [provider(), provider({ provider: 'google', callbackUrl: 'https://cb/google' })],

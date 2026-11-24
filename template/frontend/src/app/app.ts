@@ -71,6 +71,7 @@ const APP_NAME = 'Template Project';
       }
       @case ('loading') {
         <div class="h-screen w-full flex items-center justify-center bg-background">
+          <!-- eslint-disable-next-line local/spinner-placement -- 应用启动：整页处理，没有可预知的内容形状 -->
           <hlm-spinner class="text-4xl" [attr.aria-label]="loadingLabel()" />
         </div>
       }

@@ -141,6 +141,8 @@ export class DistributedEventRecordSheet {
   readonly detail = signal<EventDetail | null>(null);
   protected readonly detailError = signal<string | null>(null);
   protected readonly detailLoading = signal(false);
+  /** 正文当前对应的记录（视图 + ID）；重取同一条时保留已显示的详情与载荷，换记录才清掉。 */
+  private shownRecord: string | null = null;
   /** 详情加载失败后就地重试：只重发当前记录的详情请求。 */
   private readonly retryVersion = signal(0);
   protected retryDetail(): void {
@@ -246,11 +248,15 @@ export class DistributedEventRecordSheet {
     )
       .pipe(
         switchMap(({ id, view }) => {
-          this.payloadSubscription?.unsubscribe();
-          this.payload.set(null);
-          this.payloadError.set(null);
-          this.payloadLoading.set(false);
-          this.detail.set(null);
+          const record = id && view !== 'catalog' ? `${view}:${id}` : null;
+          if (record === null || record !== this.shownRecord) {
+            this.payloadSubscription?.unsubscribe();
+            this.payload.set(null);
+            this.payloadError.set(null);
+            this.payloadLoading.set(false);
+            this.detail.set(null);
+          }
+          this.shownRecord = record;
           this.detailError.set(null);
           if (!id || view === 'catalog') return of(null);
           this.detailLoading.set(true);

@@ -68,6 +68,7 @@ const onPush = '@angular-eslint/prefer-on-push-component-change-detection';
 const inject = '@angular-eslint/prefer-inject';
 const statusBranch = 'local/no-status-code-branch';
 const syntax = 'no-restricted-syntax';
+const spinner = 'local/spinner-placement';
 const imports = 'no-restricted-imports';
 const dto = 'Declare API contract types (*Dto)';
 const title = 'Set LayoutService.title';
@@ -77,6 +78,15 @@ const weight = 'Use font weights 400/500/600';
 const palette = 'instead of palette colors';
 const hex = 'instead of hex color values';
 const fontSize = 'Use the font-size tiers';
+const inlineTemplate = (template) => `import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-demo',
+  template: \`${template}\`,
+})
+export class Demo {}
+`;
+const spinnerWaiver = '<!-- eslint-disable-next-line local/spinner-placement -- 整页处理 -->';
 
 /**
  * @type {{ name: string, file: string, code: string, rule: string, message?: string, expect: 'report' | 'clean' }[]}
@@ -262,6 +272,23 @@ export class Demo {}
   { name: '字号 合法：text-xs', file: `${feature}/demo.html`, code: '<span class="text-xs">x</span>', rule: syntax, message: fontSize, expect: 'clean' },
   { name: '字号 例外：ng-icon 图标尺寸', file: `${feature}/demo.html`, code: '<ng-icon name="lucideX" class="text-[10px]" />', rule: syntax, message: fontSize, expect: 'clean' },
   { name: '字号 例外：hlm-spinner 尺寸', file: `${feature}/demo.html`, code: '<hlm-spinner class="text-[10px]" />', rule: syntax, message: fontSize, expect: 'clean' },
+
+  // 加载态：hlm-spinner 只放在按钮、链接里；例外在元素上一行局部关闭，只管紧随的那一个
+  { name: 'spinner 违规：裸 spinner', file: `${feature}/demo.html`, code: '<div class="flex justify-center"><hlm-spinner /></div>', rule: spinner, expect: 'report' },
+  { name: 'spinner 违规：与按钮同级', file: `${feature}/demo.html`, code: '<div><button hlmBtn type="button">Save</button><hlm-spinner /></div>', rule: spinner, expect: 'report' },
+  { name: 'spinner 违规：组件内联模板', file: `${feature}/demo.ts`, code: inlineTemplate('<hlm-spinner />'), rule: spinner, expect: 'report' },
+  {
+    name: 'spinner 违规：原按文件豁免的文件里新增的裸 spinner',
+    file: 'src/app/features/settings/components/setting-section/setting-section.html',
+    code: '<p><hlm-spinner /></p>',
+    rule: spinner,
+    expect: 'report',
+  },
+  { name: 'spinner 违规：局部关闭只管下一行', file: `${feature}/demo.html`, code: `${spinnerWaiver}\n<hlm-spinner />\n<hlm-spinner />`, rule: spinner, expect: 'report' },
+  { name: 'spinner 合法：按钮内', file: `${feature}/demo.html`, code: '<button hlmBtn type="button"><hlm-spinner data-icon="inline-start" />Save</button>', rule: spinner, expect: 'clean' },
+  { name: 'spinner 合法：链接内', file: `${feature}/demo.html`, code: '<a hlmBtn href="/next">@if (busy) {<hlm-spinner />}Next</a>', rule: spinner, expect: 'clean' },
+  { name: 'spinner 例外：外置模板局部关闭', file: `${feature}/demo.html`, code: `<div>\n  ${spinnerWaiver}\n  <hlm-spinner />\n</div>`, rule: spinner, expect: 'clean' },
+  { name: 'spinner 例外：内联模板局部关闭', file: `${feature}/demo.ts`, code: inlineTemplate(`<div>\n  ${spinnerWaiver}\n  <hlm-spinner />\n</div>`), rule: spinner, expect: 'clean' },
 ];
 
 const failures = [];

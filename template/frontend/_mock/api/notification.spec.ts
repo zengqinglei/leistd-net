@@ -57,6 +57,33 @@ describe('notification mock', () => {
       NOTIFICATIONS.length,
     );
   });
+
+  // 端点参数是 int：非十进制整数字面量或超出 Int32 在绑定阶段就是 400，没有字段错误；越界的整数才是字段错误
+  it('rejects a malformed or out-of-Int32 offset or limit as a bad request without field errors', () => {
+    const malformed: Record<string, string>[] = [
+      { offset: '1e1' },
+      { offset: '1.5' },
+      { offset: '' },
+      { offset: '2147483648' },
+      { limit: '1e1' },
+      { limit: '10.0' },
+      { limit: '' },
+      { limit: '-2147483649' },
+    ];
+    for (const queryParams of malformed) {
+      let thrown: unknown;
+      try {
+        list(queryParams);
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown, JSON.stringify(queryParams)).toBeInstanceOf(MockException);
+      expect((thrown as MockException).status).toBe(400);
+      expect((thrown as MockException).error).toBeUndefined();
+    }
+    expect(list({ offset: '2147483647' }).items).toEqual([]);
+    expect(rejectedField({ limit: '-2147483648' })).toBe('limit');
+  });
   //#if (IncludeLocalization)
 
   it('answers in Chinese for a Chinese interface and in English otherwise', () => {

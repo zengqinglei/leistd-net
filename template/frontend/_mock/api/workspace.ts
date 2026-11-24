@@ -1,4 +1,7 @@
 //#if (TenantWorkspace)
+//#if (LocalIdentity)
+import { TENANT_STAFF_CANDIDATE_LIMIT } from '../../src/app/features/platform/dtos/tenant-staff.dto';
+//#endif
 // prettier-ignore
 import { MockException,
   //#if (LocalIdentity)
@@ -18,7 +21,6 @@ import { TENANTS,
   //#endif
 } from '../data/tenant';
 //#if (LocalIdentity)
-import { TENANT_STAFF_CANDIDATE_LIMIT } from '../../src/app/features/platform/dtos/tenant-staff.dto';
 import { USERS } from '../data/user';
 //#endif
 import { STAFF_ACCESS } from '../data/workspace';

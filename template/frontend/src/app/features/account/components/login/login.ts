@@ -470,6 +470,14 @@ export class Login implements OnInit {
   );
 
   /**
+   * 认证在途（口令、通行密钥，从发起到交接完成）也不许改租户：成功后记住的、第二步沿用的都是当前租户，
+   * 中途改了就与已发出的请求对不上。与 {@link tenantSelectionBlocked} 分开：只禁用，不收起「切换租户」。
+   */
+  readonly tenantChangeBlocked = computed(
+    () => this.tenantSelectionBlocked() || this.isLoading() || this.passkeyBusy(),
+  );
+
+  /**
    * 租户上下文未定案时认证入口一律等待。与 {@link tenantSelectionBlocked} 不同：已定案时
    * 不许选择但允许登录；探测未回来或失败时提交会落到与界面不一致的上下文。
    */
@@ -482,8 +490,8 @@ export class Login implements OnInit {
 
   async onConfirmTenant(): Promise<void> {
     const name = this.tenantName().trim();
-    // 探测未回来 / 域名已定案时不接受手选：前者会被随后的探测结果覆盖，后者本就不该能改。
-    if (!name || this.tenantSelectionBlocked()) {
+    // 探测未回来 / 域名已定案时不接受手选：前者会被随后的探测结果覆盖，后者本就不该能改；认证在途同样不接受。
+    if (!name || this.tenantChangeBlocked()) {
       return;
     }
 
@@ -500,7 +508,7 @@ export class Login implements OnInit {
 
   clearTenant(): void {
     // 与手选同一条闸门：清除也是一次手动改租户，探测未回来或失败时同样不该放行。
-    if (this.tenantSelectionBlocked()) {
+    if (this.tenantChangeBlocked()) {
       return;
     }
 
@@ -514,6 +522,9 @@ export class Login implements OnInit {
 
   /** 应用输入框里的租户：填了名称切到该租户，留空回到宿主。 */
   async applyTenantInput(): Promise<void> {
+    if (this.tenantChangeBlocked()) {
+      return;
+    }
     if (this.tenantName().trim()) {
       await this.onConfirmTenant();
     } else {

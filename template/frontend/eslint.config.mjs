@@ -277,13 +277,27 @@ const templateClassSyntax = [
 
 /*
  * 加载态（frontend-ui.md 第 1 节）：首次加载用骨架占位，hlm-spinner 只放在按钮、链接按钮与菜单项里
- * （模板里都是 button / a）。例外按文件登记在下方 html 段：整页处理过程与不在按钮上的动作进度。
+ * （模板里都是 button / a）。单独成规则，例外在元素上一行局部关闭本规则
+ * （`<!-- eslint-disable-next-line local/spinner-placement -->`），不按文件豁免、不连带类名检查。
  */
-const spinnerPlacementSyntax = {
-  selector:
-    "Element[name='hlm-spinner']:not(Element[name=/^(button|a)$/] Element[name='hlm-spinner'])",
-  message:
-    'Use a skeleton for first loads; hlm-spinner belongs inside a button, link button or menu item (frontend-ui.md §1).',
+const spinnerPlacement = {
+  meta: {
+    type: 'suggestion',
+    schema: [],
+    messages: {
+      placement:
+        'Use a skeleton for first loads; hlm-spinner belongs inside a button, link button or menu item (frontend-ui.md §1).',
+    },
+  },
+  create(context) {
+    return {
+      "Element[name='hlm-spinner']:not(Element[name=/^(button|a)$/] Element[name='hlm-spinner'])"(
+        node,
+      ) {
+        context.report({ node, messageId: 'placement' });
+      },
+    };
+  },
 };
 
 /** 提交按钮保持可点，字段错误由提交入口统一展示。 */
@@ -451,23 +465,15 @@ export default defineConfig(
   {
     files: ['**/*.html'],
     extends: [...angular.configs.templateRecommended, ...angular.configs.templateAccessibility],
-    plugins: { local: { rules: { 'no-invalid-disabled': noInvalidDisabled } } },
-    rules: {
-      'no-restricted-syntax': ['error', ...templateClassSyntax, spinnerPlacementSyntax],
-      'local/no-invalid-disabled': 'error',
+    plugins: {
+      local: {
+        rules: { 'no-invalid-disabled': noInvalidDisabled, 'spinner-placement': spinnerPlacement },
+      },
     },
-  },
-  {
-    // 居中 spinner 的例外：应用启动与外部登录回调是没有可预知内容形状的整页处理；
-    // 头像上传与设置自动保存是动作进度，但不在按钮上
-    files: [
-      'src/app/app.ts/**/*.html',
-      'src/app/features/account/components/external-auth-callback/external-auth-callback.html',
-      'src/app/features/account/components/profile-panel/profile-panel.html',
-      'src/app/features/settings/components/setting-section/setting-section.html',
-    ],
     rules: {
       'no-restricted-syntax': ['error', ...templateClassSyntax],
+      'local/no-invalid-disabled': 'error',
+      'local/spinner-placement': 'error',
     },
   },
 );

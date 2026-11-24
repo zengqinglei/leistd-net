@@ -170,6 +170,94 @@ describe('TenantDetailDialog', () => {
     expect(text()).toContain(label('tenants.connectionsEmpty'));
   });
 
+  // 骨架按连接行的结构占位：带边框、右侧有两个按钮位，行高与交付后的连接行一致
+  it('shapes the connection skeleton like a registered connection row', async () => {
+    await setUp();
+    await open(tenant('t-a', 'acme'));
+    const skeleton = dialogHost()!.querySelector<HTMLElement>(
+      '[data-testid="tenant-connections-loading"] [aria-hidden="true"]',
+    )!;
+    expect(skeleton.classList).toContain('border');
+    expect(skeleton.lastElementChild!.querySelectorAll('[hlmSkeleton]')).toHaveLength(2);
+    const skeletonHeight = skeleton.offsetHeight;
+
+    await resolve('t-a', [connectionOf('t-a', 'default')]);
+    const row = dialogHost()!.querySelector<HTMLElement>(
+      '[data-testid="tenant-connections"] > div',
+    )!;
+    expect(row.offsetHeight).toBe(skeletonHeight);
+  });
+
+  // 写后重取：已列出的连接保留并标忙，不换回骨架
+  it('keeps the listed connections busy while they are refetched after a write', async () => {
+    await setUp();
+    const existing = connectionOf('t-a', 'default', 3);
+    await openWith(tenant('t-a', 'acme'), [existing]);
+
+    await component.removeConnection(existing);
+    await fixture.whenStable();
+
+    expect(requested).toEqual(['t-a', 't-a']);
+    expect(dialogHost()!.querySelector('[data-testid="tenant-connections-loading"]')).toBeNull();
+    expect(
+      dialogHost()!.querySelector('[data-testid="tenant-connections"]')!.getAttribute('aria-busy'),
+    ).toBe('true');
+    expect(text()).toContain('default');
+
+    await resolve('t-a', []);
+    expect(text()).toContain(label('tenants.connectionsEmpty'));
+    expect(
+      dialogHost()!.querySelector('[data-testid="tenant-connections"]')!.hasAttribute('aria-busy'),
+    ).toBe(false);
+  });
+
+  // 重取失败：保留已列出的连接，就地说明原因并给重试
+  it('keeps the listed connections and retries in place when a refetch fails', async () => {
+    await setUp();
+    const existing = connectionOf('t-a', 'default', 3);
+    await openWith(tenant('t-a', 'acme'), [existing]);
+    await component.removeConnection(existing);
+    await fixture.whenStable();
+    expect(requested).toEqual(['t-a', 't-a']);
+    pending.get('t-a')!.error(new Error('Connections unavailable'));
+    await fixture.whenStable();
+
+    expect(text()).toContain('Connections unavailable');
+    expect(text()).toContain('default');
+
+    dialogHost()!
+      .querySelector<HTMLButtonElement>('[data-testid="tenant-connections-retry"]')!
+      .click();
+    await fixture.whenStable();
+    expect(requested).toHaveLength(3);
+    expect(text()).not.toContain('Connections unavailable');
+    expect(text()).toContain('default');
+
+    await resolve('t-a', []);
+    expect(text()).toContain(label('tenants.connectionsEmpty'));
+  });
+
+  // 首次读取失败后重试：错误先撤下，期间只有骨架
+  it('retries a failed first load in place and shows the skeleton meanwhile', async () => {
+    await setUp();
+    await open(tenant('t-a', 'acme'));
+    pending.get('t-a')!.error(new Error('Connections unavailable'));
+    await fixture.whenStable();
+    expect(text()).toContain('Connections unavailable');
+
+    dialogHost()!
+      .querySelector<HTMLButtonElement>('[data-testid="tenant-connections-retry"]')!
+      .click();
+    await fixture.whenStable();
+
+    expect(text()).not.toContain('Connections unavailable');
+    expect(
+      dialogHost()!.querySelector('[data-testid="tenant-connections-loading"]'),
+    ).not.toBeNull();
+    await resolve('t-a', [connectionOf('t-a', 'default')]);
+    expect(text()).toContain('default');
+  });
+
   // 一条登记都没有就是"不单独分库"这一档。这句话是界面上唯一能看出当前状态的东西：
   // 没有它，"故意不分库"与"漏登记"就长得一模一样。
   it('states explicitly that the tenant has no separate database when the list is empty', async () => {

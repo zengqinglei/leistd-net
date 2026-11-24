@@ -208,6 +208,70 @@ describe('DistributedEventRecordSheet', () => {
     expect(sheet.querySelector('[data-testid=event-detail-status]')).not.toBeNull();
   });
 
+  // 重取同一条记录（恢复后、列表刷新）：保留已显示的详情与载荷并标忙，不换回骨架
+  it('keeps the shown detail and payload busy while the same record is refetched', async () => {
+    const pending = new Subject<DistributedEventOutboxDetailOutputDto>();
+    const getOutbox = vi.fn().mockReturnValueOnce(of(DETAIL)).mockReturnValueOnce(pending);
+    const sheet = await open(
+      { getOutbox, getOutboxPayload: () => of({ payload: '{"orderId":1}' }) },
+      { recordId: DETAIL.record.id, canManage: true },
+    );
+    fixture.componentInstance.loadPayload();
+    fixture.componentRef.setInput('refreshVersion', 1);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const body = sheet.querySelector('[data-testid=event-detail-body]')!;
+    expect(getOutbox).toHaveBeenCalledTimes(2);
+    expect(sheet.querySelector('app-dialog-loading')).toBeNull();
+    expect(sheet.querySelector('[data-testid=event-detail-status]')).not.toBeNull();
+    expect(fixture.componentInstance.payload()).toBe('{"orderId":1}');
+    expect(body.getAttribute('aria-busy')).toBe('true');
+
+    pending.next({ ...DETAIL, record: { ...DETAIL.record, status: 'deadLettered' } });
+    pending.complete();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.detail()!.record.status).toBe('deadLettered');
+    expect(body.hasAttribute('aria-busy')).toBe(false);
+  });
+
+  // 重取失败：保留原内容，在内容上方说明原因并给重试
+  it('keeps the shown detail and offers a retry when a refetch fails', async () => {
+    const failed = new Subject<DistributedEventOutboxDetailOutputDto>();
+    const getOutbox = vi.fn().mockReturnValueOnce(of(DETAIL)).mockReturnValueOnce(failed);
+    const sheet = await open({ getOutbox }, { recordId: DETAIL.record.id });
+    fixture.componentRef.setInput('refreshVersion', 1);
+    fixture.detectChanges();
+    failed.error(new Error('Detail unavailable'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(sheet.querySelector('[data-testid=event-detail-status]')).not.toBeNull();
+    expect(sheet.querySelector('[data-testid=event-detail-retry]')).not.toBeNull();
+    expect(sheet.textContent).toContain('Detail unavailable');
+  });
+
+  // 换到别的记录：上一条的详情与载荷立即清掉，首次加载照常用骨架
+  it('clears the previous record when another record is opened', async () => {
+    const pending = new Subject<DistributedEventOutboxDetailOutputDto>();
+    const getOutbox = vi.fn().mockReturnValueOnce(of(DETAIL)).mockReturnValueOnce(pending);
+    const sheet = await open(
+      { getOutbox, getOutboxPayload: () => of({ payload: '{"orderId":1}' }) },
+      { recordId: DETAIL.record.id, canManage: true },
+    );
+    fixture.componentInstance.loadPayload();
+    fixture.componentRef.setInput('recordId', '2');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(sheet.querySelector('[data-testid=event-detail-status]')).toBeNull();
+    expect(fixture.componentInstance.payload()).toBeNull();
+    expect(sheet.querySelector('app-dialog-loading')).not.toBeNull();
+  });
+
   it('puts the status next to the title and the view, record and event IDs on the meta line', async () => {
     const sheet = await open({ getOutbox: () => of(DETAIL) }, { recordId: DETAIL.record.id });
     const title = sheet.querySelector('[hlmSheetTitle]')!;

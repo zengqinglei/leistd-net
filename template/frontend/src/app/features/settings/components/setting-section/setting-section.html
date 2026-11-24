@@ -200,6 +200,7 @@
                 @switch (state.status) {
                   @case ('saving') {
                     <span class="text-muted-foreground inline-flex items-center gap-1">
+                      <!-- eslint-disable-next-line local/spinner-placement -- 自动保存进度：随行状态显示，没有按钮 -->
                       <hlm-spinner class="text-[10px]" />
                       {{ t('settings.saving') }}
                     </span>

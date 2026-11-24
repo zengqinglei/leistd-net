@@ -20,16 +20,34 @@ function query(req: MockRequest, name: string): string | undefined {
   return value === undefined || value === null || value === '' ? undefined : String(value);
 }
 
+/**
+ * 与端点的 `int` 参数绑定同一口径：只认十进制整数字面量（可带正负号）且在 Int32 范围内；
+ * `1e1`、小数、空串与超范围值绑定失败，回不带字段错误与业务码的 400。缺省时取默认值。
+ */
+function int32Query(req: MockRequest, name: string, fallback: number): number {
+  const raw = req.queryParams[name];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (value === undefined || value === null) {
+    return fallback;
+  }
+  const text = String(value);
+  const parsed = /^[+-]?\d+$/.test(text) ? Number(text) : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < -2_147_483_648 || parsed > 2_147_483_647) {
+    throw new MockException(400);
+  }
+  return parsed;
+}
+
 /** 与后端同一口径：最新的在前、按 offset/limit 分页；越界是 400 字段错误、不带业务码。 */
 function listPage(req: MockRequest): PagedResultDto<NotificationOutputDto> {
-  const offset = Number(query(req, 'offset') ?? 0);
-  const limit = Number(query(req, 'limit') ?? NOTIFICATION_DEFAULT_LIMIT);
-  if (!Number.isInteger(offset) || offset < 0) {
+  const offset = int32Query(req, 'offset', 0);
+  const limit = int32Query(req, 'limit', NOTIFICATION_DEFAULT_LIMIT);
+  if (offset < 0) {
     throw new MockException(400, {
       errors: [{ field: 'offset', detail: 'Offset must be 0 or greater.' }],
     });
   }
-  if (!Number.isInteger(limit) || limit < 1 || limit > NOTIFICATION_MAXIMUM_LIMIT) {
+  if (limit < 1 || limit > NOTIFICATION_MAXIMUM_LIMIT) {
     throw new MockException(400, {
       errors: [
         { field: 'limit', detail: `Limit must be between 1 and ${NOTIFICATION_MAXIMUM_LIMIT}.` },

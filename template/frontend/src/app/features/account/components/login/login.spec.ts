@@ -1023,6 +1023,47 @@ describe('Login', () => {
       expect(localStorage.getItem('app.tenant')).toBeNull();
     });
 
+    // 口令请求按发起时的租户发出：在途期间不接受改租户，记住的、第二步带的都是它
+    it('keeps the tenant the password was sent under until the response arrives', async () => {
+      byHost = of({ decision: 'undecided' as const });
+      await setUp();
+      const tenantContext = TestBed.inject(TenantContextService);
+      const host = fixture.nativeElement as HTMLElement;
+      component.tenantName.set('acme');
+      await component.onConfirmTenant();
+      let respond!: () => void;
+      authService.login.mockReturnValue(
+        new Observable((subscriber) => {
+          respond = () => {
+            subscriber.next({ requiresTwoFactor: true });
+            subscriber.complete();
+          };
+        }) as never,
+      );
+      fillValidCredentials();
+      const submitted = component.onSubmit();
+      await vi.waitFor(() => expect(authService.login).toHaveBeenCalled());
+      fixture.detectChanges();
+
+      expect(host.querySelector<HTMLButtonElement>('[data-testid="tenant-switch"]')!.disabled).toBe(
+        true,
+      );
+      component.tenantEditing.set(true);
+      fixture.detectChanges();
+      expect(host.querySelector<HTMLInputElement>('#tenantName')!.disabled).toBe(true);
+      component.tenantName.set('other');
+      await component.applyTenantInput();
+      await component.onConfirmTenant();
+      component.clearTenant();
+      expect(tenantContext.current()?.key).toBe('acme');
+
+      respond();
+      await submitted;
+
+      expect(localStorage.getItem('app.tenant')).toContain('acme');
+      expect(router.navigateByUrl).toHaveBeenCalled();
+    });
+
     // 「切换租户」展开的输入框：填名称切到该租户，留空回到宿主，应用后收起
     it('switches to the typed tenant and back to the host when left empty', async () => {
       byHost = of({ decision: 'undecided' as const });
@@ -1302,6 +1343,44 @@ describe('Login', () => {
       expect(router.navigate).toHaveBeenCalledWith(['/workspace']);
       //#endif
     });
+    //#if (IncludeMultiTenancy)
+
+    // 仪式在取选项时绑定租户：交回断言前不接受改租户，记住的是发起时的那个
+    it('keeps the tenant the passkey ceremony began under until sign-in completes', async () => {
+      vi.spyOn(navigator.credentials, 'get').mockResolvedValue(fakeAssertion());
+      await setUpPasskeys();
+      const tenantContext = TestBed.inject(TenantContextService);
+      component.tenantName.set('acme');
+      await component.onConfirmTenant();
+      let respond!: () => void;
+      completePasskeySignIn.mockReturnValue(
+        new Observable<void>((subscriber) => {
+          respond = () => {
+            subscriber.next();
+            subscriber.complete();
+          };
+        }),
+      );
+      passkeyButton()!.click();
+      await vi.waitFor(() => expect(completePasskeySignIn).toHaveBeenCalled());
+      fixture.detectChanges();
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+          '[data-testid="tenant-switch"]',
+        )!.disabled,
+      ).toBe(true);
+      component.tenantName.set('other');
+      await component.onConfirmTenant();
+      component.clearTenant();
+      expect(tenantContext.current()?.key).toBe('acme');
+
+      respond();
+      await vi.waitFor(() => expect(authService.loadUser).toHaveBeenCalled());
+
+      expect(localStorage.getItem('app.tenant')).toContain('acme');
+    });
+    //#endif
 
     it('shows a neutral note when the user cancels and keeps the form usable', async () => {
       vi.spyOn(navigator.credentials, 'get').mockRejectedValue(webAuthnError('NotAllowedError'));
