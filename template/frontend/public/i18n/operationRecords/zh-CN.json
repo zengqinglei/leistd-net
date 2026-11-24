@@ -55,7 +55,6 @@
     "tenant.connection-changed": "改动了租户 {{target}} 的数据库连接",
     "setting.changed": "修改了设置 {{target}}",
     "setting.cleared": "清除了设置 {{target}}",
-    "setting.checked": "测试了设置 {{target}}",
     "setting.test-email-sent": "发送了测试邮件",
     "operation-records.exported": "导出了操作记录",
     "auth.login.succeeded": "登录了系统",

@@ -9,7 +9,10 @@ namespace CompanyName.ProjectName.Application.Settings.AppServices;
 public interface IEmailSettingsAppService : IAppService
 {
     /// <summary>用当前生效的发信参数发一封测试邮件（只在宿主上下文、需要设置管理权限）。</summary>
-    /// <remarks>连接、认证或投递失败时以 400 返回失败原因，管理员据此改参数，而不是去翻服务端日志。</remarks>
+    /// <remarks>
+    /// 失败时以 422 返回原因：连不上服务器 <c>AppSetting:TestEmailUnreachable</c>、认证被拒 <c>AppSetting:TestEmailAuthRejected</c>、
+    /// 投递被拒 <c>AppSetting:TestEmailRejected</c>，归不了类的 <c>AppSetting:TestEmailFailed</c>；管理员据此改参数，而不是去翻服务端日志。
+    /// </remarks>
     Task SendTestEmailAsync(SendTestEmailInputDto input, CancellationToken cancellationToken = default);
 }
 #endif

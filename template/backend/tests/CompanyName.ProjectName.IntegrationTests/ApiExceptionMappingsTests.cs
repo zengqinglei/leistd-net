@@ -109,8 +109,16 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
     [InlineData(AppSettingErrorCodes.EmailVerificationKeyMissing, StatusCodes.Status409Conflict)]
     [InlineData(AuthErrorCodes.EmailCodeSendTooFrequent, StatusCodes.Status429TooManyRequests)]
     [InlineData(AuthErrorCodes.EmailVerificationUnavailable, StatusCodes.Status503ServiceUnavailable)]
-    [InlineData(AppSettingErrorCodes.TestEmailFailed, StatusCodes.Status503ServiceUnavailable)]
+    [InlineData(AppSettingErrorCodes.TestEmailFailed, StatusCodes.Status422UnprocessableEntity)]
+    [InlineData(AppSettingErrorCodes.TestEmailUnreachable, StatusCodes.Status422UnprocessableEntity)]
+    [InlineData(AppSettingErrorCodes.TestEmailAuthRejected, StatusCodes.Status422UnprocessableEntity)]
+    [InlineData(AppSettingErrorCodes.TestEmailRejected, StatusCodes.Status422UnprocessableEntity)]
 #endif
+    [InlineData(AppSettingErrorCodes.TelemetryExportNotConfigured, StatusCodes.Status422UnprocessableEntity)]
+    [InlineData(AppSettingErrorCodes.TelemetryExportUnavailable, StatusCodes.Status422UnprocessableEntity)]
+    [InlineData(AppSettingErrorCodes.TelemetryExportAuthRejected, StatusCodes.Status422UnprocessableEntity)]
+    [InlineData(AppSettingErrorCodes.TelemetryExportUnreachable, StatusCodes.Status422UnprocessableEntity)]
+    [InlineData(AppSettingErrorCodes.TelemetryExportUnexpectedStatus, StatusCodes.Status422UnprocessableEntity)]
     public void Stable_error_codes_keep_their_declared_http_semantics(string code, int expectedStatusCode)
     {
         Assert.Equal(expectedStatusCode, ComposedOptions().CodeStatusMappings[code]);

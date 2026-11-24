@@ -1,4 +1,9 @@
-import { HttpClient, HttpRequest, provideHttpClient } from '@angular/common/http';
+import {
+  HttpClient,
+  HttpErrorResponse,
+  HttpRequest,
+  provideHttpClient,
+} from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import {
   ApplicationRef,
@@ -14,15 +19,16 @@ import { provideRouter } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoLoader, TranslocoService } from '@jsverse/transloco';
 //#endif
-//#if (IncludeLocalization)
+import { toast } from '@spartan-ng/brain/sonner';
 import { EMPTY, firstValueFrom, of, Subject, throwError } from 'rxjs';
-//#else
-import { EMPTY, firstValueFrom, Subject, throwError } from 'rxjs';
-//#endif
 import { userEvent } from 'vitest/browser';
 
+import { ApplicationHttpError } from '../../../../core/errors/application-http-error';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
+//#endif
+//#if (Email)
+import { AuthService } from '../../../../core/services/auth-service';
 //#endif
 //#if (IncludeLocalization)
 import { LanguageService } from '../../../../core/services/language-service';
@@ -2828,14 +2834,51 @@ describe('SettingSection extension points', () => {
   });
 });
 
-// 修改信息与设置测试：只在系统设置里出现；测试按钮在输入框尾部或控件旁，结论以后端快照为准
-describe('SettingSection modification and checks', () => {
-  const checkable = (overrides: Partial<SettingOutputDto> = {}) =>
+/**
+ * 测试区：需要测试的配置块在分组下方放一个测试区，结果只用提示给出。行内没有测试按钮、结论与修改信息，
+ * 机密行的状态只由占位符给出。测试前先等本组的写入落定。
+ */
+describe('SettingSection test panels', () => {
+  //#if (IncludeLocalization)
+  /** 断言到的英文词条，与 `en.json` 一致；不含本地化时同样的句子来自组件的内联英文表。 */
+  const texts: TranslocoLoader = {
+    getTranslation: () =>
+      of({
+        settings: {
+          secretSet: 'Set (type a new value to replace it)',
+          secretUnset: 'Not set',
+          testSaveFirst: "Some settings in this group weren't saved. Fix them, then test again",
+          telemetryTest: {
+            title: 'Test telemetry export',
+            run: 'Test',
+            passed: 'Telemetry export works',
+            passedDescription: 'The endpoint accepted the export',
+            failed: 'Telemetry export test failed',
+            failure: {
+              notConfigured: 'No export endpoint is set. Enter the OTLP endpoint above first',
+              unavailable:
+                "Telemetry is turned off for this deployment (OTEL_SDK_DISABLED), so export can't be tested",
+              authRejected: 'The endpoint rejected the credentials. Check the OTLP headers',
+              unreachable:
+                "Couldn't reach the endpoint, or it didn't answer in time. Check the address and the network",
+              unexpectedStatus:
+                'The endpoint answered with an unexpected status. Check that it is the OTLP base address',
+            },
+          },
+        },
+      }),
+  };
+  //#endif
+  const endpoint = (overrides: Partial<SettingOutputDto> = {}) =>
     row({
-      name: 'Probe.Endpoint',
-      tenantValue: 'https://collector:4318',
-      tenantModification: { time: '2026-11-20T08:00:00Z', modifierName: 'Alice' },
-      isCheckable: true,
+      name: 'Telemetry.Export.Endpoint',
+      displayName: 'OTLP endpoint',
+      group: 'Operations',
+      defaultValue: null,
+      tenantValue: 'http://collector:4318',
+      allowsTenantScope: false,
+      allowsUserScope: false,
+      allowsHostScope: true,
       ...overrides,
     });
 
@@ -2843,7 +2886,20 @@ describe('SettingSection modification and checks', () => {
     settings: SettingOutputDto[],
     scope: 'system' | 'account' = 'system',
   ): Promise<{ fixture: ComponentFixture<SettingSection>; http: HttpTestingController }> {
-    TestBed.configureTestingModule({ imports: [SettingSection], providers: [...pageProviders()] });
+    TestBed.configureTestingModule({
+      imports: [SettingSection],
+      // prettier-ignore
+      providers: [
+        //#if (IncludeLocalization)
+        ...pageProviders(texts),
+        //#else
+        ...pageProviders(),
+        //#endif
+        //#if (Email)
+        { provide: AuthService, useValue: { currentUser: signal({ email: 'admin@example.test' }) } },
+        //#endif
+      ],
+    });
     const fixture = TestBed.createComponent(SettingSection);
     const http = TestBed.inject(HttpTestingController);
     fixture.componentRef.setInput('scope', scope);
@@ -2857,160 +2913,257 @@ describe('SettingSection modification and checks', () => {
   const find = (fixture: ComponentFixture<SettingSection>, testId: string) =>
     (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(`[data-testid="${testId}"]`);
 
-  afterEach(() => TestBed.inject(HttpTestingController).verify());
-
-  it('shows who last changed an overridden value, but not an inherited one or on the account page', async () => {
-    const overridden = await render([checkable({ isCheckable: false })]);
-    expect(find(overridden.fixture, 'setting-modification')).not.toBeNull();
-    TestBed.resetTestingModule();
-
-    const inherited = await render([checkable({ isCheckable: false, tenantValue: null })]);
-    expect(find(inherited.fixture, 'setting-modification')).toBeNull();
-    TestBed.resetTestingModule();
-
-    const account = await render([checkable({ isCheckable: false })], 'account');
-    expect(find(account.fixture, 'setting-modification')).toBeNull();
-  });
-
-  it('puts the check button inside the input group and refreshes the snapshot after a run', async () => {
-    const { fixture, http } = await render([checkable()]);
-    const button = find(fixture, 'setting-check-Probe.Endpoint')!;
-    expect(button.closest('hlm-input-group')).not.toBeNull();
-
-    button.click();
-    fixture.detectChanges();
-    expect(button.hasAttribute('disabled')).toBe(true);
-    const post = await vi.waitFor(() => http.expectOne('/api/v1/settings/checks/Probe.Endpoint'));
-    expect(post.request.method).toBe('POST');
-    post.flush({ passed: true, time: '2026-11-23T08:00:00Z', isStale: false });
-    await fixture.whenStable();
-    http.expectOne('/api/v1/settings').flush([
-      checkable({
-        lastCheck: {
-          passed: false,
-          failureCode: 'unreachable',
-          time: '2026-11-23T08:00:00Z',
-          isStale: true,
-        },
+  /** 后端测试不通过时的响应：422 加原因码，经与拦截器相同的归一化。 */
+  const rejected = (code: string) =>
+    ApplicationHttpError.from(
+      new HttpErrorResponse({
+        status: 422,
+        error: { code, detail: 'Server-side wording' },
       }),
-    ]);
-    await fixture.whenStable();
-    fixture.detectChanges();
+      { method: 'POST' },
+    );
 
-    // 刷新经会话服务的桩取快照，按钮在它落定之后才恢复
-    await vi.waitFor(() => {
-      fixture.detectChanges();
-      expect(find(fixture, 'setting-check-Probe.Endpoint')!.hasAttribute('disabled')).toBe(false);
-    });
-    expect(find(fixture, 'setting-check')).not.toBeNull();
-    expect(find(fixture, 'setting-check-stale')).not.toBeNull();
-  });
-
-  // 测试请求本身失败（网络、无权限）：在该行给出原因，不当成一次测试结论
-  it('shows a failed check request on the row', async () => {
-    const { fixture, http } = await render([checkable()]);
-
-    find(fixture, 'setting-check-Probe.Endpoint')!.click();
-    (await vi.waitFor(() => http.expectOne('/api/v1/settings/checks/Probe.Endpoint'))).flush(null, {
-      status: 503,
-      statusText: 'Service Unavailable',
-    });
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(find(fixture, 'setting-check-error')).not.toBeNull();
-    expect(find(fixture, 'setting-check')).toBeNull();
-  });
-
-  // 改完直接点测试：输入框失焦提交的 PUT 先落定，测试才发出，测到的是刚改的值
-  it('runs the check only after the pending save of the edited value', async () => {
-    const { fixture, http } = await render([checkable()]);
-    const field = find(fixture, 'setting-input-Probe.Endpoint') as HTMLInputElement;
+  /** 改一行输入并提交（失焦或回车），写入排进队列。 */
+  async function edit(
+    fixture: ComponentFixture<SettingSection>,
+    name: string,
+    value: string,
+  ): Promise<void> {
+    const field = find(fixture, `setting-input-${name}`) as HTMLInputElement;
     field.focus();
-    field.value = 'https://new:4318';
+    field.value = value;
     field.dispatchEvent(new Event('input'));
     field.dispatchEvent(new Event('change'));
     await fixture.whenStable();
+  }
 
-    find(fixture, 'setting-check-Probe.Endpoint')!.click();
+  beforeEach(() => {
+    vi.spyOn(toast, 'success').mockImplementation(() => '');
+    vi.spyOn(toast, 'error').mockImplementation(() => '');
+  });
+
+  afterEach(() => TestBed.inject(HttpTestingController).verify());
+
+  // 测的是一组配置：输入框里没有测试按钮，行上没有结论、"已过期"与修改信息，每行只有控件与恢复默认
+  it('keeps the rows free of test buttons, results and modification lines', async () => {
+    const { fixture } = await render([
+      endpoint(),
+      endpoint({ name: 'Telemetry.Export.Headers', isSecret: true, hasSecretValue: true }),
+    ]);
+
+    for (const name of ['Telemetry.Export.Endpoint', 'Telemetry.Export.Headers']) {
+      const settingRow = (fixture.nativeElement as HTMLElement).querySelector(
+        `[data-setting-name="${name}"]`,
+      )!;
+      expect(settingRow.querySelector('hlm-input-group')).toBeNull();
+      expect(
+        [...settingRow.querySelectorAll('button')].map((button) => button.dataset['testid']),
+      ).toEqual([`setting-reset-${name}`]);
+    }
+  });
+
+  // 机密只写不读：标签下不再写"已设置"，状态由占位符给出一次
+  it.each([
+    [true, 'Set (type a new value to replace it)'],
+    [false, 'Not set'],
+  ])(
+    'states a secret only through its placeholder (set: %s)',
+    async (hasSecretValue, placeholder) => {
+      const { fixture } = await render([
+        row({ name: 'Probe.Secret', displayName: 'API key', isSecret: true, hasSecretValue }),
+      ]);
+
+      const input = find(fixture, 'setting-input-Probe.Secret') as HTMLInputElement;
+      expect(input.type).toBe('password');
+      expect(input.placeholder).toBe(placeholder);
+      const content = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-setting-name="Probe.Secret"] [data-slot="field-content"]',
+      )!;
+      expect(content.textContent?.trim()).toBe('API key');
+    },
+  );
+
+  it('offers the telemetry export test below the operations group on the system page', async () => {
+    const { fixture } = await render([
+      row({ name: 'Logging.MinimumLevel', group: 'Operations', defaultValue: 'Information' }),
+      endpoint(),
+    ]);
+
+    const panel = find(fixture, 'telemetry-test')!;
+    expect(panel.closest('section')?.dataset['group']).toBe('Operations');
+    const group = panel.querySelector<HTMLElement>('[role="group"]')!;
+    expect(
+      panel.querySelector(`#${group.getAttribute('aria-labelledby')}`)?.textContent?.trim(),
+    ).toBe('Test telemetry export');
+    expect(find(fixture, 'telemetry-test-run')!.textContent?.trim()).toBe('Test');
+  });
+
+  // 部署关闭了导出配置时导出设置不下发；个人页不测
+  it('offers no telemetry export test without the endpoint setting or on the account page', async () => {
+    const withoutEndpoint = await render([
+      row({ name: 'Logging.MinimumLevel', group: 'Operations', defaultValue: 'Information' }),
+    ]);
+    expect(find(withoutEndpoint.fixture, 'telemetry-test')).toBeNull();
+    TestBed.resetTestingModule();
+
+    const account = await render([endpoint({ allowsUserScope: true })], 'account');
+    expect(find(account.fixture, 'telemetry-test')).toBeNull();
+  });
+
+  // 测试区跟着导出地址行出现：开关关着时地址行收起，测试区也不出现；打开后作为子项块的最后一项
+  it('shows the telemetry export test only while the endpoint row is shown', async () => {
+    const host = (enabled: string) =>
+      render([
+        row({
+          name: 'Telemetry.Export.Enabled',
+          group: 'Operations',
+          isBoolean: true,
+          defaultValue: enabled,
+        }),
+        endpoint(),
+      ]);
+
+    const off = await host('false');
+    expect(find(off.fixture, 'telemetry-test')).toBeNull();
+    TestBed.resetTestingModule();
+
+    const on = await host('true');
+    const panel = find(on.fixture, 'telemetry-test')!;
+    // 作为导出开关子项块的最后一项，与子项同一缩进
+    const block = panel.closest<HTMLElement>('[data-testid="setting-children"]')!;
+    expect(block.dataset['parent']).toBe('Telemetry.Export.Enabled');
+    expect(block.lastElementChild).toBe(panel);
+  });
+
+  // 改完直接点测试：输入框失焦提交的 PUT 与快照刷新先落定，测试才发出，测到的是刚改的值
+  it('tests the export after the pending save of the group and confirms success', async () => {
+    const { fixture, http } = await render([endpoint()]);
+    const probe = vi
+      .spyOn(TestBed.inject(SettingService), 'testTelemetryExport')
+      .mockReturnValue(of(undefined));
+    await edit(fixture, 'Telemetry.Export.Endpoint', 'http://new-collector:4318');
+
+    find(fixture, 'telemetry-test-run')!.click();
     await fixture.whenStable();
     const put = http.expectOne(settingWrite);
-    expect(http.match('/api/v1/settings/checks/Probe.Endpoint')).toHaveLength(0);
+    expect(probe).not.toHaveBeenCalled();
+    fixture.detectChanges();
+    expect(find(fixture, 'telemetry-test-run')!.hasAttribute('disabled')).toBe(true);
 
     put.flush(null);
     await fixture.whenStable();
-    http.expectOne('/api/v1/settings').flush([checkable({ tenantValue: 'https://new:4318' })]);
-    await vi.waitFor(() => http.expectOne('/api/v1/settings/checks/Probe.Endpoint'), {
-      timeout: 2000,
-    });
-  });
+    http
+      .expectOne('/api/v1/settings')
+      .flush([endpoint({ tenantValue: 'http://new-collector:4318' })]);
+    await vi.waitFor(() => expect(probe).toHaveBeenCalledOnce(), { timeout: 2000 });
 
-  // 同组的保存失败了：测到的会是旧配置，不测，提示先保存
-  it('does not run the check while a save in the group has failed', async () => {
-    const { fixture, http } = await render([checkable()]);
-    const field = find(fixture, 'setting-input-Probe.Endpoint') as HTMLInputElement;
-    field.value = 'https://new:4318';
-    field.dispatchEvent(new Event('input'));
-    field.dispatchEvent(new Event('change'));
-    await fixture.whenStable();
-
-    find(fixture, 'setting-check-Probe.Endpoint')!.click();
-    await fixture.whenStable();
-    http.expectOne(settingWrite).flush('boom', { status: 500, statusText: 'Server Error' });
-    await vi.waitFor(
-      () => {
-        fixture.detectChanges();
-        expect(find(fixture, 'setting-check-error')).not.toBeNull();
-      },
-      { timeout: 2000 },
-    );
-
-    expect(http.match('/api/v1/settings/checks/Probe.Endpoint')).toHaveLength(0);
-  });
-
-  // 重测请求失败：上一次的结论与"已过期"照常显示，错误另起一行
-  it('keeps the last result visible when a re-run request fails', async () => {
-    const { fixture, http } = await render([
-      checkable({
-        lastCheck: { passed: true, time: '2026-11-22T08:00:00Z', isStale: true },
+    await vi.waitFor(() =>
+      expect(toast.success).toHaveBeenCalledExactlyOnceWith('Telemetry export works', {
+        description: 'The endpoint accepted the export',
       }),
-    ]);
-
-    find(fixture, 'setting-check-Probe.Endpoint')!.click();
-    await vi
-      .waitFor(() => http.expectOne('/api/v1/settings/checks/Probe.Endpoint'))
-      .then((request) => request.flush(null, { status: 503, statusText: 'Service Unavailable' }));
+    );
+    expect(toast.error).not.toHaveBeenCalled();
     await vi.waitFor(() => {
       fixture.detectChanges();
-      expect(find(fixture, 'setting-check-error')).not.toBeNull();
+      expect(find(fixture, 'telemetry-test-run')!.hasAttribute('disabled')).toBe(false);
     });
-
-    expect(find(fixture, 'setting-check')).not.toBeNull();
-    expect(find(fixture, 'setting-check-stale')).not.toBeNull();
   });
 
-  it('puts the check button beside a control that is not a text input', async () => {
-    const { fixture } = await render([
-      checkable({
-        name: 'Probe.Enabled',
-        defaultValue: 'false',
-        tenantValue: 'true',
-        isBoolean: true,
+  // 后端以 422 加原因码返回：原因取本地词条而不是服务端文案，提示保留到手动关闭
+  it.each([
+    [
+      'AppSetting:TelemetryExportNotConfigured',
+      'No export endpoint is set. Enter the OTLP endpoint above first',
+    ],
+    [
+      'AppSetting:TelemetryExportUnavailable',
+      "Telemetry is turned off for this deployment (OTEL_SDK_DISABLED), so export can't be tested",
+    ],
+    [
+      'AppSetting:TelemetryExportAuthRejected',
+      'The endpoint rejected the credentials. Check the OTLP headers',
+    ],
+    [
+      'AppSetting:TelemetryExportUnreachable',
+      "Couldn't reach the endpoint, or it didn't answer in time. Check the address and the network",
+    ],
+    [
+      'AppSetting:TelemetryExportUnexpectedStatus',
+      'The endpoint answered with an unexpected status. Check that it is the OTLP base address',
+    ],
+  ])('explains %s and keeps the failure until it is closed', async (code, reason) => {
+    const { fixture } = await render([endpoint()]);
+    vi.spyOn(TestBed.inject(SettingService), 'testTelemetryExport').mockReturnValue(
+      throwError(() => rejected(code)),
+    );
+
+    find(fixture, 'telemetry-test-run')!.click();
+
+    await vi.waitFor(() =>
+      expect(toast.error).toHaveBeenCalledExactlyOnceWith('Telemetry export test failed', {
+        description: reason,
+        duration: Number.POSITIVE_INFINITY,
+        closeButton: true,
       }),
-    ]);
-    const button = find(fixture, 'setting-check-Probe.Enabled');
-
-    expect(button).not.toBeNull();
-    expect(button!.closest('hlm-input-group')).toBeNull();
+    );
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
-  // 测试会用存着的凭据对外调用：个人页、不能管理这一项时都不提供
-  it('offers no check on the account page or to someone who cannot manage the setting', async () => {
-    const account = await render([checkable()], 'account');
-    expect(find(account.fixture, 'setting-check-Probe.Endpoint')).toBeNull();
+  // 同组的保存失败了：测到的会是旧配置，不测，提示先修正
+  it('does not test while a save in the group has failed', async () => {
+    const { fixture, http } = await render([endpoint()]);
+    const probe = vi.spyOn(TestBed.inject(SettingService), 'testTelemetryExport');
+    await edit(fixture, 'Telemetry.Export.Endpoint', 'http://new-collector:4318');
+
+    find(fixture, 'telemetry-test-run')!.click();
+    await fixture.whenStable();
+    http.expectOne(settingWrite).flush('boom', { status: 500, statusText: 'Server Error' });
+
+    await vi.waitFor(
+      () =>
+        expect(toast.error).toHaveBeenCalledExactlyOnceWith(
+          "Some settings in this group weren't saved. Fix them, then test again",
+        ),
+      { timeout: 2000 },
+    );
+    expect(probe).not.toHaveBeenCalled();
+  });
+  //#if (Email)
+
+  it('offers the test email below the email group on the system page only', async () => {
+    const host = row({ name: 'Email.SmtpHost', group: 'Email', defaultValue: 'localhost' });
+    const system = await render([host]);
+    expect(find(system.fixture, 'email-test')!.closest('section')?.dataset['group']).toBe('Email');
     TestBed.resetTestingModule();
 
-    const readOnly = await render([checkable({ canManage: false })]);
-    expect(find(readOnly.fixture, 'setting-check-Probe.Endpoint')).toBeNull();
+    const account = await render([host], 'account');
+    expect(find(account.fixture, 'email-test')).toBeNull();
   });
+
+  // 发信测试同样先等本组的写入：刚改的主机名保存并刷新后才发
+  it('sends the test email after the pending save of the email group', async () => {
+    const { fixture, http } = await render([
+      row({ name: 'Email.SmtpHost', group: 'Email', defaultValue: 'localhost' }),
+    ]);
+    const send = vi
+      .spyOn(TestBed.inject(SettingService), 'sendTestEmail')
+      .mockReturnValue(of(undefined));
+    await edit(fixture, 'Email.SmtpHost', 'smtp.example.test');
+
+    find(fixture, 'email-test-send')!.click();
+    await fixture.whenStable();
+    const put = http.expectOne(settingWrite);
+    expect(send).not.toHaveBeenCalled();
+
+    put.flush(null);
+    await fixture.whenStable();
+    http
+      .expectOne('/api/v1/settings')
+      .flush([row({ name: 'Email.SmtpHost', group: 'Email', tenantValue: 'smtp.example.test' })]);
+    await vi.waitFor(() => expect(send).toHaveBeenCalledExactlyOnceWith('admin@example.test'), {
+      timeout: 2000,
+    });
+    await vi.waitFor(() => expect(toast.success).toHaveBeenCalledOnce());
+  });
+  //#endif
 });

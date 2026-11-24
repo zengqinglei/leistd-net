@@ -5,6 +5,7 @@ using CompanyName.ProjectName.Application.Settings.Dtos;
 using CompanyName.ProjectName.Application.Settings.Errors;
 using Leistd.Ddd.Application.AppServices;
 using Leistd.Email.Abstractions;
+using Leistd.Email.Exceptions;
 using Leistd.ExceptionHandling;
 using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Recording;
@@ -36,7 +37,19 @@ public class EmailSettingsAppService(
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogWarning(ex, "Test email to {To} failed", TextRedactor.RedactEmail(input.To));
-            throw new BusinessException(AppSettingErrorCodes.TestEmailFailed, "The test email could not be sent. Check the email settings and server logs.", ex);
+            // 按失败类别给码，界面据此指明该查哪一项；归不了类的仍是通用原因
+            var (code, message) = (ex as EmailDeliveryException)?.FailureKind switch
+            {
+                EmailDeliveryFailureKind.Unreachable => (AppSettingErrorCodes.TestEmailUnreachable,
+                    "The email server could not be reached. Check the host, port and TLS settings."),
+                EmailDeliveryFailureKind.AuthenticationRejected => (AppSettingErrorCodes.TestEmailAuthRejected,
+                    "The email server rejected the sign-in. Check the username and password."),
+                EmailDeliveryFailureKind.DeliveryRejected => (AppSettingErrorCodes.TestEmailRejected,
+                    "The email server refused the message. Check the sender address and the recipient."),
+                _ => (AppSettingErrorCodes.TestEmailFailed,
+                    "The test email could not be sent. Check the email settings and server logs."),
+            };
+            throw new BusinessException(code, message, ex);
         }
 
         // 不带目标：收件人是任意填写的地址，写进审计表就成了一份可被读取的联系方式清单

@@ -44,6 +44,15 @@
         @if (group.rows.length > 0) {
           <ng-container *ngTemplateOutlet="rowList; context: { $implicit: group.rows }" />
         }
+        <!-- 测试区在配置块下方：测的是整组配置，不挂在某个输入框上。结果只用提示给出，不留历史 -->
+        <!--#if (Email)-->
+        @if (group.emailTest) {
+          <app-email-test [settle]="settleEmailGroup" />
+        }
+        <!--#endif-->
+        @if (telemetryTestTarget(group.rows); as target) {
+          <ng-container *ngTemplateOutlet="telemetryTest; context: { $implicit: target.group }" />
+        }
       </section>
     } @empty {
       <!-- 首次加载失败与"没有可配置项"分开表达：说出原因并给重试。 -->
@@ -67,12 +76,6 @@
         </div>
       }
     }
-    <!--#if (Email)-->
-
-    @if (showEmailTest()) {
-      <app-email-test />
-    }
-    <!--#endif-->
   </div>
 
   <!-- 设置行列表：单列，行间只留白不画线。开关与输入框混排时两列网格的格子高度不一、对不齐；
@@ -99,9 +102,40 @@
           [attr.aria-labelledby]="node.setting.name + '-label'"
         >
           <ng-container *ngTemplateOutlet="rowNodes; context: { $implicit: children }" />
+          <!-- 测试区测的是这一块子项：作为子项块的最后一项，与子项同一缩进，随被测的行一起出现 -->
+          @if (telemetryTestTarget(children); as target) {
+            <ng-container *ngTemplateOutlet="telemetryTest; context: { $implicit: target.group }" />
+          }
         </div>
       }
     }
+  </ng-template>
+
+  <!-- 遥测导出测试区：出现位置由 telemetryTestTarget 决定（导出地址行所在那一层的末尾） -->
+  <ng-template #telemetryTest let-group>
+        <app-setting-test-panel
+          icon="lucideActivity"
+          data-testid="telemetry-test"
+          [heading]="t('settings.telemetryTest.title')"
+          [description]="t('settings.telemetryTest.description')"
+        >
+          <button
+            hlmBtn
+            type="button"
+            variant="outline"
+            data-testid="telemetry-test-run"
+            [disabled]="telemetryTesting()"
+            (click)="testTelemetryExport(group)"
+          >
+            @if (telemetryTesting()) {
+              <hlm-spinner class="text-base" data-icon="inline-start" />
+              {{ t('settings.telemetryTest.running') }}
+            } @else {
+              <ng-icon name="lucideActivity" data-icon="inline-start" />
+              {{ t('settings.telemetryTest.run') }}
+            }
+          </button>
+        </app-setting-test-panel>
   </ng-template>
 
   <!-- 一行设置的渲染：普通分组与外部登录的提供方卡片共用，控件、校验与即改即存只有这一份。
@@ -191,60 +225,6 @@
         </div>
         @if (hintKeyOf(setting, scope()); as hint) {
           <p class="text-muted-foreground text-xs">{{ t(hint) }}</p>
-        }
-        @if (modificationOf(setting, scope()); as modification) {
-          <!-- 机密只写不读之后，"谁、什么时候改过"是排查的唯一线索，常驻在说明区；时间整体不断行 -->
-          <p class="text-muted-foreground text-xs" data-testid="setting-modification">
-            {{
-              t(setting.isSecret ? 'settings.modification.secret' : 'settings.modification.value', {
-                name: modification.modifierName ?? t('settings.modification.system'),
-              })
-            }}
-            <span class="whitespace-nowrap">{{
-              modification.time | appDate: 'short' : displayTimeZone() : displayLocale()
-            }}</span>
-          </p>
-        }
-        @if (checkableIn(setting, scope())) {
-          <!-- 本次请求的错误与已保存的最近结论各自显示：重测失败不遮掉上一次的结论与"已过期" -->
-          @if (checkErrors()[setting.name]; as checkError) {
-            <p class="text-destructive text-xs" role="status" data-testid="setting-check-error">
-              {{ checkError }}
-            </p>
-          }
-          @if (setting.lastCheck; as check) {
-            <!-- 最近一次测试的结论：是状态而不是当前输入的校验错误，不挂 aria-invalid、不用字段错误样式 -->
-            <p
-              class="text-muted-foreground inline-flex flex-wrap items-center gap-x-1 text-xs"
-              data-testid="setting-check"
-            >
-              <ng-icon
-                [name]="check.passed ? 'lucideCircleCheck' : 'lucideCircleX'"
-                size="12"
-                class="shrink-0"
-                [class.text-success]="check.passed"
-                [class.text-destructive]="!check.passed"
-              />
-              <span>{{
-                check.passed
-                  ? t('settings.check.passed', {
-                      name: check.checkerName ?? t('settings.modification.system'),
-                    })
-                  : t('settings.check.failed', {
-                      reason: t(checkFailureKey(check.failureCode)),
-                      name: check.checkerName ?? t('settings.modification.system'),
-                    })
-              }}</span>
-              <span class="whitespace-nowrap">{{
-                check.time | appDate: 'short' : displayTimeZone() : displayLocale()
-              }}</span>
-              @if (check.isStale) {
-                <span hlmBadge variant="outline" data-testid="setting-check-stale">{{
-                  t('settings.check.stale')
-                }}</span>
-              }
-            </p>
-          }
         }
         @if (isBoolean(setting)) {
           <!-- 开关没有宽度：字段错误接在说明下面 -->
@@ -369,50 +349,6 @@
                 }
               </hlm-select-content>
             </hlm-select>
-          } @else if (checkableIn(setting, scope())) {
-            <!-- 带测试的行：测试按钮是输入框尾部的按钮（Spartan InputGroup 官方组合），输入框宽度不变、与其他行对齐，
-             动作与它作用的值挨在一起。其余属性同下方普通输入框。 -->
-            <hlm-input-group class="flex-1 @md/field-group:w-64 @md/field-group:flex-none">
-              <input
-                [attr.aria-invalid]="isInvalid(setting, scope()) ? 'true' : null"
-                hlmInputGroupInput
-                [id]="setting.name"
-                [type]="inputTypeOf(setting)"
-                [attr.min]="setting.minimum"
-                [attr.max]="setting.maximum"
-                [attr.inputmode]="isNumeric(setting) ? 'numeric' : null"
-                [attr.autocomplete]="setting.isSecret ? 'new-password' : 'off'"
-                spellcheck="false"
-                autocapitalize="off"
-                [attr.data-testid]="'setting-input-' + setting.name"
-                [formField]="fieldOf(setting, scope())"
-                [placeholder]="
-                  setting.isSecret
-                    ? setting.hasSecretValue
-                      ? t('settings.secretSet')
-                      : t('settings.secretUnset')
-                    : systemOrInheritedValue(setting, scope())
-                "
-                (input)="onInput(setting, scope(), $event)"
-                (change)="onCommit(setting, scope(), $event)"
-              />
-              <button
-                hlmInputGroupButton
-                type="button"
-                size="xs"
-                align="inline-end"
-                [disabled]="checking().has(setting.name)"
-                [attr.data-testid]="'setting-check-' + setting.name"
-                (click)="runCheck(setting)"
-              >
-                @if (checking().has(setting.name)) {
-                  <hlm-spinner class="text-[10px]" />
-                  {{ t('settings.check.running') }}
-                } @else {
-                  {{ t('settings.check.run') }}
-                }
-              </button>
-            </hlm-input-group>
           } @else {
             <!-- 值经 [formField] 绑定到表单。数值型把上下界交给浏览器（值域以服务端为准）。用 change 提交；
              与本行其他控件一样不随写入禁用（见 write）：提交时光标常在框里，禁用会弹走焦点。值多为主机名、密钥、标识，
@@ -442,25 +378,6 @@
               (input)="onInput(setting, scope(), $event)"
               (change)="onCommit(setting, scope(), $event)"
             />
-          }
-          @if (checksBesideControl(setting, scope())) {
-            <button
-              type="button"
-              hlmBtn
-              size="sm"
-              variant="outline"
-              class="shrink-0"
-              [disabled]="checking().has(setting.name)"
-              [attr.data-testid]="'setting-check-' + setting.name"
-              (click)="runCheck(setting)"
-            >
-              @if (checking().has(setting.name)) {
-                <hlm-spinner class="text-xs" />
-                {{ t('settings.check.running') }}
-              } @else {
-                {{ t('settings.check.run') }}
-              }
-            </button>
           }
           <button
             type="button"

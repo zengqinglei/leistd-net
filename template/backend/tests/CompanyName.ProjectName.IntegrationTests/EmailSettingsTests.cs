@@ -1,4 +1,5 @@
 #if (LocalIdentity)
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -7,16 +8,19 @@ using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Settings.Errors;
 using CompanyName.ProjectName.Application.Settings.Provider;
 using CompanyName.ProjectName.Infrastructure.Persistence;
+using Leistd.Email.Abstractions;
+using Leistd.Email.Exceptions;
 using Leistd.Email.Smtp.Options;
 #if (IncludeMultiTenancy)
 using Leistd.MultiTenancy.AspNetCore.Options;
 #endif
 using Leistd.OperationRecords.Errors;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
-using Leistd.Settings.Definitions;
 using Leistd.Settings.EntityFrameworkCore.Entities;
 
 namespace CompanyName.ProjectName.IntegrationTests;
@@ -95,6 +99,30 @@ public sealed class EmailSettingsTests(ProjectWebApplicationFactory factory) : I
         Assert.Equal(baselineHost, monitor.CurrentValue.Host);
     }
 
+    /// <summary>测试邮件是真实投递、有外部副作用：发出后记一条成功的操作记录。</summary>
+    [Fact]
+    public async Task Sent_test_email_is_recorded()
+    {
+        var mailbox = new RecordingMailbox();
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IEmailSender>();
+            services.AddSingleton<IEmailSender>(mailbox);
+        }));
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(
+            host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var recordedBefore = await OperationRecordQueries.CountSucceededAsync(
+            host, admin.Client, OperationRecordActions.SettingTestEmailSent, NoTarget);
+
+        using var response = await admin.Client.PostAsJsonAsync("/api/v1/settings/email/test", new { To = "someone@example.test" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("someone@example.test", mailbox.Recipients);
+        Assert.Equal(recordedBefore + 1, await OperationRecordQueries.CountSucceededAsync(
+            host, admin.Client, OperationRecordActions.SettingTestEmailSent, NoTarget));
+    }
+
+    /// <summary>经真实发信端连一个没有服务在听的端口：以 422 与"连不上"的码返回，界面据此提示检查地址、端口与 TLS。</summary>
     [Fact]
     public async Task Failed_test_email_returns_the_reason()
     {
@@ -102,19 +130,22 @@ public sealed class EmailSettingsTests(ProjectWebApplicationFactory factory) : I
         // 保留给 IANA 的丢弃端口，本机上不会有服务监听
         await WriteAsync(admin.Client, SettingConstant.Email.SmtpHost, "127.0.0.1");
         await WriteAsync(admin.Client, SettingConstant.Email.SmtpPort, "9");
+        // 同一夹具里发送成功的用例也记成功：只看本次前后之差
+        var succeededBefore = await OperationRecordQueries.CountSucceededAsync(
+            factory, admin.Client, OperationRecordActions.SettingTestEmailSent, NoTarget);
         try
         {
             using var response = await admin.Client.PostAsJsonAsync("/api/v1/settings/email/test", new { To = "someone@example.test" });
 
-            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
             using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            Assert.Equal(AppSettingErrorCodes.TestEmailFailed, body.RootElement.GetProperty("code").GetString());
+            Assert.Equal(AppSettingErrorCodes.TestEmailUnreachable, body.RootElement.GetProperty("code").GetString());
 
             // 授权已通过的业务失败同样留痕，依据是端点上的权限策略
             var failures = await OperationRecordQueries.GetFailuresAsync(
                 factory, admin.Client, OperationRecordActions.SettingTestEmailSent, NoTarget);
-            Assert.Contains((AppSettingErrorCodes.TestEmailFailed, PermissionConstant.Settings.Email), failures);
-            Assert.Equal(0, await OperationRecordQueries.CountSucceededAsync(
+            Assert.Contains((AppSettingErrorCodes.TestEmailUnreachable, PermissionConstant.Settings.Email), failures);
+            Assert.Equal(succeededBefore, await OperationRecordQueries.CountSucceededAsync(
                 factory, admin.Client, OperationRecordActions.SettingTestEmailSent, NoTarget));
         }
         finally
@@ -122,6 +153,35 @@ public sealed class EmailSettingsTests(ProjectWebApplicationFactory factory) : I
             await WriteAsync(admin.Client, SettingConstant.Email.SmtpHost, null);
             await WriteAsync(admin.Client, SettingConstant.Email.SmtpPort, null);
         }
+    }
+
+    /// <summary>
+    /// 发信端报告的失败类别各对应一个码，同为 422：界面据此指明该查地址与端口、用户名与口令，还是发件地址与收件人；
+    /// 归不了类的失败是通用原因。
+    /// </summary>
+    [Theory]
+    [InlineData(EmailDeliveryFailureKind.Unreachable, AppSettingErrorCodes.TestEmailUnreachable)]
+    [InlineData(EmailDeliveryFailureKind.AuthenticationRejected, AppSettingErrorCodes.TestEmailAuthRejected)]
+    [InlineData(EmailDeliveryFailureKind.DeliveryRejected, AppSettingErrorCodes.TestEmailRejected)]
+    [InlineData(null, AppSettingErrorCodes.TestEmailFailed)]
+    public async Task Failed_test_email_reports_the_failure_kind_by_code(EmailDeliveryFailureKind? kind, string expectedCode)
+    {
+        Exception failure = kind is { } known
+            ? new EmailDeliveryException(known, "Simulated delivery failure.", new IOException("Simulated transport failure."))
+            : new InvalidOperationException("Simulated unclassified failure.");
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IEmailSender>();
+            services.AddSingleton<IEmailSender>(new FailingMailbox(failure));
+        }));
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(
+            host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+
+        using var response = await admin.Client.PostAsJsonAsync("/api/v1/settings/email/test", new { To = "someone@example.test" });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(expectedCode, body.RootElement.GetProperty("code").GetString());
     }
 
     /// <summary>
@@ -224,49 +284,27 @@ public sealed class EmailSettingsTests(ProjectWebApplicationFactory factory) : I
     private const string TenantAdminPassword = "Tenant@123456";
 #endif
 
-    // 连通测试只连接与认证：连不上记为 unreachable 并保存在设置页上，测试本身留痕；
-    // 之后改了依赖的设置（端口），上次的结论标为过期。同时证明真实库里有测试结果表与修改信息列
-    [Fact]
-    public async Task Checking_the_smtp_connection_saves_the_result_until_a_covered_setting_changes()
+    // 测试邮件不带目标：收件人是任意填写的地址，不进审计表
+    private const string NoTarget = "-";
+
+    private sealed class RecordingMailbox : IEmailSender
     {
-        using var admin = await LoginAdminAsync();
-        // 保留给 IANA 的丢弃端口，本机上不会有服务监听
-        await WriteAsync(admin.Client, SettingConstant.Email.SmtpHost, "127.0.0.1");
-        await WriteAsync(admin.Client, SettingConstant.Email.SmtpPort, "9");
-        var target = $"{SettingScopes.Host}/{SettingConstant.Email.SmtpHost}";
-        var checkedBefore = await OperationRecordQueries.CountSucceededAsync(
-            factory, admin.Client, OperationRecordActions.SettingChecked, target);
-        try
+        private readonly ConcurrentQueue<string> recipients = new();
+
+        public IReadOnlyCollection<string> Recipients => recipients.ToArray();
+
+        public Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
         {
-            using var response = await admin.Client.PostAsync($"/api/v1/settings/checks/{SettingConstant.Email.SmtpHost}", null);
-
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            var result = await response.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.False(result.GetProperty("passed").GetBoolean());
-            Assert.Equal("unreachable", result.GetProperty("failureCode").GetString());
-
-            var host = await ReadSettingAsync(admin.Client, SettingConstant.Email.SmtpHost);
-            Assert.True(host.GetProperty("isCheckable").GetBoolean());
-            Assert.Equal("unreachable", host.GetProperty("lastCheck").GetProperty("failureCode").GetString());
-            Assert.False(host.GetProperty("lastCheck").GetProperty("isStale").GetBoolean());
-            Assert.False(string.IsNullOrEmpty(host.GetProperty("tenantModification").GetProperty("modifierName").GetString()));
-            Assert.Equal(checkedBefore + 1, await OperationRecordQueries.CountSucceededAsync(
-                factory, admin.Client, OperationRecordActions.SettingChecked, target));
-
-            await WriteAsync(admin.Client, SettingConstant.Email.SmtpPort, "10");
-
-            var after = await ReadSettingAsync(admin.Client, SettingConstant.Email.SmtpHost);
-            Assert.True(after.GetProperty("lastCheck").GetProperty("isStale").GetBoolean());
-        }
-        finally
-        {
-            await WriteAsync(admin.Client, SettingConstant.Email.SmtpHost, null);
-            await WriteAsync(admin.Client, SettingConstant.Email.SmtpPort, null);
+            recipients.Enqueue(message.To);
+            return Task.CompletedTask;
         }
     }
 
-    // 测试邮件不带目标：收件人是任意填写的地址，不进审计表
-    private const string NoTarget = "-";
+    private sealed class FailingMailbox(Exception failure) : IEmailSender
+    {
+        public Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default) =>
+            Task.FromException(failure);
+    }
 
     private Task<AuthenticatedSession> LoginAdminAsync() =>
         ProjectWebApplicationFactory.LoginAsync(factory, "admin", ProjectWebApplicationFactory.TestAdminPassword);

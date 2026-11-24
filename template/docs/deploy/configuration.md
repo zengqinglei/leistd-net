@@ -98,7 +98,7 @@ OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-CompanyName.ProjectName}
 OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
 ```
 
-排障先看系统设置里三项的当前值，再确认容器实际收到部署变量，然后检查地址、Collector 的 HTTP 接收端（默认 4318）、接收管道与服务名称；采集器不可达不会阻止应用启动。
+排障时，导出已开启的话先在系统设置的运维分组点“测试”：它用当前生效的地址与认证头发一个空的追踪请求，按结果区分未配置、认证被拒、连不上与意外状态。测试区随导出地址一行出现，导出开关关闭或部署设了 `OTEL_SDK_DISABLED=true` 时没有这个按钮，此时从部署变量查起：看三项的当前值，确认容器实际收到部署变量，然后检查地址、Collector 的 HTTP 接收端（默认 4318）、接收管道与服务名称；采集器不可达不会阻止应用启动。
 
 自建 Collector 建议仅集群内可达；托管端点按服务商要求配置认证与网络。进入 Prometheus 可经 Collector 转换或使用其 [OTLP 接收能力](https://prometheus.io/docs/guides/opentelemetry/)。本项目不暴露 `/metrics`；确需拉取时自行采用 [Prometheus ASP.NET Core 导出器](https://github.com/open-telemetry/opentelemetry-dotnet/blob/core-1.20.1/src/OpenTelemetry.Exporter.Prometheus.AspNetCore/README.md)，端点放单独内部端口，网关不转发，预发布包的维护由项目承担；Worker 不使用仅面向开发内循环的 HttpListener 导出器。
 

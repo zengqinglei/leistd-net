@@ -3,26 +3,25 @@
 <!--#else-->
 <ng-container>
 <!--#endif-->
-  <!-- 独立的操作分区：与设置分组同级，分区标题下一条实线 -->
-  <section class="flex flex-col gap-5" data-testid="email-test">
-    <header class="flex flex-col gap-1 border-b pb-3">
-      <h4 class="text-sm leading-none font-semibold">{{ t('settings.emailTest.title') }}</h4>
-      <p class="text-muted-foreground text-sm">{{ t('settings.emailTest.description') }}</p>
-    </header>
-    <form
-      #emailTestRoot
-      class="flex flex-col gap-2 @md/panel:flex-row"
-      novalidate
-      (submit)="$event.preventDefault(); send()"
+  <!-- 表单包住测试区：收件人与发送按钮投影到测试区的操作区，回车即发送 -->
+  <form
+    #emailTestRoot
+    novalidate
+    data-testid="email-test"
+    (submit)="$event.preventDefault(); send()"
+  >
+    <app-setting-test-panel
+      icon="lucideSend"
+      [heading]="t('settings.emailTest.title')"
+      [description]="t('settings.emailTest.description')"
     >
-      <hlm-field>
+      <hlm-field class="@md/test-panel:w-56">
         <input
           hlmInput
           type="email"
           autocomplete="off"
           spellcheck="false"
           autocapitalize="off"
-          class="@md/panel:max-w-sm @md/panel:flex-1"
           data-testid="email-test-to"
           [attr.aria-label]="t('settings.emailTest.recipient')"
           [placeholder]="t('settings.emailTest.recipient')"
@@ -34,7 +33,13 @@
           }}</hlm-field-error>
         }
       </hlm-field>
-      <button hlmBtn type="submit" data-testid="email-test-send" [disabled]="sending()">
+      <button
+        hlmBtn
+        type="submit"
+        variant="outline"
+        data-testid="email-test-send"
+        [disabled]="sending()"
+      >
         @if (sending()) {
           <hlm-spinner class="text-base" data-icon="inline-start" />
         } @else {
@@ -42,6 +47,6 @@
         }
         {{ t('settings.emailTest.send') }}
       </button>
-    </form>
-  </section>
+    </app-setting-test-panel>
+  </form>
 </ng-container>

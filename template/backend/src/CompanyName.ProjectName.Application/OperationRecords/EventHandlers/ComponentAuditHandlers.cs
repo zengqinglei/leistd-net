@@ -9,7 +9,6 @@ using Leistd.MultiTenancy.Management.Events;
 #endif
 using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Recording;
-using Leistd.Settings.Checks;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Events;
 #if (IncludeWebhooks)
@@ -41,24 +40,11 @@ internal sealed class SettingChangedAuditHandler(
         => @event.Scope == SettingScopes.User
             ? Task.CompletedTask
             : recorder.RecordSucceededAsync(
-                // 清除会把修改信息随行删掉，单独记一个动作，事后才查得到是谁清的
+                // 清除会删掉这一层的值所在的行：写入与清除是两种动作，操作记录分开记
                 @event.IsCleared ? OperationRecordActions.SettingCleared : OperationRecordActions.SettingChanged,
                 OperationTarget.For($"{@event.Scope}/{@event.Name}", @event.Name),
                 SettingAuthorization.For(definitions, @event.Name),
                 cancellationToken);
-}
-
-/// <summary>设置测试留痕：测试会用存着的凭据对外调用一次，记下谁触发的；结论本身在设置页，不进记录。</summary>
-internal sealed class SettingCheckCompletedAuditHandler(
-    IOperationRecorder recorder,
-    ISettingDefinitionManager definitions) : IEventHandler<SettingCheckCompletedEvent>
-{
-    public Task HandleAsync(SettingCheckCompletedEvent @event, CancellationToken cancellationToken = default)
-        => recorder.RecordSucceededAsync(
-            OperationRecordActions.SettingChecked,
-            OperationTarget.For($"{@event.Scope}/{@event.SettingName}", @event.SettingName),
-            SettingAuthorization.For(definitions, @event.SettingName),
-            cancellationToken);
 }
 
 // 凭什么：该设置所在分组的管理子权限；未登记分组的只要求父权限

@@ -1,0 +1,70 @@
+<!-- 标题与说明不截断（Item 默认按行数截断，测试区的说明没有别处可看全文）。
+   图标底色与尺寸照设计稿：浅色方底，与 Item 的标题块顶部对齐。 -->
+@if (expandable()) {
+  <!-- 多项输入：容器画边框，整行是展开按钮，表单在同一个容器里展开 -->
+  <div class="rounded-md border" data-testid="setting-test-panel" data-expandable="true">
+    <button
+      hlmItem
+      type="button"
+      class="hover:bg-muted/50 cursor-pointer text-start"
+      data-testid="setting-test-panel-toggle"
+      [attr.aria-expanded]="expanded()"
+      [attr.aria-controls]="expanded() ? bodyId : null"
+      (click)="toggle()"
+    >
+      <span hlmItemMedia variant="icon" class="bg-muted size-8 rounded-md">
+        <ng-icon [name]="icon()" />
+      </span>
+      <span hlmItemContent class="min-w-0">
+        <span hlmItemTitle class="line-clamp-none" [id]="titleId">{{ heading() }}</span>
+        @if (description()) {
+          <span hlmItemDescription class="line-clamp-none">{{ description() }}</span>
+        }
+      </span>
+      <ng-icon
+        size="16"
+        class="text-muted-foreground shrink-0"
+        [name]="expanded() ? 'lucideChevronDown' : 'lucideChevronRight'"
+      />
+    </button>
+    @if (expanded()) {
+      <div
+        role="region"
+        class="border-t p-4"
+        data-testid="setting-test-panel-body"
+        [id]="bodyId"
+        [attr.aria-labelledby]="titleId"
+      >
+        <ng-container *ngTemplateOutlet="content" />
+      </div>
+    }
+  </div>
+} @else {
+  <!-- 操作区在测试区够宽时接在说明右侧、各项同行；窄时落到下一行，输入与按钮各占满一行 -->
+  <div
+    hlmItem
+    variant="outline"
+    role="group"
+    data-testid="setting-test-panel"
+    [attr.aria-labelledby]="titleId"
+  >
+    <div hlmItemMedia variant="icon" class="bg-muted size-8 rounded-md">
+      <ng-icon [name]="icon()" />
+    </div>
+    <div hlmItemContent class="min-w-0">
+      <div hlmItemTitle class="line-clamp-none" [id]="titleId">{{ heading() }}</div>
+      @if (description()) {
+        <p hlmItemDescription class="line-clamp-none">{{ description() }}</p>
+      }
+    </div>
+    <div
+      hlmItemActions
+      class="grid w-full items-start @md/test-panel:flex @md/test-panel:w-auto"
+      data-testid="setting-test-panel-actions"
+    >
+      <ng-container *ngTemplateOutlet="content" />
+    </div>
+  </div>
+}
+<!-- 投影内容只能落在一处：包进模板，两种形态各自渲染一次 -->
+<ng-template #content><ng-content /></ng-template>
