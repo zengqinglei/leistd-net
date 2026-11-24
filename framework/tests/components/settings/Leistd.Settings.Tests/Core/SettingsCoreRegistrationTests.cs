@@ -1,17 +1,9 @@
-using Leistd.Lock.Memory;
-using Leistd.Security.Users;
-using Leistd.Settings.Checks;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Management;
 using Leistd.Settings.Options;
 using Leistd.Settings.Resolution;
-using Leistd.Settings.Stores;
-using Leistd.Settings.Tests.TestDoubles;
-using Leistd.TestBase.Doubles;
-using Leistd.UnitOfWork;
 using Leistd.TestBase.Assertions;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -62,46 +54,5 @@ public sealed class SettingsCoreRegistrationTests
         services.AddSettingsCore();
 
         Assert.NotNull(services.AssertSingle<ISettingProvider>(ServiceLifetime.Scoped).ImplementationFactory);
-    }
-
-    // 只换了自己的设置存储、没有登记任何测试的宿主：不因测试结果存储缺席而构建失败
-    [Fact]
-    public void A_host_with_only_its_own_setting_store_builds_without_a_check_store()
-    {
-        var services = new ServiceCollection()
-            .AddSettingsCore()
-            .AddSingleton<ISettingStore>(new FakeSettingStore())
-            .AddSingleton<ICurrentUser>(new FakeCurrentUser())
-            .AddLogging()
-            .AddMemoryLocalLock()
-            .AddSingleton<IUnitOfWorkManager>(new RecordingUnitOfWorkManager());
-
-        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
-
-        using var scope = provider.CreateScope();
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ISettingCheckService>());
-    }
-
-    // 换掉写入入口的宿主不注册锁与工作单元：测试服务只在执行测试时才要它们，构建与解析不受影响
-    [Fact]
-    public void A_host_that_replaces_the_setting_manager_builds_without_a_lock_or_unit_of_work()
-    {
-        var services = new ServiceCollection()
-            .AddSettingsCore()
-            .AddSingleton<ISettingStore>(new FakeSettingStore())
-            .AddSingleton<ICurrentUser>(new FakeCurrentUser())
-            .AddLogging();
-        services.Replace(ServiceDescriptor.Transient<ISettingManager, ReplacementManager>());
-
-        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
-
-        using var scope = provider.CreateScope();
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ISettingCheckService>());
-    }
-
-    private sealed class ReplacementManager : ISettingManager
-    {
-        public Task SetAsync(string name, string? value, SettingScopes scope, string? userId = null, CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
     }
 }

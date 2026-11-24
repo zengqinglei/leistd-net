@@ -11,25 +11,32 @@ internal sealed class LoopbackSmtpServer : IAsyncDisposable
     private readonly CancellationTokenSource _stop = new(TimeSpan.FromSeconds(30));
     private readonly Task _serving;
     private readonly string? _authReply;
+    private readonly string _recipientReply;
+    private readonly string? _startTlsReply;
 
     /// <param name="dataReply">收到正文结束符后的回复；<see langword="null"/> 表示不回复（挂住客户端）。</param>
     /// <param name="onDataEnd">收到正文结束符、回复之前调用。</param>
     /// <param name="onQuit">收到 QUIT 时调用。</param>
     /// <param name="replyToQuit">是否回复 QUIT；<see langword="false"/> 让客户端等到读超时或取消。</param>
     /// <param name="authReply">不为 <see langword="null"/> 时 EHLO 声明支持 AUTH PLAIN，并以它回复 AUTH 命令。</param>
+    /// <param name="recipientReply">对 RCPT TO 的回复。</param>
+    /// <param name="startTlsReply">不为 <see langword="null"/> 时 EHLO 声明支持 STARTTLS，并以它回复 STARTTLS 命令。</param>
     public LoopbackSmtpServer(
         string? dataReply = "250 2.0.0 accepted",
         Action? onDataEnd = null,
         Action? onQuit = null,
         bool replyToQuit = true,
-        string? authReply = null)
+        string? authReply = null,
+        string recipientReply = "250 OK",
+        string? startTlsReply = null)
     {
         _listener.Start();
         Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
         _authReply = authReply;
+        _recipientReply = recipientReply;
+        _startTlsReply = startTlsReply;
         _serving = ServeAsync(dataReply, onDataEnd, onQuit, replyToQuit);
     }
-
 
     public int Port { get; }
 
@@ -67,19 +74,26 @@ internal sealed class LoopbackSmtpServer : IAsyncDisposable
             }
             else if (line.StartsWith("EHLO", StringComparison.Ordinal) || line.StartsWith("HELO", StringComparison.Ordinal))
             {
-                if (_authReply is not null)
+                var extensions = new List<string>();
+                if (_startTlsReply is not null) extensions.Add("STARTTLS");
+                if (_authReply is not null) extensions.Add("AUTH PLAIN");
+                await writer.WriteLineAsync(extensions.Count == 0 ? "250 localhost" : "250-localhost");
+                for (var i = 0; i < extensions.Count; i++)
                 {
-                    await writer.WriteLineAsync("250-localhost");
-                    await writer.WriteLineAsync("250 AUTH PLAIN");
+                    await writer.WriteLineAsync((i == extensions.Count - 1 ? "250 " : "250-") + extensions[i]);
                 }
-                else
-                {
-                    await writer.WriteLineAsync("250 localhost");
-                }
+            }
+            else if (_startTlsReply is not null && line == "STARTTLS")
+            {
+                await writer.WriteLineAsync(_startTlsReply);
             }
             else if (_authReply is not null && line.StartsWith("AUTH", StringComparison.Ordinal))
             {
                 await writer.WriteLineAsync(_authReply);
+            }
+            else if (line.StartsWith("RCPT", StringComparison.Ordinal))
+            {
+                await writer.WriteLineAsync(_recipientReply);
             }
             else if (line == "DATA")
             {
@@ -100,7 +114,7 @@ internal sealed class LoopbackSmtpServer : IAsyncDisposable
             }
             else
             {
-                // MAIL FROM、RCPT TO 等一律接受
+                // MAIL FROM、RSET 等一律接受
                 await writer.WriteLineAsync("250 OK");
             }
         }

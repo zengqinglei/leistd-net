@@ -1,4 +1,6 @@
+using System.Net.Sockets;
 using Leistd.Email.Abstractions;
+using Leistd.Email.Exceptions;
 using Leistd.Redaction;
 using Leistd.Email.Smtp.Options;
 using MailKit;
@@ -13,7 +15,8 @@ namespace Leistd.Email.Smtp;
 
 /// <summary>经 SMTP 发信的 <see cref="IEmailSender"/>。</summary>
 /// <remarks>
-/// <para>每次调用建立独立连接，连接、认证与投递异常原样传播，不自动重试。
+/// <para>每次调用建立独立连接，不自动重试。连接、认证与投递阶段能归类的失败抛 <see cref="EmailDeliveryException"/>，
+/// MailKit 的原异常为内层；其余失败与取消原样传播。
 /// 收到服务器的接受确认之后，断开连接被取消或超时都不改写发送结果；超时记 Warning。</para>
 /// <para>每封信取一次 <see cref="IOptionsMonitor{TOptions}.CurrentValue"/>，配置源重载后下一封信即用新值；
 /// 新值同样经 <see cref="IValidateOptions{TOptions}"/> 校验，不合规时抛 <see cref="OptionsValidationException"/>。</para>
@@ -34,15 +37,57 @@ public sealed class SmtpEmailSender(
         var mime = BuildMessage(message, current);
 
         using var client = CreateClient();
-        await client.ConnectAsync(current.Host, current.Port, ResolveSocketOptions(current), cancellationToken);
+        try
+        {
+            await client.ConnectAsync(current.Host, current.Port, ResolveSocketOptions(current), cancellationToken);
+        }
+        catch (Exception exception) when (IsUnreachable(exception))
+        {
+            throw new EmailDeliveryException(
+                EmailDeliveryFailureKind.Unreachable,
+                $"Could not connect to the SMTP server {current.Host}:{current.Port}.",
+                exception);
+        }
 
         if (!string.IsNullOrWhiteSpace(current.Username))
         {
-            // CurrentValue 经 SmtpOptionsValidator 校验，只有用户名、没有口令的配置到不了这里。
-            await client.AuthenticateAsync(current.Username, current.Password!, cancellationToken);
+            try
+            {
+                // CurrentValue 经 SmtpOptionsValidator 校验，只有用户名、没有口令的配置到不了这里。
+                await client.AuthenticateAsync(current.Username, current.Password!, cancellationToken);
+            }
+            catch (Exception exception) when (IsAuthenticationRejected(exception))
+            {
+                // 用户名常是邮箱，不进消息。
+                throw new EmailDeliveryException(
+                    EmailDeliveryFailureKind.AuthenticationRejected,
+                    $"The SMTP server {current.Host}:{current.Port} rejected the credentials or does not support authentication.",
+                    exception);
+            }
         }
 
-        await client.SendAsync(mime, cancellationToken);
+        try
+        {
+            await client.SendAsync(mime, cancellationToken);
+        }
+        catch (ServiceNotAuthenticatedException exception)
+        {
+            // 服务器要求认证（530）而没有配置账号：管理员该查的同样是用户名与口令。
+            throw new EmailDeliveryException(
+                EmailDeliveryFailureKind.AuthenticationRejected,
+                $"The SMTP server {current.Host}:{current.Port} requires authentication.",
+                exception);
+        }
+        catch (Exception exception) when (IsDeliveryRejected(exception))
+        {
+            // 不带 SmtpCommandException.Mailbox：被拒的地址就是收件人或发件人。
+            throw new EmailDeliveryException(
+                EmailDeliveryFailureKind.DeliveryRejected,
+                exception is SmtpCommandException command
+                    ? $"The SMTP server {current.Host}:{current.Port} did not accept the message ({command.ErrorCode}, status {(int)command.StatusCode})."
+                    : $"An address of the message is not a valid SMTPUTF8 address for the SMTP server {current.Host}:{current.Port}.",
+                exception);
+        }
 
         // 走到这里服务器已接受投递，QUIT 只是善后，它的失败不能把已投递的信报成失败。
         // MailKit 在 QUIT 阶段已吞掉取消、I/O 与协议异常，唯独网络读超时以 TimeoutException 抛出。
@@ -62,49 +107,29 @@ public sealed class SmtpEmailSender(
             message.Subject);
     }
 
-    /// <summary>按当前配置连接服务器并认证，不发信，用来确认配置可用。</summary>
-    /// <remarks>
-    /// 只覆盖连接与认证：发件地址是否被服务器接受、收件人能否投递要真正发一封信才知道。
-    /// 失败只返回分类，原因记 Information 日志（不含口令）；取消照常抛出。
-    /// </remarks>
-    /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>探测结果。</returns>
-    public Task<SmtpProbeResult> ProbeAsync(CancellationToken cancellationToken = default)
-        => ProbeAsync(options.CurrentValue, cancellationToken);
+    // 连接阶段：Socket 不通、TLS 握手失败、服务器不支持或拒绝 STARTTLS、问候被拒、连接中断与超时；参数错误与取消不在其列。
+    // 连接阶段的 SmtpCommandException 只来自问候、EHLO 与 STARTTLS，都表示这台服务器此刻用不了。
+    private static bool IsUnreachable(Exception exception)
+        => exception is SocketException or SslHandshakeException or IOException or SmtpProtocolException
+            or TimeoutException or NotSupportedException or SmtpCommandException;
 
-    /// <summary>按给定的发信参数连接服务器并认证，不发信。</summary>
-    /// <remarks>
-    /// 用于在参数生效之前确认它们：例如设置页刚读到的存储值，而进程里的配置可能尚未刷新。只用到主机、端口、加密与用户名口令。
-    /// </remarks>
-    /// <param name="current">要探测的发信参数。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>探测结果。</returns>
-    public async Task<SmtpProbeResult> ProbeAsync(SmtpOptions current, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(current);
-        using var client = CreateClient();
-        try
+    // 认证阶段：凭据被拒或服务器不支持认证。服务器回 4xx（如 454 暂时无法认证）是临时故障，凭据未必有错，原样抛出。
+    private static bool IsAuthenticationRejected(Exception exception)
+        => exception switch
         {
-            await client.ConnectAsync(current.Host, current.Port, ResolveSocketOptions(current), cancellationToken);
-            if (!string.IsNullOrWhiteSpace(current.Username))
+            AuthenticationException { InnerException: SmtpCommandException command } => (int)command.StatusCode is < 400 or >= 500,
+            AuthenticationException or SaslException or NotSupportedException => true,
+            _ => false,
+        };
+
+    // 发送阶段只有服务器明确拒收发件人、收件人或正文，以及地址过不了 SMTPUTF8 校验才算投递被拒；
+    // 其他状态码、协议错误与超时原样抛出。
+    private static bool IsDeliveryRejected(Exception exception)
+        => exception is SmtpUtf8AddressException
+            or SmtpCommandException
             {
-                await client.AuthenticateAsync(current.Username, current.Password!, cancellationToken);
-            }
-
-            await client.DisconnectAsync(quit: true, cancellationToken);
-            return SmtpProbeResult.Succeeded;
-        }
-        catch (AuthenticationException exception)
-        {
-            logger.LogInformation(exception, "SMTP probe of {Host}:{Port} was rejected at authentication", current.Host, current.Port);
-            return SmtpProbeResult.AuthenticationRejected;
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
-        {
-            logger.LogInformation(exception, "SMTP probe of {Host}:{Port} could not reach the server", current.Host, current.Port);
-            return SmtpProbeResult.Unreachable;
-        }
-    }
+                ErrorCode: SmtpErrorCode.SenderNotAccepted or SmtpErrorCode.RecipientNotAccepted or SmtpErrorCode.MessageNotAccepted
+            };
 
     // 465 要求连接即 TLS，其余加密端口使用 STARTTLS。
     private static SecureSocketOptions ResolveSocketOptions(SmtpOptions current)

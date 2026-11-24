@@ -45,6 +45,7 @@
 - 值域声明在设置定义上（`AsBoolean()`、`AsInteger(min, max)`、`WithAllowedValues(...)`）；定义表达不了的规则写成 `Application/Settings/Validators` 下的 `ISettingValueValidator`。跨设置的约束（如未读通知保留不短于已读）读另一项的设置链值而不是 `IOptionsMonitor`；清除也经校验器，候选值是回落后的值。
 - 分组按管理员要完成的事归组，不按组件归组：新设置先归入已有分组（保留期一类都进 `Retention`），讲不进任何现有分组才新建；同一作用域的设置不散落到多个分组。允许用户覆盖的设置（`SettingScopes.All`）可以同时出现在系统与个人设置页，不为此拆定义。
 - 界面语言与时区（`Display.*`）是组织默认、个人可覆盖（`SettingScopes.All`），代码默认值取部署基线 `DisplayDefaults`（启动期绑定与校验，空为跟随设备）；外观 `Display.Theme` 只有个人层，未设置时沿用设备当前值，设备无记录时跟随系统。它们是账户偏好，服务端读写都经 `IAccountPreferenceStore`，不直接读这几项设置。服务端给某个收件人产出文本时按收件人解析：语言用 `IAccountPreferenceStore.GetForUserAsync`，时区用 `IUserTimeZoneProvider.GetForUserAsync`，写出的时刻注明时区；不用当前用户的值，也不把当地时刻标成 UTC。
+- 配置块的"测试"（如发信、遥测导出）是 Api 里的业务动作端点，用当前生效的值调用对方，权限取该分组的子权限；不通过时抛带原因码的 `BusinessException` 并映射 422（请求有效、这组配置不可用；写请求的 5xx 前端只按"可能已生效"处理，给不出原因）。结果不落库；有外部副作用的测试（真实发信）记操作记录，纯探测不记。谁在何时改过设置查 `setting.changed` / `setting.cleared` 操作记录，设置本身不存修改信息。前端把测试放在该分组的行下方，用 `setting-test-panel`（无输入一个按钮；一项输入与按钮同行；多项输入 `expandable` 展开），测试前先等本组写入完成，结果只用 toast，不在设置行上显示结论。
 - 系统设置的每个分组一条 `App.Settings.*` 子权限，登记在 `Application/Settings/Provider/SettingGroupPermissions`（设置端点的分组策略与操作记录的授权依据都从这里取）；只含进程级设置的分组子权限侧别为 `Host`。新建系统设置分组时同时加子权限定义、中英译文、前端 `PERMISSIONS.settings` 与 Mock。
 <!--#if (SpaFrontend)-->
 

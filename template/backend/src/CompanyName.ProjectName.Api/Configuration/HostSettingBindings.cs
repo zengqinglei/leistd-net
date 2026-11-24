@@ -3,8 +3,6 @@ using CompanyName.ProjectName.Application.Settings.Provider;
 #if (IncludeOperationRecords)
 using Leistd.OperationRecords.EntityFrameworkCore.Options;
 #endif
-using CompanyName.ProjectName.Api.Hosting;
-using Leistd.Settings;
 using Leistd.Settings.Hosting;
 #if (Email)
 using Leistd.Email.Smtp.Options;
@@ -35,9 +33,7 @@ public static class HostSettingBindings
     /// <param name="services">服务集合。</param>
     /// <param name="deploymentConfiguration">部署配置：遥测导出开关的兜底值由它算出（见 <see cref="TelemetryExportOptions.IsEnabledByDeployment"/>）。</param>
     public static IServiceCollection AddMyProjectHostSettings(this IServiceCollection services, IConfiguration deploymentConfiguration)
-    {
-        AddSettingChecks(services, deploymentConfiguration);
-        return services.AddHostSettings(bindings =>
+        => services.AddHostSettings(bindings =>
         {
             // 内置日志过滤随配置重载即时生效：覆盖这个键即改变全局级别，清除即回到部署配置
             bindings.Bind(SettingConstant.Logging.MinimumLevel, [LogLevelDefault], fallback: nameof(LogLevel.Information));
@@ -86,29 +82,6 @@ public static class HostSettingBindings
                 SettingConstant.ExternalLogin.GoogleEnabled, SettingConstant.ExternalLogin.GoogleClientId, SettingConstant.ExternalLogin.GoogleClientSecret);
 #endif
         });
-    }
-
-    // 设置页"测试"：按钮挂在主设置那一行，列出的依赖设置被改动或清除时上次的结论标为过期
-    private static void AddSettingChecks(IServiceCollection services, IConfiguration deploymentConfiguration)
-    {
-        if (!TelemetryExportOptions.IsSdkDisabled(deploymentConfiguration))
-        {
-            // 与导出时一致不跟随重定向；超时取短值，测试按钮不该挂住半分钟
-            services.AddHttpClient(TelemetryExportCheck.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
-                .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
-            services.AddSettingCheck<TelemetryExportCheck>(
-                SettingConstant.Telemetry.ExportEndpoint, SettingConstant.Telemetry.ExportHeaders);
-        }
-#if (Email)
-
-        services.AddSettingCheck<SmtpConnectionCheck>(
-            SettingConstant.Email.SmtpHost,
-            SettingConstant.Email.SmtpPort,
-            SettingConstant.Email.SmtpEnableSsl,
-            SettingConstant.Email.SmtpUsername,
-            SettingConstant.Email.SmtpPassword);
-#endif
-    }
 #if (ExternalLogin)
 
     private static void BindExternalLogin(

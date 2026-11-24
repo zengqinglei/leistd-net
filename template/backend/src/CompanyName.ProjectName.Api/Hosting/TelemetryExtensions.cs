@@ -1,5 +1,6 @@
 using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Application.Settings.Options;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
@@ -17,7 +18,7 @@ public static class TelemetryExtensions
 
     /// <summary>注册三路信号的采集与 OTLP 导出；是否导出、发到哪由 <see cref="TelemetryExportOptions"/> 在运行时决定。</summary>
     /// <remarks>
-    /// <para>部署设 <c>OTEL_SDK_DISABLED=true</c> 时什么都不注册（SDK 只在启动时读这个开关），系统设置里也不出现导出项。
+    /// <para>部署设 <c>OTEL_SDK_DISABLED=true</c> 时不注册采集与导出（SDK 只在启动时读这个开关），系统设置里也不出现导出项；只留导出测试（<see cref="TelemetryExportProbe"/>），它答复本部署不可用。
     /// 测试宿主默认这样关闭，遥测自己的用例再打开。</para>
     /// <para>否则三路导出管道常驻：OpenTelemetry .NET 不支持运行期增删导出器，而导出开关可在系统设置里改。
     /// 导出不活动时尽早丢弃：追踪由采样器丢弃，不记录；日志不交给 SDK 的日志提供程序（见 <see cref="TelemetryExportLoggerProvider"/>）；
@@ -33,6 +34,10 @@ public static class TelemetryExtensions
         }
 
         builder.Services.AddSingleton<TelemetryRegistrationMarker>();
+        // 系统设置里的导出测试：SDK 关闭时也注册，由它答复"本部署不可用"。与导出时一致不跟随重定向；超时取短值
+        builder.Services.TryAddTransient<TelemetryExportProbe>();
+        builder.Services.AddHttpClient(TelemetryExportProbe.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
         if (TelemetryExportOptions.IsSdkDisabled(builder.Configuration))
         {
             builder.Services.Configure<TelemetrySettingsOptions>(options => options.ExportConfigurable = false);

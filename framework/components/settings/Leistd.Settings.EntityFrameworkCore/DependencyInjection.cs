@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Leistd.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Leistd.Settings.Checks;
 using Leistd.Settings.Stores;
 using Leistd.Settings.EntityFrameworkCore.EntityConfigurations;
 using Leistd.Settings.EntityFrameworkCore.Entities;
@@ -44,16 +43,14 @@ public static class DependencyInjection
 
         services.AddSettingsCore();
         services.TryAddTransient<ISettingStore, EfCoreSettingStore<TDbContext>>();
-        services.TryAddTransient<ISettingCheckStore, EfCoreSettingCheckStore<TDbContext>>();
 
         return services;
     }
 
-    /// <summary>将 <see cref="SettingRecord"/> 与 <see cref="SettingCheckRecord"/> 的实体配置应用到 DbContext。在 OnModelCreating 中调用。</summary>
+    /// <summary>将 <see cref="SettingRecord"/> 实体配置应用到 DbContext。在 OnModelCreating 中调用。</summary>
     public static ModelBuilder ConfigureSettings(this ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new SettingRecordConfiguration());
-        modelBuilder.ApplyConfiguration(new SettingCheckRecordConfiguration());
         return modelBuilder;
     }
 }

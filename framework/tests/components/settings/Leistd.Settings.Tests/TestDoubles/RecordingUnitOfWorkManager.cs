@@ -22,8 +22,7 @@ internal sealed class RecordingUnitOfWorkManager(Action<string>? journal = null)
         }
     }
 
-    // 默认没有外层工作单元；用例需要模拟调用方已开的工作单元时设置它
-    public IUnitOfWork? Current { get; set; }
+    public IUnitOfWork? Current => null;
 
     public IUnitOfWork Begin(UnitOfWorkOptions? options = null, bool requiresNew = false)
     {

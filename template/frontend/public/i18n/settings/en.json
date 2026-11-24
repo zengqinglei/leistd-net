@@ -92,29 +92,21 @@
   },
   "secretSet": "Set (type a new value to replace it)",
   "secretUnset": "Not set",
-  "modification": {
-    "secret": "Set · updated by {{name}} on",
-    "value": "Updated by {{name}} on",
-    "system": "the system"
-  },
-  "check": {
+  "testSaveFirst": "Some settings in this group weren't saved. Fix them, then test again",
+  "telemetryTest": {
+    "title": "Test telemetry export",
+    "description": "Sends an empty trace export with the saved endpoint and headers",
     "run": "Test",
     "running": "Testing…",
-    "passed": "Last test passed · {{name}} ·",
-    "failed": "Last test failed: {{reason}} · {{name}} ·",
-    "stale": "Outdated",
-    "requestFailed": "Couldn't run the test. Try again later",
-    "saveFirst": "Save the changes in this group before testing",
+    "passed": "Telemetry export works",
+    "passedDescription": "The endpoint accepted the export",
+    "failed": "Telemetry export test failed",
     "failure": {
-      "not-configured": "not configured",
-      "secret-unavailable": "the saved secret can't be decrypted",
-      "auth-rejected": "credentials rejected",
-      "unreachable": "couldn't connect",
-      "rate-limited": "rate limited",
-      "service-disabled": "service disabled",
-      "unexpected-status": "unexpected response",
-      "unexpected-error": "test failed unexpectedly",
-      "other": "failed"
+      "notConfigured": "No export endpoint is set. Enter the OTLP endpoint above first",
+      "unavailable": "Telemetry is turned off for this deployment (OTEL_SDK_DISABLED), so export can't be tested",
+      "authRejected": "The endpoint rejected the credentials. Check the OTLP headers",
+      "unreachable": "Couldn't reach the endpoint, or it didn't answer in time. Check the address and the network",
+      "unexpectedStatus": "The endpoint answered with an unexpected status. Check that it is the OTLP base address"
     }
   },
   //#if (ExternalLogin)
@@ -140,9 +132,17 @@
   //#endif
   "emailTest": {
     "title": "Send a test email",
-    "description": "Uses the settings above as they are now. Save your changes first.",
+    "description": "Sends an email with the saved settings to confirm the server can be reached and mail gets through",
     "recipient": "Recipient",
-    "send": "Send test email",
-    "sent": "Test email sent to {{to}}"
+    "send": "Send",
+    "sent": "Test email sent",
+    "sentDescription": "Delivered to {{to}}. Check the inbox",
+    "failed": "The test email wasn't sent",
+    "failure": {
+      "unreachable": "Couldn't reach the SMTP server. Check the host, port and TLS setting",
+      "authRejected": "The SMTP server rejected the sign-in. Check the username and password",
+      "rejected": "The SMTP server refused the message. Check the sender address and the recipient",
+      "sendFailed": "Couldn't connect, sign in or deliver through the SMTP server. Check the host, port, TLS and credentials; the server logs have the details"
+    }
   }
 }

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using CompanyName.ProjectName.Api.Options;
 using Microsoft.Extensions.Options;
 
@@ -86,18 +87,25 @@ internal sealed class TelemetryExportHandler(
         }
 
         request.RequestUri = new Uri($"{current.Endpoint!.Trim().TrimEnd('/')}/v1/{SignalOf(request)}");
-        foreach (var (name, value) in ParseHeaders(current.Headers))
-        {
-            request.Headers.Remove(name);
-            request.Headers.TryAddWithoutValidation(name, value);
-        }
+        WriteHeaders(request.Headers, current.Headers);
 
         return true;
     }
 
+    /// <summary>把配置的认证头写进请求：同名头（名称不分大小写）只留最后一个值，请求里原有的同名头被替换。</summary>
+    /// <remarks>导出测试（<see cref="TelemetryExportProbe"/>）用同一写法，测试通过的认证头就是导出时发出的那一份。</remarks>
+    internal static void WriteHeaders(HttpRequestHeaders target, string? headers)
+    {
+        foreach (var (name, value) in ParseHeaders(headers))
+        {
+            target.Remove(name);
+            target.TryAddWithoutValidation(name, value);
+        }
+    }
+
     // 格式同 OTEL_EXPORTER_OTLP_HEADERS：逗号分隔的 key=value，值按 URL 编码解码（与 SDK 一致）。
     // 系统设置的写法在写入时已校验，这里只解析
-    internal static IEnumerable<(string Name, string Value)> ParseHeaders(string? headers)
+    private static IEnumerable<(string Name, string Value)> ParseHeaders(string? headers)
     {
         if (string.IsNullOrWhiteSpace(headers))
         {

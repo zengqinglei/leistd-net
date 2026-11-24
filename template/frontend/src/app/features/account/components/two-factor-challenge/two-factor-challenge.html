@@ -101,7 +101,7 @@
               spellcheck="false"
               data-testid="two-factor-recovery-input"
               [id]="inputIds.recoveryCode"
-              [attr.aria-invalid]="error() ? 'true' : null"
+              [aria-invalid]="error() ? true : undefined"
               [formField]="verificationForm.value"
               (input)="onValueChange($any($event.target).value)"
             />

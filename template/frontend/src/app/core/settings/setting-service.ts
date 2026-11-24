@@ -17,7 +17,6 @@ import {
   ExternalLoginStatusOutputDto,
   //#endif
   SetSettingInputDto,
-  SettingCheckResultDto,
   SettingOutputDto,
 } from './setting.dto';
 
@@ -69,12 +68,12 @@ export class SettingService {
     return scope === 'account' ? this.setForCurrentUser(data) : this.setForCurrentTenant(data);
   }
 
-  /** 在设置页编辑的那一层执行一项设置测试（会用存着的凭据对外调用一次），返回本次结果。 */
-  checkSetting(name: string): Observable<SettingCheckResultDto> {
-    return this.http.post<SettingCheckResultDto>(
-      `${this.baseUrl}/checks/${encodeURIComponent(name)}`,
-      null,
-    );
+  /**
+   * 用当前生效的导出地址与认证头发一次空的追踪导出（宿主，运维分组权限）。通过时无正文；
+   * 不通过时以 422 返回原因码（`AppSetting:TelemetryExport*`）。纯探测，不留记录。
+   */
+  testTelemetryExport(): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/telemetry/test`, null);
   }
   //#if (LocalIdentity)
 

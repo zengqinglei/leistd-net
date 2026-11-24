@@ -55,7 +55,6 @@
     "tenant.connection-changed": "Changed the database connection of tenant {{target}}",
     "setting.changed": "Changed setting {{target}}",
     "setting.cleared": "Cleared setting {{target}}",
-    "setting.checked": "Tested setting {{target}}",
     "setting.test-email-sent": "Sent a test email",
     "operation-records.exported": "Exported operation records",
     "auth.login.succeeded": "Signed in",

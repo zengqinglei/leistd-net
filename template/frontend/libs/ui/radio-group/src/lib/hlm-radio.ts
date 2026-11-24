@@ -15,8 +15,8 @@ import {
   Renderer2,
 } from '@angular/core';
 import { BrnRadio, BrnRadioGroup, type BrnRadioChange } from '@spartan-ng/brain/radio-group';
-import { hlm, syncHlmAriaInvalid } from '@spartan-ng/helm/utils';
-import type { ClassValue } from 'clsx';
+import { hlm } from '@spartan-ng/helm/utils';
+import type { ClassValue } from 'cn';
 
 @Component({
   selector: 'hlm-radio',
@@ -38,7 +38,7 @@ import type { ClassValue } from 'clsx';
       [required]="required()"
       [disabled]="disabled()"
       [attr.aria-invalid]="_groupSpartanInvalid() ? 'true' : null"
-      [attr.data-invalid]="_ariaInvalid() ? 'true' : null"
+      [attr.data-invalid]="_invalid() ? 'true' : null"
       [attr.data-dirty]="_dirty() ? 'true' : null"
       [attr.data-touched]="_touched() ? 'true' : null"
       [attr.data-matches-spartan-invalid]="_groupSpartanInvalid() ? 'true' : null"
@@ -59,7 +59,7 @@ export class HlmRadio<T = unknown> {
   private readonly _isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
   private readonly _radioGroup = inject(BrnRadioGroup, { optional: true });
 
-  protected readonly _ariaInvalid = computed(() => this._radioGroup?.controlState?.()?.invalid);
+  protected readonly _invalid = computed(() => this._radioGroup?.controlState?.()?.invalid);
 
   protected readonly _touched = computed(() => this._radioGroup?.controlState?.()?.touched);
   protected readonly _dirty = computed(() => this._radioGroup?.controlState?.()?.dirty);
@@ -115,7 +115,6 @@ export class HlmRadio<T = unknown> {
   public readonly change = output<BrnRadioChange<T>>();
 
   constructor() {
-    syncHlmAriaInvalid('input[type="radio"]', () => this._groupSpartanInvalid());
     effect(() => {
       const isDisabled = this.disabled();
 

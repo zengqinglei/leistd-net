@@ -28,11 +28,11 @@
           />
         </button>
         <ng-template #systems>
-          <hlm-dropdown-menu class="min-w-56 max-w-80" (keydown.escape)="$event.stopPropagation()">
+          <hlm-dropdown-menu class="min-w-56 max-w-80">
             <hlm-dropdown-menu-label>{{
               t('layout.systemSwitcher.title')
             }}</hlm-dropdown-menu-label>
-            <hlm-dropdown-menu-group (keydown.escape)="closeMenu($event)">
+            <hlm-dropdown-menu-group>
               @for (system of directory.systems(); track system.key) {
                 <button
                   hlmDropdownMenuItem

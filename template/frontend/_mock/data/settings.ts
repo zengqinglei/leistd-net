@@ -578,25 +578,6 @@ export const USER_SETTING_VALUES = new StoredMap('mock_user_settings');
 
 /** 租户级覆盖：`${tenantKey}:${settingName}` → 值；宿主用 `host`。 */
 export const TENANT_SETTING_VALUES = new StoredMap('mock_tenant_settings');
-
-/** 租户级覆盖的最后一次写入：键同 {@link TENANT_SETTING_VALUES}，值为 `SettingModificationDto` 的 JSON；清除时一起删。 */
-export const TENANT_SETTING_MODIFICATIONS = new StoredMap('mock_tenant_setting_modifications');
-
-/** 设置测试的最近结果：`${tenantKey}:${settingName}` → `SettingCheckResultDto` 的 JSON。 */
-export const SETTING_CHECK_RESULTS = new StoredMap('mock_setting_checks');
-
-/** 登记了测试的设置：主设置 → 依赖设置（与后端 AddSettingCheck 一致，任一项改动即结论过期）。 */
-export const SETTING_CHECKS: Readonly<Record<string, readonly string[]>> = {
-  'Telemetry.Export.Endpoint': ['Telemetry.Export.Headers'],
-  //#if (Email)
-  'Email.SmtpHost': [
-    'Email.SmtpPort',
-    'Email.SmtpEnableSsl',
-    'Email.SmtpUsername',
-    'Email.SmtpPassword',
-  ],
-  //#endif
-};
 //#if (ExternalLogin)
 
 /** 一个外部登录提供方的有效配置。 */

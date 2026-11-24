@@ -1,4 +1,3 @@
-using Leistd.Settings.Tests.TestDoubles;
 using System.Data.Common;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -40,7 +39,7 @@ public sealed class EfCoreSettingStoreConcurrencyTests : IDisposable
     {
         await using var db = NewContext(new RunOnceBeforeSaveInterceptor(() => WriteAsOtherAsync("en-US")));
 
-        await StoreOver(db).SetAsync(Name, "ja-JP", SettingScopes.Tenant, null, TestWrites.Anonymous);
+        await StoreOver(db).SetAsync(Name, "ja-JP", SettingScopes.Tenant, null);
 
         Assert.Equal("ja-JP", Assert.Single(await RowsAsync()).Value);
     }
@@ -52,7 +51,7 @@ public sealed class EfCoreSettingStoreConcurrencyTests : IDisposable
         await WriteAsOtherAsync("en-US");
         await using var db = NewContext(new RunOnceBeforeSaveInterceptor(() => WriteAsOtherAsync(null)));
 
-        await StoreOver(db).SetAsync(Name, null, SettingScopes.Tenant, null, TestWrites.Anonymous);
+        await StoreOver(db).SetAsync(Name, null, SettingScopes.Tenant, null);
 
         Assert.Empty(await RowsAsync());
     }
@@ -64,7 +63,7 @@ public sealed class EfCoreSettingStoreConcurrencyTests : IDisposable
         await WriteAsOtherAsync("en-US");
         await using var db = NewContext(new RunOnceBeforeSaveInterceptor(() => WriteAsOtherAsync(null)));
 
-        await StoreOver(db).SetAsync(Name, "ja-JP", SettingScopes.Tenant, null, TestWrites.Anonymous);
+        await StoreOver(db).SetAsync(Name, "ja-JP", SettingScopes.Tenant, null);
 
         Assert.Equal("ja-JP", Assert.Single(await RowsAsync()).Value);
     }
@@ -80,7 +79,7 @@ public sealed class EfCoreSettingStoreConcurrencyTests : IDisposable
             await WriteAsOtherAsync("ko-KR");
         }));
 
-        await StoreOver(db).SetAsync(Name, null, SettingScopes.Tenant, null, TestWrites.Anonymous);
+        await StoreOver(db).SetAsync(Name, null, SettingScopes.Tenant, null);
 
         Assert.Empty(await RowsAsync());
     }
@@ -95,7 +94,7 @@ public sealed class EfCoreSettingStoreConcurrencyTests : IDisposable
         outer = transaction.GetDbTransaction();
 
         db.Notes.Add(new HostNote { Code = "pending" });
-        await StoreOver(db).SetAsync(Name, "ja-JP", SettingScopes.Tenant, null, TestWrites.Anonymous);
+        await StoreOver(db).SetAsync(Name, "ja-JP", SettingScopes.Tenant, null);
         await transaction.CommitAsync();
 
         Assert.Equal("ja-JP", Assert.Single(await RowsAsync()).Value);
@@ -125,7 +124,7 @@ public sealed class EfCoreSettingStoreConcurrencyTests : IDisposable
         var duplicate = db.Notes.Add(new HostNote { Code = "taken" });
 
         await Assert.ThrowsAnyAsync<DbUpdateException>(
-            () => StoreOver(db).SetAsync(Name, value, SettingScopes.Tenant, null, TestWrites.Anonymous));
+            () => StoreOver(db).SetAsync(Name, value, SettingScopes.Tenant, null));
 
         Assert.Equal(EntityState.Added, duplicate.State);
         Assert.Equal(existing, (await RowsAsync()).SingleOrDefault()?.Value);
@@ -139,7 +138,7 @@ public sealed class EfCoreSettingStoreConcurrencyTests : IDisposable
         await using var db = NewContext(saves);
 
         await Assert.ThrowsAnyAsync<DbUpdateException>(
-            () => StoreOver(db).SetAsync(Name, RejectedValue, SettingScopes.Tenant, null, TestWrites.Anonymous));
+            () => StoreOver(db).SetAsync(Name, RejectedValue, SettingScopes.Tenant, null));
 
         Assert.Equal(1, saves.Count);
         Assert.Empty(await RowsAsync());
@@ -154,7 +153,7 @@ public sealed class EfCoreSettingStoreConcurrencyTests : IDisposable
             () => WriteAsOtherAsync(null)));
 
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(
-            () => StoreOver(db).SetAsync(Name, "ja-JP", SettingScopes.Tenant, null, TestWrites.Anonymous));
+            () => StoreOver(db).SetAsync(Name, "ja-JP", SettingScopes.Tenant, null));
     }
 
     // 恢复途中取消照常抛出，不被当作冲突吞掉，也不再写入。
@@ -167,7 +166,7 @@ public sealed class EfCoreSettingStoreConcurrencyTests : IDisposable
             new CancelOnSaveFailedInterceptor(cancellation));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => StoreOver(db).SetAsync(Name, "ja-JP", SettingScopes.Tenant, null, TestWrites.Anonymous, cancellation.Token));
+            () => StoreOver(db).SetAsync(Name, "ja-JP", SettingScopes.Tenant, null, cancellation.Token));
 
         Assert.Equal("en-US", Assert.Single(await RowsAsync()).Value);
     }
@@ -190,7 +189,7 @@ public sealed class EfCoreSettingStoreConcurrencyTests : IDisposable
             await other.Database.UseTransactionAsync(transaction);
         }
 
-        await StoreOver(other).SetAsync(Name, value, SettingScopes.Tenant, null, TestWrites.Anonymous);
+        await StoreOver(other).SetAsync(Name, value, SettingScopes.Tenant, null);
     }
 
     private async Task<List<SettingRecord>> RowsAsync()

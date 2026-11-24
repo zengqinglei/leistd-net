@@ -37,17 +37,16 @@
     //#endif
     "@ng-icons/core": "36.1.0",
     "@ng-icons/lucide": "36.1.0",
-    "@spartan-ng/brain": "1.9.0",
+    "@spartan-ng/brain": "1.10.0",
     "@tanstack/angular-charts": "1.5.0",
     "@tanstack/angular-table": "9.3.2",
     "@tanstack/charts": "1.5.0",
     "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
+    "cn": "^0.5.2",
     //#if (LocalIdentity)
     "qrcode": "^1.5.4",
     //#endif
     "rxjs": "~7.8.2",
-    "tailwind-merge": "^3.7.0",
     "tslib": "^2.9.1"
   },
   "devDependencies": {
@@ -56,7 +55,7 @@
     "@angular/compiler-cli": "22.3.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.65.1",
-    "@spartan-ng/cli": "1.9.0",
+    "@spartan-ng/cli": "1.10.0",
     "@tailwindcss/postcss": "^4.3.5",
     "@testcontainers/postgresql": "^12.2.1",
     //#if (LocalIdentity)

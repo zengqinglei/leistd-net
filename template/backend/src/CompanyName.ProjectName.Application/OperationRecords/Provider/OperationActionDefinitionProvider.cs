@@ -152,11 +152,6 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
             OperationRecordActions.SettingCleared,
             OperationRecordCategories.Configuration,
             OperationVisibility.Tenant);
-        // 测试会用存着的凭据对外调用一次，记下是谁触发的
-        context.Add(
-            OperationRecordActions.SettingChecked,
-            OperationRecordCategories.Configuration,
-            OperationVisibility.Tenant);
 #if (LocalIdentity && Email)
         // 只有宿主能发测试邮件；租户里的尝试被拒后记在租户层，租户管理员看得见自己人试过。
         context.Add(

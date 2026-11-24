@@ -62,7 +62,6 @@ const ACTION_SENTENCES: Record<string, (target: string) => string> = {
   //#endif
   'setting.changed': (t) => `Changed setting ${t}`,
   'setting.cleared': (t) => `Cleared setting ${t}`,
-  'setting.checked': (t) => `Tested setting ${t}`,
   //#if (LocalIdentity && Email)
   'setting.test-email-sent': () => 'Sent a test email',
   //#endif

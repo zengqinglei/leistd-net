@@ -5,6 +5,7 @@ import {
   Component,
   computed,
   inject,
+  input,
   signal,
 } from '@angular/core';
 import { FormField, form, required, email } from '@angular/forms/signals';
@@ -20,17 +21,34 @@ import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { firstValueFrom } from 'rxjs';
 
+import { ApplicationHttpError } from '../../../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../../../core/services/auth-service';
 import { SettingService } from '../../../../../../core/settings/setting-service';
 import { injectFormSubmission } from '../../../../../../core/validation/form-submission';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
+import { SettingTestPanel } from '../setting-test-panel/setting-test-panel';
 
 /** 发信参数的分组标识，与后端 `SettingConstant.Groups.Email` 一致。 */
 export const EMAIL_GROUP = 'Email';
 
-/** 「邮件发送」面板底部：用当前生效的参数发一封测试邮件，失败时原样显示服务端给出的原因。 */
+/**
+ * 发信失败码 → 本地词条：原因按码给出，不依赖服务端文案；不认识的码与其他失败用归一化后的通用原因。
+ * 码与后端 `AppSettingErrorCodes` 逐字一致。
+ */
+const EMAIL_TEST_FAILURES: Readonly<Partial<Record<string, string>>> = {
+  'AppSetting:TestEmailUnreachable': 'settings.emailTest.failure.unreachable',
+  'AppSetting:TestEmailAuthRejected': 'settings.emailTest.failure.authRejected',
+  'AppSetting:TestEmailRejected': 'settings.emailTest.failure.rejected',
+  'AppSetting:TestEmailFailed': 'settings.emailTest.failure.sendFailed',
+};
+
+/**
+ * 「邮件发送」分组底部的测试区：用当前生效的参数发一封测试邮件，收件人默认是自己。
+ * 发送前先等本组的写入落定（{@link settle}），刚改的参数才会用上。成功提示自动消失；失败提示保留到手动关闭，
+ * 原因按错误码取本地词条。
+ */
 @Component({
   selector: 'app-email-test',
   // prettier-ignore
@@ -41,6 +59,7 @@ export const EMAIL_GROUP = 'Email';
     HlmButton,
     HlmInput,
     HlmSpinner,
+    SettingTestPanel,
     //#if (IncludeLocalization)
     TranslocoDirective,
     //#endif
@@ -58,6 +77,12 @@ export class EmailTest {
   protected readonly t = englishText(ENGLISH);
   //#endif
 
+  /**
+   * 发送前让本组的写入落定：为真时继续；本组有没保存成功的输入时为假，由提供方说明原因，这里不发请求。
+   * 不给时直接发送。
+   */
+  readonly settle = input<() => Promise<boolean>>(() => Promise.resolve(true));
+
   /** 默认发给自己：最常见的用法就是"发一封给我看看收不收得到"。 */
   private readonly submitForm = injectFormSubmission();
   private readonly model = signal({ to: inject(AuthService).currentUser()?.email ?? '' });
@@ -70,15 +95,42 @@ export class EmailTest {
 
   protected async send(): Promise<void> {
     this.model.update((value) => ({ to: value.to.trim() }));
-    // 服务端的原因里已经带着“测试邮件发送失败”，标题不再重复一遍。
-    await this.submitForm(this.emailForm, this.emailTestRoot().nativeElement, async () => {
-      await firstValueFrom(this.settingService.sendTestEmail(this.to()));
-      //#if (IncludeLocalization)
-      toast.success(this.transloco.translate('settings.emailTest.sent', { to: this.to() }));
-      //#else
-      toast.success(this.t('settings.emailTest.sent', { to: this.to() }));
-      //#endif
+    await this.submitForm(
+      this.emailForm,
+      this.emailTestRoot().nativeElement,
+      async () => {
+        // 等写入期间按钮保持"发送中"：点按钮时输入框失焦提交的那次写入也在其中
+        if (!(await this.settle()())) {
+          return;
+        }
+
+        const to = this.to();
+        await firstValueFrom(this.settingService.sendTestEmail(to));
+        toast.success(this.text('settings.emailTest.sent'), {
+          description: this.text('settings.emailTest.sentDescription', { to }),
+        });
+      },
+      (message, error) => this.reportFailure(message, error),
+    );
+  }
+
+  /** 失败保留到手动关闭：管理员要照着原因去改参数，自动消失就看不全了。 */
+  private reportFailure(message: string, error: unknown): void {
+    const code = error instanceof ApplicationHttpError ? error.code : undefined;
+    const reason = code ? EMAIL_TEST_FAILURES[code] : undefined;
+    toast.error(this.text('settings.emailTest.failed'), {
+      description: reason ? this.text(reason) : message,
+      duration: Number.POSITIVE_INFINITY,
+      closeButton: true,
     });
+  }
+
+  private text(key: string, params?: Record<string, unknown>): string {
+    //#if (IncludeLocalization)
+    return this.transloco.translate(key, params);
+    //#else
+    return this.t(key, params);
+    //#endif
   }
 }
 //#if (!IncludeLocalization)
@@ -87,10 +139,19 @@ export class EmailTest {
 const ENGLISH: Record<string, string> = {
   'settings.emailTest.title': 'Send a test email',
   'settings.emailTest.description':
-    'Uses the settings above as they are now. Save your changes first.',
+    'Sends an email with the saved settings to confirm the server can be reached and mail gets through',
   'settings.emailTest.recipient': 'Recipient',
-  'settings.emailTest.send': 'Send test email',
-  'settings.emailTest.sent': 'Test email sent to {{to}}',
-  'common.requestError': 'Request error',
+  'settings.emailTest.send': 'Send',
+  'settings.emailTest.sent': 'Test email sent',
+  'settings.emailTest.sentDescription': 'Delivered to {{to}}. Check the inbox',
+  'settings.emailTest.failed': "The test email wasn't sent",
+  'settings.emailTest.failure.unreachable':
+    "Couldn't reach the SMTP server. Check the host, port and TLS setting",
+  'settings.emailTest.failure.authRejected':
+    'The SMTP server rejected the sign-in. Check the username and password',
+  'settings.emailTest.failure.rejected':
+    'The SMTP server refused the message. Check the sender address and the recipient',
+  'settings.emailTest.failure.sendFailed':
+    "Couldn't connect, sign in or deliver through the SMTP server. Check the host, port, TLS and credentials; the server logs have the details",
 };
 //#endif

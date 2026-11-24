@@ -337,7 +337,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             "/api/v1/settings/current-tenant",
             new { Name = SettingConstant.Logging.RequestLogging, Value = (string?)null });
         Assert.Equal(HttpStatusCode.NoContent, cleared.StatusCode);
-        // 清除单独记一个动作：它会把修改信息随行删掉，事后只能从这里查到是谁清的
+        // 清除会删掉这一层的值所在的行：写入与清除是两种动作，操作记录分开记
         Assert.Equal(changedBefore + 1, await RecordedAsync(OperationRecordActions.SettingChanged));
         Assert.Equal(clearedBefore + 1, await RecordedAsync(OperationRecordActions.SettingCleared));
     }

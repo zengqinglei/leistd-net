@@ -91,7 +91,7 @@ public sealed class NotificationRetentionSettingsTests(ProjectWebApplicationFact
         await using var scope = factory.Services.CreateAsyncScope();
         var services = scope.ServiceProvider;
         using var unitOfWork = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
-        await services.GetRequiredService<ISettingStore>().SetAsync(name, value, SettingScopes.Host, userId: null, new SettingModification(DateTime.UtcNow, null, null));
+        await services.GetRequiredService<ISettingStore>().SetAsync(name, value, SettingScopes.Host, userId: null);
         await unitOfWork.CompleteAsync();
     }
 }

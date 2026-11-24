@@ -1,8 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { BrnInputOtp, BrnInputOtpInput, type InputMode } from '@spartan-ng/brain/input-otp';
 import { BrnFieldControlDescribedBy } from '@spartan-ng/brain/field';
-import { classes, hlm, hlmAriaInvalid } from '@spartan-ng/helm/utils';
-import type { ClassValue } from 'clsx';
+import { classes, hlm } from '@spartan-ng/helm/utils';
+import type { ClassValue } from 'cn';
 
 @Component({
   selector: 'hlm-input-otp',
@@ -43,7 +43,7 @@ import type { ClassValue } from 'clsx';
 })
 export class HlmInputOtp {
   private readonly _otp = inject(BrnInputOtp);
-  protected readonly _ariaInvalid = computed(() => hlmAriaInvalid(this._otp.spartanInvalid?.()));
+  protected readonly _ariaInvalid = computed(() => (this._otp.spartanInvalid?.() ? 'true' : null));
 
   /** Custom autocomplete attribute applied to the input element */
   public readonly inputAutocomplete = input<'one-time-code' | 'off'>('one-time-code');

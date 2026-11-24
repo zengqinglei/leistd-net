@@ -1,4 +1,3 @@
-using Leistd.Settings.Tests.TestDoubles;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Leistd.MultiTenancy.Context;
@@ -6,9 +5,7 @@ using Leistd.Settings.Definitions;
 using Leistd.Settings.EntityFrameworkCore;
 using Leistd.Settings.EntityFrameworkCore.Entities;
 using Leistd.Settings.EntityFrameworkCore.Stores;
-using Leistd.Settings.Checks;
 using Leistd.Settings.Exceptions;
-using Leistd.Settings.Stores;
 using Leistd.TestBase.Doubles;
 using Xunit;
 
@@ -55,8 +52,8 @@ public sealed class EfCoreSettingStoreTests : IDisposable
     [Fact]
     public async Task Values_written_at_a_level_are_read_back_from_that_level()
     {
-        await _store.SetAsync("Display.Language", "en-US", SettingScopes.Tenant, null, TestWrites.Anonymous);
-        await _store.SetAsync("Display.Language", "ja-JP", SettingScopes.User, "user-1", TestWrites.Anonymous);
+        await _store.SetAsync("Display.Language", "en-US", SettingScopes.Tenant, null);
+        await _store.SetAsync("Display.Language", "ja-JP", SettingScopes.User, "user-1");
 
         var tenant = await _store.GetAllAsync(SettingScopes.Tenant, null);
         var user = await _store.GetAllAsync(SettingScopes.User, "user-1");
@@ -69,7 +66,7 @@ public sealed class EfCoreSettingStoreTests : IDisposable
     [Fact]
     public async Task A_user_value_does_not_leak_into_the_tenant_level()
     {
-        await _store.SetAsync("Display.Language", "ja-JP", SettingScopes.User, "user-1", TestWrites.Anonymous);
+        await _store.SetAsync("Display.Language", "ja-JP", SettingScopes.User, "user-1");
 
         Assert.Empty(await _store.GetAllAsync(SettingScopes.Tenant, null));
     }
@@ -77,8 +74,8 @@ public sealed class EfCoreSettingStoreTests : IDisposable
     [Fact]
     public async Task Two_users_do_not_see_each_other_values()
     {
-        await _store.SetAsync("Display.Language", "ja-JP", SettingScopes.User, "user-1", TestWrites.Anonymous);
-        await _store.SetAsync("Display.Language", "ko-KR", SettingScopes.User, "user-2", TestWrites.Anonymous);
+        await _store.SetAsync("Display.Language", "ja-JP", SettingScopes.User, "user-1");
+        await _store.SetAsync("Display.Language", "ko-KR", SettingScopes.User, "user-2");
 
         Assert.Equal("ja-JP", (await _store.GetAllAsync(SettingScopes.User, "user-1"))["Display.Language"]);
         Assert.Equal("ko-KR", (await _store.GetAllAsync(SettingScopes.User, "user-2"))["Display.Language"]);
@@ -88,8 +85,8 @@ public sealed class EfCoreSettingStoreTests : IDisposable
     [Fact]
     public async Task Writing_the_same_setting_twice_updates_in_place()
     {
-        await _store.SetAsync("Display.Language", "en-US", SettingScopes.Tenant, null, TestWrites.Anonymous);
-        await _store.SetAsync("Display.Language", "ja-JP", SettingScopes.Tenant, null, TestWrites.Anonymous);
+        await _store.SetAsync("Display.Language", "en-US", SettingScopes.Tenant, null);
+        await _store.SetAsync("Display.Language", "ja-JP", SettingScopes.Tenant, null);
 
         Assert.Equal("ja-JP", (await _store.GetAllAsync(SettingScopes.Tenant, null))["Display.Language"]);
         Assert.Equal(1, await _db.Settings.CountAsync());
@@ -99,9 +96,9 @@ public sealed class EfCoreSettingStoreTests : IDisposable
     [Fact]
     public async Task A_null_value_removes_the_row()
     {
-        await _store.SetAsync("Display.Language", "en-US", SettingScopes.Tenant, null, TestWrites.Anonymous);
+        await _store.SetAsync("Display.Language", "en-US", SettingScopes.Tenant, null);
 
-        await _store.SetAsync("Display.Language", null, SettingScopes.Tenant, null, TestWrites.Anonymous);
+        await _store.SetAsync("Display.Language", null, SettingScopes.Tenant, null);
 
         Assert.Empty(await _store.GetAllAsync(SettingScopes.Tenant, null));
     }
@@ -109,7 +106,7 @@ public sealed class EfCoreSettingStoreTests : IDisposable
     [Fact]
     public async Task Clearing_a_level_that_has_no_value_is_a_no_op()
     {
-        await _store.SetAsync("Display.Language", null, SettingScopes.Tenant, null, TestWrites.Anonymous);
+        await _store.SetAsync("Display.Language", null, SettingScopes.Tenant, null);
 
         Assert.Empty(await _store.GetAllAsync(SettingScopes.Tenant, null));
     }
@@ -118,9 +115,9 @@ public sealed class EfCoreSettingStoreTests : IDisposable
     [Fact]
     public async Task RemoveAll_clears_every_scope_of_the_current_tenant()
     {
-        await _store.SetAsync("Display.Language", "en-US", SettingScopes.Tenant, null, TestWrites.Anonymous);
-        await _store.SetAsync("Display.Language", "ja-JP", SettingScopes.User, "user-1", TestWrites.Anonymous);
-        await _store.SetAsync("Display.Language", "ko-KR", SettingScopes.User, "user-2", TestWrites.Anonymous);
+        await _store.SetAsync("Display.Language", "en-US", SettingScopes.Tenant, null);
+        await _store.SetAsync("Display.Language", "ja-JP", SettingScopes.User, "user-1");
+        await _store.SetAsync("Display.Language", "ko-KR", SettingScopes.User, "user-2");
 
         await _store.RemoveAllAsync();
 
@@ -135,7 +132,7 @@ public sealed class EfCoreSettingStoreTests : IDisposable
     [Fact]
     public async Task A_duplicate_row_at_the_host_level_is_rejected_by_the_database()
     {
-        await _store.SetAsync("Display.Language", "en-US", SettingScopes.Tenant, null, TestWrites.Anonymous);
+        await _store.SetAsync("Display.Language", "en-US", SettingScopes.Tenant, null);
         var existing = await _db.Settings.SingleAsync();
 
         _db.Settings.Add(new SettingRecord
@@ -153,7 +150,7 @@ public sealed class EfCoreSettingStoreTests : IDisposable
     public async Task A_duplicate_row_at_the_tenant_level_is_rejected_by_the_database()
     {
         var store = NewStore(Guid.CreateVersion7());
-        await store.SetAsync("Display.TimeZone", "UTC", SettingScopes.Tenant, null, TestWrites.Anonymous);
+        await store.SetAsync("Display.TimeZone", "UTC", SettingScopes.Tenant, null);
         var existing = await _db.Settings.SingleAsync();
 
         _db.Settings.Add(new SettingRecord
@@ -174,8 +171,8 @@ public sealed class EfCoreSettingStoreTests : IDisposable
         var first = NewStore(Guid.CreateVersion7());
         var second = NewStore(Guid.CreateVersion7());
 
-        await first.SetAsync("Display.TimeZone", "UTC", SettingScopes.Tenant, null, TestWrites.Anonymous);
-        await second.SetAsync("Display.TimeZone", "Asia/Tokyo", SettingScopes.Tenant, null, TestWrites.Anonymous);
+        await first.SetAsync("Display.TimeZone", "UTC", SettingScopes.Tenant, null);
+        await second.SetAsync("Display.TimeZone", "Asia/Tokyo", SettingScopes.Tenant, null);
 
         Assert.Equal("UTC", (await first.GetAllAsync(SettingScopes.Tenant, null))["Display.TimeZone"]);
         Assert.Equal("Asia/Tokyo", (await second.GetAllAsync(SettingScopes.Tenant, null))["Display.TimeZone"]);
@@ -187,8 +184,8 @@ public sealed class EfCoreSettingStoreTests : IDisposable
     {
         var tenantStore = NewStore(Guid.CreateVersion7());
 
-        await _store.SetAsync("Display.TimeZone", "UTC", SettingScopes.Tenant, null, TestWrites.Anonymous);
-        await tenantStore.SetAsync("Display.TimeZone", "Asia/Tokyo", SettingScopes.Tenant, null, TestWrites.Anonymous);
+        await _store.SetAsync("Display.TimeZone", "UTC", SettingScopes.Tenant, null);
+        await tenantStore.SetAsync("Display.TimeZone", "Asia/Tokyo", SettingScopes.Tenant, null);
 
         Assert.Equal("UTC", (await _store.GetAllAsync(SettingScopes.Tenant, null))["Display.TimeZone"]);
         Assert.Equal("Asia/Tokyo", (await tenantStore.GetAllAsync(SettingScopes.Tenant, null))["Display.TimeZone"]);
@@ -202,8 +199,8 @@ public sealed class EfCoreSettingStoreTests : IDisposable
     [InlineData("u")]
     public async Task A_user_id_cannot_collide_with_the_tenant_level(string userId)
     {
-        await _store.SetAsync("Display.TimeZone", "UTC", SettingScopes.Tenant, null, TestWrites.Anonymous);
-        await _store.SetAsync("Display.TimeZone", "Asia/Tokyo", SettingScopes.User, userId, TestWrites.Anonymous);
+        await _store.SetAsync("Display.TimeZone", "UTC", SettingScopes.Tenant, null);
+        await _store.SetAsync("Display.TimeZone", "Asia/Tokyo", SettingScopes.User, userId);
 
         Assert.Equal("UTC", (await _store.GetAllAsync(SettingScopes.Tenant, null))["Display.TimeZone"]);
         Assert.Equal("Asia/Tokyo", (await _store.GetAllAsync(SettingScopes.User, userId))["Display.TimeZone"]);
@@ -223,7 +220,7 @@ public sealed class EfCoreSettingStoreTests : IDisposable
             () => _store.GetAllAsync(SettingScopes.User, userId));
 
         await Assert.ThrowsAnyAsync<ArgumentException>(
-            () => _store.SetAsync("Display.TimeZone", "UTC", SettingScopes.User, userId, TestWrites.Anonymous));
+            () => _store.SetAsync("Display.TimeZone", "UTC", SettingScopes.User, userId));
     }
 
     // None 与 All 不指向任何一行：静默按某一层处理会把值写到调用方没预期的地方。
@@ -252,7 +249,7 @@ public sealed class EfCoreSettingStoreTests : IDisposable
         Assert.True(_store.CanAccessHostScope);
 
         await Assert.ThrowsAsync<HostScopeUnavailableException>(
-            () => tenantStore.SetAsync("Logging.MinimumLevel", "Debug", SettingScopes.Host, null, TestWrites.Anonymous));
+            () => tenantStore.SetAsync("Logging.MinimumLevel", "Debug", SettingScopes.Host, null));
         await Assert.ThrowsAsync<HostScopeUnavailableException>(
             () => tenantStore.GetAllAsync(SettingScopes.Host, null));
     }
@@ -262,8 +259,8 @@ public sealed class EfCoreSettingStoreTests : IDisposable
     [Fact]
     public async Task Host_scope_and_the_host_tenant_row_are_the_same_row()
     {
-        await _store.SetAsync("Logging.MinimumLevel", "Debug", SettingScopes.Host, null, TestWrites.Anonymous);
-        await _store.SetAsync("Display.Language", "zh-CN", SettingScopes.Tenant, null, TestWrites.Anonymous);
+        await _store.SetAsync("Logging.MinimumLevel", "Debug", SettingScopes.Host, null);
+        await _store.SetAsync("Display.Language", "zh-CN", SettingScopes.Tenant, null);
 
         var viaHost = await _store.GetAllAsync(SettingScopes.Host, null);
         var viaTenant = await _store.GetAllAsync(SettingScopes.Tenant, null);
@@ -281,7 +278,7 @@ public sealed class EfCoreSettingStoreTests : IDisposable
     [Fact]
     public async Task Reading_returns_the_database_value_over_an_entity_already_tracked_by_the_context()
     {
-        await _store.SetAsync("Display.Language", "en-US", SettingScopes.Tenant, null, TestWrites.Anonymous);
+        await _store.SetAsync("Display.Language", "en-US", SettingScopes.Tenant, null);
         var tracked = await _db.Settings.SingleAsync(x => x.Name == "Display.Language");
 
         await using (var other = new SettingDbContext(new DbContextOptionsBuilder<SettingDbContext>().UseSqlite(_connection).Options))
@@ -295,85 +292,6 @@ public sealed class EfCoreSettingStoreTests : IDisposable
 
         Assert.Equal("ja-JP", values["Display.Language"]);
         Assert.Equal("en-US", tracked.Value);
-    }
-
-    // 修改信息随值保存：改值时覆盖为本次写入，清除时随行删除
-    [Fact]
-    public async Task Each_write_records_its_modification_and_a_clear_removes_it()
-    {
-        var first = new SettingModification(new DateTime(2026, 11, 1, 8, 0, 0, DateTimeKind.Utc), "u-1", "Alice");
-        var second = new SettingModification(new DateTime(2026, 11, 2, 8, 0, 0, DateTimeKind.Utc), "u-2", "Bob");
-
-        await _store.SetAsync("Display.Language", "en-US", SettingScopes.Tenant, null, first);
-        Assert.Equal(first, (await _store.GetModificationsAsync(SettingScopes.Tenant, null))["Display.Language"]);
-
-        await _store.SetAsync("Display.Language", "ja-JP", SettingScopes.Tenant, null, second);
-        var modification = (await _store.GetModificationsAsync(SettingScopes.Tenant, null))["Display.Language"];
-        Assert.Equal(second, modification);
-        Assert.Equal(DateTimeKind.Utc, modification.Time.Kind);
-
-        await _store.SetAsync("Display.Language", null, SettingScopes.Tenant, null, second);
-        Assert.Empty(await _store.GetModificationsAsync(SettingScopes.Tenant, null));
-    }
-
-    // 修改信息上线之前写入、从未再写过的行没有修改信息，不报成某个时间
-    [Fact]
-    public async Task Rows_written_before_modifications_were_recorded_report_none()
-    {
-        _db.Settings.Add(new SettingRecord { ScopeKey = "host:t", Name = "Display.Language", Value = "en-US" });
-        await _db.SaveChangesAsync();
-
-        Assert.Empty(await _store.GetModificationsAsync(SettingScopes.Tenant, null));
-        Assert.Equal("en-US", (await _store.GetAllAsync(SettingScopes.Tenant, null))["Display.Language"]);
-    }
-
-    [Fact]
-    public async Task A_check_result_is_saved_per_tenant_overwritten_and_marked_stale()
-    {
-        var checks = new EfCoreSettingCheckStore<SettingDbContext>(new FixedDbContextProvider<SettingDbContext>(_db), new FakeCurrentTenant(null));
-        var other = new EfCoreSettingCheckStore<SettingDbContext>(new FixedDbContextProvider<SettingDbContext>(_db), new FakeCurrentTenant(Guid.NewGuid()));
-        var failed = new SettingCheckResult(false, "auth-rejected", new DateTime(2026, 11, 1, 8, 0, 0, DateTimeKind.Utc), "u-1", "Alice", false);
-        var passed = failed with { Passed = true, FailureCode = null };
-
-        await checks.SaveAsync("Export.Headers", 1, failed);
-        await checks.MarkStaleAsync(["Export.Headers", "Never.Checked"]);
-        Assert.Equal(failed with { IsStale = true }, (await checks.GetAllAsync())["Export.Headers"]);
-        Assert.Empty(await other.GetAllAsync());
-
-        await checks.SaveAsync("Export.Headers", 2, passed);
-        Assert.Equal(passed, Assert.Single(await checks.GetAllAsync()).Value);
-    }
-
-    // 运行计数：首次测试只有计数的那一行不列为结果；序号逐次递增，写入推进修订号，保存记下结果的序号
-    [Fact]
-    public async Task Run_counters_are_hidden_advanced_by_writes_and_recorded_on_save()
-    {
-        var checks = new EfCoreSettingCheckStore<SettingDbContext>(new FixedDbContextProvider<SettingDbContext>(_db), new FakeCurrentTenant(null));
-
-        Assert.Equal(default, await checks.GetLatestAsync("Export.Headers"));
-        Assert.Equal(new SettingCheckRun(1, 0), await checks.BeginRunAsync("Export.Headers"));
-        Assert.Empty(await checks.GetAllAsync());
-
-        await checks.MarkStaleAsync(["Export.Headers"]);
-        Assert.Equal(new SettingCheckRun(2, 1), await checks.BeginRunAsync("Export.Headers"));
-        Assert.Empty(await checks.GetAllAsync());
-
-        await checks.SaveAsync("Export.Headers", 2, new SettingCheckResult(true, null, DateTime.UtcNow, null, null, false));
-        Assert.Equal(new SettingCheckRun(2, 1), await checks.GetLatestAsync("Export.Headers"));
-        Assert.False(Assert.Single(await checks.GetAllAsync()).Value.IsStale);
-    }
-
-    // 永久废弃租户时测试结果随设置一起清掉
-    [Fact]
-    public async Task Removing_all_settings_also_removes_the_check_results()
-    {
-        var checks = new EfCoreSettingCheckStore<SettingDbContext>(new FixedDbContextProvider<SettingDbContext>(_db), new FakeCurrentTenant(null));
-        await _store.SetAsync("Display.Language", "en-US", SettingScopes.Tenant, null, TestWrites.Anonymous);
-        await checks.SaveAsync("Export.Headers", 1, new SettingCheckResult(true, null, DateTime.UtcNow, null, null, false));
-
-        await _store.RemoveAllAsync();
-
-        Assert.Empty(await checks.GetAllAsync());
     }
 
     public void Dispose()

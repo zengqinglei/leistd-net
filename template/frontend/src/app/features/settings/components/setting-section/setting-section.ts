@@ -1,7 +1,5 @@
 import { NgComponentOutlet, NgTemplateOutlet } from '@angular/common';
 import {
-  afterRenderEffect,
-  ElementRef,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -16,25 +14,33 @@ import { FieldTree, form, FormField, validateTree, ValidationError } from '@angu
 import { TranslocoDirective, TranslocoService, translateObjectSignal } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideCircleCheck, lucideCircleX, lucideRotateCcw } from '@ng-icons/lucide';
+import {
+  lucideActivity,
+  lucideCircleCheck,
+  lucideCircleX,
+  lucideRotateCcw,
+} from '@ng-icons/lucide';
+import { toast } from '@spartan-ng/brain/sonner';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmComboboxImports } from '@spartan-ng/helm/combobox';
 import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
-import { HlmInputGroupImports } from '@spartan-ng/helm/input-group';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmSwitchImports } from '@spartan-ng/helm/switch';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { firstValueFrom, map } from 'rxjs';
 
+import {
+  ApplicationHttpError,
+  applicationErrorMessage,
+} from '../../../../core/errors/application-http-error';
 import { mapFormErrors } from '../../../../core/errors/form-errors';
 //#if (IncludeLocalization)
 import { textAt } from '../../../../core/i18n/translation-text';
 //#endif
-import { AccountPreferencesService } from '../../../../core/services/account-preferences-service';
 //#if (IncludeLocalization)
 import { LanguageService } from '../../../../core/services/language-service';
 //#endif
@@ -47,7 +53,8 @@ import {
   settingsInScope,
 } from '../../../../core/settings/setting-groups';
 import { SettingService } from '../../../../core/settings/setting-service';
-import { SettingModificationDto, SettingOutputDto } from '../../../../core/settings/setting.dto';
+import { SETTINGS } from '../../../../core/settings/setting.constants';
+import { SettingOutputDto } from '../../../../core/settings/setting.dto';
 import { SETTINGS_SECTION_HEADING_LEVEL } from '../../../../core/settings/settings-section-heading-level';
 import { injectFormSubmission } from '../../../../core/validation/form-submission';
 import {
@@ -56,7 +63,6 @@ import {
 } from '../../../../core/validation/submit-error-state-matcher';
 import { InfoHint } from '../../../../shared/components/info-hint/info-hint';
 import { ComboboxRevealSelected } from '../../../../shared/directives/combobox-reveal-selected';
-import { AppDate } from '../../../../shared/pipes/app-date-pipe';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
@@ -96,6 +102,7 @@ import {
   partitionExternalLoginSettings,
 } from './widgets/external-login-providers/external-login-providers';
 //#endif
+import { SettingTestPanel } from './widgets/setting-test-panel/setting-test-panel';
 
 /**
  * 单项设置的写入状态。`saved` 在 {@link SAVED_HINT_MS} 后回到常态；
@@ -127,6 +134,14 @@ interface GroupView extends SettingGroup {
   /** 外部登录分组按提供方拆出的卡片；其他分组为空。 */
   externalLoginProviders: ExternalLoginProviderSettings[];
   //#endif
+  //#if (Email)
+  /** 系统页的邮件分组在底部给"发送测试邮件"：改完参数最想确认的就是能否收到。 */
+  emailTest: boolean;
+  //#endif
+  /**
+   * 系统页的运维分组里有导出地址这一项时，在底部给"测试遥测导出"。部署关闭了导出配置时这几项设置不下发，
+   * 测试区随之不出现。
+   */
 }
 
 /** 继承来源的文案，由模板按当前语言传入。 */
@@ -167,8 +182,6 @@ export const SAVING_MIN_MS = 400;
     HlmButton,
     HlmInput,
     HlmSpinner,
-    ...HlmInputGroupImports,
-    AppDate,
     ...HlmComboboxImports,
     ...HlmFieldImports,
     ...HlmSelectImports,
@@ -177,6 +190,7 @@ export const SAVING_MIN_MS = 400;
     TranslocoDirective,
     ComboboxRevealSelected,
     InfoHint,
+    SettingTestPanel,
     //#if (Email)
     EmailTest,
     //#endif
@@ -195,8 +209,6 @@ export const SAVING_MIN_MS = 400;
     HlmButton,
     HlmInput,
     HlmSpinner,
-    ...HlmInputGroupImports,
-    AppDate,
     ...HlmComboboxImports,
     ...HlmFieldImports,
     ...HlmSelectImports,
@@ -204,6 +216,7 @@ export const SAVING_MIN_MS = 400;
     ...HlmTooltipImports,
     ComboboxRevealSelected,
     InfoHint,
+    SettingTestPanel,
     //#if (Email)
     EmailTest,
     //#endif
@@ -212,7 +225,7 @@ export const SAVING_MIN_MS = 400;
     //#endif
   ],
   //#endif
-  providers: [provideIcons({ lucideCircleCheck, lucideCircleX, lucideRotateCcw })],
+  providers: [provideIcons({ lucideActivity, lucideCircleCheck, lucideCircleX, lucideRotateCcw })],
   templateUrl: './setting-section.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -230,13 +243,8 @@ export class SettingSection {
     );
   /** 多分组时的分区标题级别，由外壳按自己的标题层级给出。 */
   protected readonly headingLevel = inject(SETTINGS_SECTION_HEADING_LEVEL);
-  /** 修改信息与测试结论的时间按用户的时区与语言显示，与操作记录一致。 */
-  protected readonly displayTimeZone = inject(AccountPreferencesService).timeZone;
-  protected readonly displayLocale = inject(AccountPreferencesService).displayLocale;
-  /** 正在执行测试的设置名：测试期间按钮显示进行中并禁用，避免重复外呼。 */
-  protected readonly checking = signal<ReadonlySet<string>>(new Set());
-  /** 测试请求本身失败（网络中断、无权限）时该行的原因；测试结论来自后端快照，不在这里。 */
-  protected readonly checkErrors = signal<Readonly<Record<string, string>>>({});
+  /** 遥测导出测试进行中：按钮显示进行中并禁用，避免重复外呼。 */
+  protected readonly telemetryTesting = signal(false);
   private readonly themeService = inject(ThemeService);
   //#if (IncludeLocalization)
   private readonly languageService = inject(LanguageService);
@@ -274,29 +282,6 @@ export class SettingSection {
   /** 按行记录写入状态：用户会连续操作多个控件，整页一个状态无法把反馈落到对应行。 */
   private readonly rowState = signal<Record<string, RowState>>({});
 
-  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-  constructor() {
-    // aria-describedby 与输入框、下拉触发器的 aria-invalid 由 Helm 的字段关联或显式绑定给出。`hlm-switch` 与
-    // `hlm-combobox-trigger` 透传了 forceInvalid，Brain 只用它算样式上的无效态，可操作元素的 aria-invalid
-    // 不由它推导：只给这两种补 aria-invalid
-    afterRenderEffect(() => {
-      this.groupViews();
-      this.rowState();
-      this.serverErrors();
-      // 依赖子项按上级的草稿显隐：草稿变化重建的子项同样要补上
-      this.values();
-      for (const row of this.host.nativeElement.querySelectorAll<HTMLElement>(
-        '[data-setting-name]',
-      )) {
-        const control = row.querySelector<HTMLElement>(
-          '[role="switch"], [data-slot="combobox-trigger"]',
-        );
-        if (row.dataset['settingInvalid'] === 'true') control?.setAttribute('aria-invalid', 'true');
-        else control?.removeAttribute('aria-invalid');
-      }
-    });
-  }
-
   private readonly submitForm = injectFormSubmission();
   /** 写入链的队尾。见 {@link write} 里为什么必须串行。 */
   private writeQueue: Promise<void> = Promise.resolve();
@@ -306,10 +291,8 @@ export class SettingSection {
   private readonly labelFns = new Map<string, (value: unknown) => string>();
   //#if (Email)
 
-  /** 发信参数的面板底部给"发送测试邮件"：改完参数最想确认的就是能否收到。 */
-  protected readonly showEmailTest = computed(
-    () => this.scope() === 'system' && this.groups().some((group) => group.key === EMAIL_GROUP),
-  );
+  /** 发送测试邮件之前让邮件分组的写入落定（见 {@link settle}）；字段上建一次，输入不随变更检测变化。 */
+  protected readonly settleEmailGroup = (): Promise<boolean> => this.settle(EMAIL_GROUP);
   //#endif
   //#if (ExternalLogin)
 
@@ -376,6 +359,9 @@ export class SettingSection {
         hostScopeOnce: isHostScopeOnly(group.settings),
         //#if (ExternalLogin)
         externalLoginProviders: providers,
+        //#endif
+        //#if (Email)
+        emailTest: this.scope() === 'system' && group.key === EMAIL_GROUP,
         //#endif
       };
     }),
@@ -845,6 +831,20 @@ export class SettingSection {
     );
   }
 
+  /**
+   * 遥测测试区跟着导出地址这一行出现，渲染在这一行所在那一层的末尾：地址行是导出开关的子项时，
+   * 测试区就是子项块的最后一项、与子项同一缩进；开关关着地址行收起，测试区也不出现。
+   */
+  protected telemetryTestTarget(nodes: SettingRowNode[]): SettingOutputDto | undefined {
+    if (this.scope() !== 'system') {
+      return undefined;
+    }
+
+    return nodes.find(
+      (node) => node.setting.name === SETTINGS.telemetry.exportEndpoint && node.setting.canManage,
+    )?.setting;
+  }
+
   /** 本层没设值时实际生效的那个值（继承来的，或跟随系统探测到的）。 */
   protected systemOrInheritedValue(setting: SettingOutputDto, scope: SettingScope): string {
     return this.inheritedOf(setting, scope) || this.systemDefaultOf(setting, scope);
@@ -963,89 +963,54 @@ export class SettingSection {
   }
 
   /**
-   * 本层最后一次写入的时间与写入人。个人页不显示（写入人就是自己）；机密行只在已设置时显示，
-   * 是只写之后唯一的状态线索；非机密行只在本层有覆盖值时显示，继承来的值没有"谁改过"。
+   * 测试前让一组的写入落定：先等此前排队的写入（点测试按钮时输入框失焦提交的那次也在其中），测试才用到刚改的值。
+   * 组里还有没保存成功或没提交的输入时不测，提示先修正，返回 false。依赖设置都在主设置的分组里。
    */
-  protected modificationOf(
-    setting: SettingOutputDto,
-    scope: SettingScope,
-  ): SettingModificationDto | null {
-    if (scope === 'account' || !setting.tenantModification) {
-      return null;
+  private async settle(group: string): Promise<boolean> {
+    await new Promise<void>((resolve) => this.enqueue(async () => resolve()));
+    const scope = this.scope();
+    const unsaved = this.settings().some(
+      (row) =>
+        row.group === group &&
+        (this.pending().has(draftKey(row, scope)) || this.stateOf(row, scope)?.status === 'error'),
+    );
+    if (unsaved) {
+      toast.error(this.text('settings.testSaveFirst'));
+      return false;
     }
 
-    return (setting.isSecret ? setting.hasSecretValue : setting.tenantValue !== null)
-      ? setting.tenantModification
-      : null;
-  }
-
-  /** 这一行能否测试：只在系统设置里、且当前用户能管理这一项时提供（测试会用存着的凭据对外调用）。 */
-  protected checkableIn(setting: SettingOutputDto, scope: SettingScope): boolean {
-    return scope !== 'account' && setting.isCheckable === true && setting.canManage;
-  }
-
-  /** 能测试、但控件不是文本输入框（开关、下拉、时区、项目控件）：测试按钮放在控件旁，而不是输入框尾部。 */
-  protected checksBesideControl(setting: SettingOutputDto, scope: SettingScope): boolean {
-    return (
-      this.checkableIn(setting, scope) &&
-      (this.customControlOf(setting) !== undefined ||
-        this.isBoolean(setting) ||
-        this.isTimeZone(setting) ||
-        this.choicesOf(setting) !== undefined)
-    );
-  }
-
-  /** 失败码对应的词条；不认识的码走兜底，不把对方的原始状态显示给管理员。 */
-  protected checkFailureKey(code: string | null | undefined): string {
-    return code && KNOWN_CHECK_FAILURES.has(code)
-      ? `settings.check.failure.${code}`
-      : 'settings.check.failure.other';
+    return true;
   }
 
   /**
-   * 执行一项测试并重取快照：结论、测试人与"已过期"都以后端为准。
-   * 先等此前排队的写入落定（点按钮时输入框失焦提交的那次也在其中），测试才用到刚改的值；
-   * 同组还有没保存成功的输入时不测，提示先保存。依赖设置都在主设置的分组里。
+   * 用当前生效的导出地址与认证头测试遥测导出。结果只用提示给出：通过的自动消失；不通过的保留到手动关闭，
+   * 原因按错误码取本地词条（不依赖服务端文案），不认识的码与其他失败用归一化后的通用原因。
    */
-  protected async runCheck(setting: SettingOutputDto): Promise<void> {
-    const name = setting.name;
-    const scope = this.scope();
-    this.checking.update((names) => new Set(names).add(name));
-    this.checkErrors.update(({ [name]: _, ...rest }) => rest);
+  protected async testTelemetryExport(group: string): Promise<void> {
+    if (this.telemetryTesting()) {
+      return;
+    }
+
+    this.telemetryTesting.set(true);
     try {
-      await new Promise<void>((resolve) => this.enqueue(async () => resolve()));
-      const unsaved = this.settings().some(
-        (row) =>
-          row.group === setting.group &&
-          (this.pending().has(draftKey(row, scope)) ||
-            this.stateOf(row, scope)?.status === 'error'),
-      );
-      if (unsaved) {
-        //#if (IncludeLocalization)
-        const message = this.transloco.translate('settings.check.saveFirst');
-        //#else
-        const message = this.t('settings.check.saveFirst');
-        //#endif
-        this.checkErrors.update((errors) => ({ ...errors, [name]: message }));
+      if (!(await this.settle(group))) {
         return;
       }
 
-      await firstValueFrom(this.settingService.checkSetting(name));
-      await this.pageState.refresh();
-    } catch (error: unknown) {
-      //#if (IncludeLocalization)
-      const fallback = this.transloco.translate('settings.check.requestFailed');
-      //#else
-      const fallback = this.t('settings.check.requestFailed');
-      //#endif
-      const { message } = mapFormErrors(error, this.settingForm, {}, fallback);
-      this.checkErrors.update((errors) => ({ ...errors, [name]: message ?? fallback }));
-    } finally {
-      this.checking.update((names) => {
-        const next = new Set(names);
-        next.delete(name);
-        return next;
+      await firstValueFrom(this.settingService.testTelemetryExport());
+      toast.success(this.text('settings.telemetryTest.passed'), {
+        description: this.text('settings.telemetryTest.passedDescription'),
       });
+    } catch (error: unknown) {
+      const code = error instanceof ApplicationHttpError ? error.code : undefined;
+      const reason = code ? TELEMETRY_TEST_FAILURES[code] : undefined;
+      toast.error(this.text('settings.telemetryTest.failed'), {
+        description: reason ? this.text(reason) : applicationErrorMessage(error),
+        duration: Number.POSITIVE_INFINITY,
+        closeButton: true,
+      });
+    } finally {
+      this.telemetryTesting.set(false);
     }
   }
 
@@ -1193,17 +1158,18 @@ function storedValueOf(setting: SettingOutputDto, scope: SettingScope): string {
 function isHostScopeOnly(settings: readonly SettingOutputDto[]): boolean {
   return settings.length > 0 && settings.every((setting) => setting.allowsHostScope);
 }
-/** 失败码基线（框架 SettingCheckFailureCodes）；项目新增的码加到这里并补词条。 */
-const KNOWN_CHECK_FAILURES = new Set([
-  'not-configured',
-  'secret-unavailable',
-  'auth-rejected',
-  'unreachable',
-  'rate-limited',
-  'service-disabled',
-  'unexpected-status',
-  'unexpected-error',
-]);
+
+/**
+ * 遥测导出测试的失败码 → 本地词条，码与后端 `AppSettingErrorCodes.TelemetryExport*` 逐字一致。
+ * 项目新增的码加到这里并补词条；不在表里的码走通用原因。
+ */
+const TELEMETRY_TEST_FAILURES: Readonly<Partial<Record<string, string>>> = {
+  'AppSetting:TelemetryExportNotConfigured': 'settings.telemetryTest.failure.notConfigured',
+  'AppSetting:TelemetryExportUnavailable': 'settings.telemetryTest.failure.unavailable',
+  'AppSetting:TelemetryExportAuthRejected': 'settings.telemetryTest.failure.authRejected',
+  'AppSetting:TelemetryExportUnreachable': 'settings.telemetryTest.failure.unreachable',
+  'AppSetting:TelemetryExportUnexpectedStatus': 'settings.telemetryTest.failure.unexpectedStatus',
+};
 //#if (!IncludeLocalization)
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
@@ -1223,25 +1189,6 @@ const ENGLISH: Record<string, string> = {
   'settings.browserTimeZone': 'browser',
   'settings.secretSet': 'Set (type a new value to replace it)',
   'settings.secretUnset': 'Not set',
-  'settings.modification.secret': 'Set · updated by {{name}} on',
-  'settings.modification.value': 'Updated by {{name}} on',
-  'settings.modification.system': 'the system',
-  'settings.check.run': 'Test',
-  'settings.check.running': 'Testing…',
-  'settings.check.passed': 'Last test passed · {{name}} ·',
-  'settings.check.failed': 'Last test failed: {{reason}} · {{name}} ·',
-  'settings.check.stale': 'Outdated',
-  'settings.check.requestFailed': "Couldn't run the test. Try again later",
-  'settings.check.saveFirst': 'Save the changes in this group before testing',
-  'settings.check.failure.not-configured': 'not configured',
-  'settings.check.failure.secret-unavailable': "the saved secret can't be decrypted",
-  'settings.check.failure.auth-rejected': 'credentials rejected',
-  'settings.check.failure.unreachable': "couldn't connect",
-  'settings.check.failure.rate-limited': 'rate limited',
-  'settings.check.failure.service-disabled': 'service disabled',
-  'settings.check.failure.unexpected-status': 'unexpected response',
-  'settings.check.failure.unexpected-error': 'test failed unexpectedly',
-  'settings.check.failure.other': 'failed',
   'settings.reset': 'Reset to default',
   'settings.hostScope.hint':
     'One value for the whole system; changes reach every server within about 30 seconds',
@@ -1271,5 +1218,24 @@ const ENGLISH: Record<string, string> = {
     'OTLP base address, such as https://otel.example.com:4318. Logs, metrics and traces go to /v1/logs, /v1/metrics and /v1/traces under it, over http/protobuf only.',
   'settings.settingHints.telemetryExportHeaders':
     'Authentication headers for the collector or platform, written as key1=value1,key2=value2. Write-only: the saved value is never shown.',
+  'settings.testSaveFirst': "Some settings in this group weren't saved. Fix them, then test again",
+  'settings.telemetryTest.title': 'Test telemetry export',
+  'settings.telemetryTest.description':
+    'Sends an empty trace export with the saved endpoint and headers',
+  'settings.telemetryTest.run': 'Test',
+  'settings.telemetryTest.running': 'Testing…',
+  'settings.telemetryTest.passed': 'Telemetry export works',
+  'settings.telemetryTest.passedDescription': 'The endpoint accepted the export',
+  'settings.telemetryTest.failed': 'Telemetry export test failed',
+  'settings.telemetryTest.failure.notConfigured':
+    'No export endpoint is set. Enter the OTLP endpoint above first',
+  'settings.telemetryTest.failure.unavailable':
+    "Telemetry is turned off for this deployment (OTEL_SDK_DISABLED), so export can't be tested",
+  'settings.telemetryTest.failure.authRejected':
+    'The endpoint rejected the credentials. Check the OTLP headers',
+  'settings.telemetryTest.failure.unreachable':
+    "Couldn't reach the endpoint, or it didn't answer in time. Check the address and the network",
+  'settings.telemetryTest.failure.unexpectedStatus':
+    'The endpoint answered with an unexpected status. Check that it is the OTLP base address',
 };
 //#endif

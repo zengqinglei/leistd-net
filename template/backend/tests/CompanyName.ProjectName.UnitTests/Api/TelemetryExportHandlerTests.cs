@@ -106,6 +106,17 @@ public sealed class TelemetryExportHandlerTests
         Assert.Equal(["current"], Assert.Single(inner.Requests).Header("x-api-key"));
     }
 
+    /// <summary>配置里名称大小写不同的同名头只发最后一个值；导出测试走同一写法。</summary>
+    [Fact]
+    public void Headers_with_the_same_name_in_different_case_keep_the_last_value()
+    {
+        var (invoker, inner, _, _) = Create(new() { Enabled = true, Endpoint = "http://collector:4318", Headers = "x-api-key=old,X-Api-Key=current" });
+
+        using var _ = invoker.Send(Request("traces"), CancellationToken.None);
+
+        Assert.Equal(["current"], Assert.Single(inner.Requests).Header("x-api-key"));
+    }
+
     // 收集器拒绝（如认证头错误）时 SDK 只经 EventSource 报错：发送层要在进程日志里留一条，持续失败不刷屏，恢复时说一声
     [Theory]
     [InlineData(true)]

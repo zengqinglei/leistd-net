@@ -1,10 +1,22 @@
 using System.Data.Common;
 using System.Diagnostics;
+using System.Net;
+#if (LocalIdentity)
+using System.Net.Http.Json;
+#endif
+using System.Text.Json;
 using CompanyName.ProjectName.Api.Hosting;
 using CompanyName.ProjectName.Api.Options;
+#if (!LocalIdentity)
+using CompanyName.ProjectName.Application.Permissions.Provider;
+#endif
 using CompanyName.ProjectName.Application.Settings.Errors;
 using CompanyName.ProjectName.Application.Settings.Provider;
 using CompanyName.ProjectName.Infrastructure.Persistence;
+#if (!LocalIdentity)
+using Leistd.Authorization.Constants;
+using Leistd.Authorization.Grants;
+#endif
 using Leistd.ExceptionHandling;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Management;
@@ -239,6 +251,132 @@ public sealed class TelemetryExportTests(TelemetryExportTests.TelemetryHost tele
         {
             await app.StopAsync(CancellationToken.None);
         }
+    }
+
+    /// <summary>
+    /// 运维分组的导出测试：用当前生效的地址与认证头发空的追踪导出，导出开关关着也测；不通过时 422 带原因码；
+    /// 没有运维设置的管理权限答 403；部署关闭 SDK 时答"本部署不可用"。纯探测，操作记录数不变。
+    /// </summary>
+    [Fact]
+    public async Task Testing_the_export_uses_the_effective_values_and_leaves_no_operation_record()
+    {
+        const string url = "/api/v1/settings/telemetry/test";
+        using var receiver = new OtlpReceiver();
+        using var host = Host(new() { [TelemetryExportOptions.EndpointKey] = "" });
+        await ClearAsync(host);
+        try
+        {
+            // 只填地址与认证头、不打开导出
+            await SetAsync(host, SettingConstant.Telemetry.ExportEndpoint, receiver.BaseAddress);
+            await SetAsync(host, SettingConstant.Telemetry.ExportHeaders, "x-api-key=probe");
+            using var operations = await OperationsSessionAsync(host);
+            using var member = await MemberSessionAsync(host, operations.Client);
+
+            var recordsBefore = await OperationRecordCountAsync(host);
+            using (var passed = await operations.Client.PostAsync(url, null))
+            {
+                Assert.Equal(HttpStatusCode.OK, passed.StatusCode);
+            }
+
+            var probe = Assert.Single(receiver.Requests, request => request.Path == "/v1/traces");
+            Assert.Equal(["probe"], probe.Header("x-api-key"));
+            Assert.Equal("application/x-protobuf", probe.ContentType);
+            Assert.Empty(probe.Body);
+
+            using (var denied = await member.Client.PostAsync(url, null))
+            {
+                Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+            }
+
+            Assert.Equal(recordsBefore, await OperationRecordCountAsync(host));
+
+            await SetAsync(host, SettingConstant.Telemetry.ExportEndpoint, null);
+            var recordsBeforeFailure = await OperationRecordCountAsync(host);
+            using (var failed = await operations.Client.PostAsync(url, null))
+            {
+                Assert.Equal(HttpStatusCode.UnprocessableEntity, failed.StatusCode);
+                Assert.Equal(AppSettingErrorCodes.TelemetryExportNotConfigured, await CodeAsync(failed));
+            }
+
+            Assert.Equal(recordsBeforeFailure, await OperationRecordCountAsync(host));
+        }
+        finally
+        {
+            await ClearAsync(host);
+        }
+
+        // 共享工厂关闭了 SDK：导出选项没有注册，答复本部署不可用而不是"未配置"
+        using var disabled = await OperationsSessionAsync(telemetry.Factory);
+        using var unavailable = await disabled.Client.PostAsync(url, null);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, unavailable.StatusCode);
+        Assert.Equal(AppSettingErrorCodes.TelemetryExportUnavailable, await CodeAsync(unavailable));
+    }
+
+    private static async Task<string?> CodeAsync(HttpResponseMessage response)
+    {
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return body.RootElement.GetProperty("code").GetString();
+    }
+
+    // 有运维设置管理权限的宿主主体：本地身份用内置管理员，资源服务给新主体授权
+    private static async Task<AuthenticatedSession> OperationsSessionAsync(WebApplicationFactory<Program> host)
+    {
+#if (LocalIdentity)
+        return await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+#else
+        var subjectId = Guid.CreateVersion7();
+        var session = await ResourceSessionAsync(host, subjectId);
+        await using var scope = host.Services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<IPermissionGrantManager>()
+            .GrantAsync(PermissionConstant.Settings.Operations, PermissionGrantProviderNames.User, subjectId.ToString());
+        return session;
+#endif
+    }
+
+    // 没有任何设置权限的宿主主体
+    private static async Task<AuthenticatedSession> MemberSessionAsync(WebApplicationFactory<Program> host, HttpClient admin)
+    {
+#if (LocalIdentity)
+        const string password = "TelemetryExportTests!Pw1";
+        var username = $"member_{Guid.NewGuid():N}"[..24];
+        using (var create = await admin.PostAsJsonAsync("/api/v1/users", new
+        {
+            Username = username,
+            Email = $"{username}@example.test",
+            Password = password,
+            IsActive = true
+        }))
+        {
+            Assert.Equal(HttpStatusCode.OK, create.StatusCode);
+        }
+
+        return await ProjectWebApplicationFactory.LoginAsync(host, username, password);
+#else
+        _ = admin;
+        return await ResourceSessionAsync(host, Guid.CreateVersion7());
+#endif
+    }
+#if (!LocalIdentity)
+
+    // 先读一次 /auth/me，让本服务登记这名成员
+    private static async Task<AuthenticatedSession> ResourceSessionAsync(WebApplicationFactory<Program> host, Guid subjectId)
+    {
+        var session = ProjectWebApplicationFactory.CreateResourceSession(host, subjectId, tenantId: null);
+        (await session.Client.GetAsync("/api/v1/auth/me")).EnsureSuccessStatusCode();
+        return session;
+    }
+#endif
+
+    // 操作记录总数：有记录表时数表里所有租户的行，否则数宿主日志管道里的操作记录
+    private static async Task<int> OperationRecordCountAsync(WebApplicationFactory<Program> host)
+    {
+#if (IncludeOperationRecords)
+        await using var scope = host.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<MyProjectDbContext>().OperationRecords.IgnoreQueryFilters().CountAsync();
+#else
+        await Task.CompletedTask;
+        return host.Services.GetRequiredService<OperationRecordLogCapture>().Snapshot().Length;
+#endif
     }
 
     private WebApplicationFactory<Program> Host(Dictionary<string, string?> deployment, StartupFlushProbe? probe = null)

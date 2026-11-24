@@ -153,6 +153,19 @@ public class SettingValueValidationTests
             e => Assert.Equal(("Logging.MinimumLevel", SettingScopes.Host, (string?)null), (e.Name, e.Scope, e.UserId)));
     }
 
+    [Theory]
+    [InlineData("Asia/Tokyo", false)]
+    [InlineData(null, true)]
+    public async Task The_change_event_tells_a_write_from_a_clear(string? value, bool cleared)
+    {
+        var (manager, _, events) = Build();
+        await manager.SetAsync("Display.TimeZone", "UTC", SettingScopes.Tenant);
+
+        await manager.SetAsync("Display.TimeZone", value, SettingScopes.Tenant);
+
+        Assert.Equal(cleared, events.Published.Cast<SettingChangedEvent>().Last().IsCleared);
+    }
+
     [Fact]
     public async Task A_rejected_write_publishes_nothing()
     {

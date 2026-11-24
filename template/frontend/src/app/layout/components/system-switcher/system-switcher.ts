@@ -1,10 +1,7 @@
-//#if (OpenIddictServer || RemoteTokenAuth)
-import { CdkMenuTrigger } from '@angular/cdk/menu';
-//#endif
 // prettier-ignore
 import { ChangeDetectionStrategy, Component, inject,
   //#if (OpenIddictServer || RemoteTokenAuth)
-  ElementRef, computed, viewChild,
+  computed,
   //#endif
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
@@ -54,17 +51,6 @@ export class SystemSwitcher {
   //#endif
   //#if (OpenIddictServer || RemoteTokenAuth)
   readonly directory = inject(SystemDirectoryService);
-  private readonly menuTrigger = viewChild(CdkMenuTrigger);
-  private readonly menuButton = viewChild(CdkMenuTrigger, { read: ElementRef });
-
-  /** 先消费嵌套菜单的 Escape，再经 CDK 公共入口关闭，避免同一按键继续关闭父抽屉。 */
-  closeMenu(event: Event): void {
-    event.preventDefault();
-    event.stopPropagation();
-    this.menuTrigger()?.close();
-    this.menuButton()?.nativeElement.focus();
-  }
-
   readonly currentName = computed(
     () => this.directory.systems().find((system) => system.isCurrent)?.displayName ?? '',
   );
