@@ -37,7 +37,7 @@
 | F3 | 解密诊断不变 | 用另一密钥环写入的密文 → 读取抛 `SettingDecryptionException` 并记固定事件号；宿主设置单项解不开不影响其他项 | 既有 Settings 与 Hosting 单测 |
 | F4 | 连通探测与部署基线撤除 | `Leistd.Email.Smtp` 没有 `ProbeAsync` 与 `SmtpProbeResult`；`Leistd.Settings.Hosting` 没有 `IHostSettingBaseline`、`HostSettingBaseline`，`HostSettingDefaultsProvider` 回到 #307 之前的内联查找 | 编译与 Email、Hosting 单测 |
 | T1 | 迁移回到 #307 之前 | 用第 1 步新打包的框架生成 identity-all-features 与 resource-capabilities 场景 → 不含 `AddSettingAuditAndChecks`，快照与实体一致，没有待生成的模型变更 | 生成场景迁移检查 + 真实 PostgreSQL 集成测试 |
-| T2 | 邮件分组测试区 | 邮件分组 → 底部测试区含收件人输入框与“发送”按钮，输入框里没有测试按钮；发送成功显示成功 toast；发送失败（422，`TestEmailFailed`）显示带原因的失败 toast 并保留到关闭；仍记 `setting.test-email-sent` | 前端单测（用真实状态码）+ 集成测试 |
+| T2 | 邮件分组测试区 | 邮件分组 → 底部测试区含收件人输入框与“发送”按钮，输入框里没有测试按钮；发送成功显示成功 toast；发送失败（均为 422：`TestEmailUnreachable` 连不上、`TestEmailAuthRejected` 认证被拒、`TestEmailRejected` 投递被拒，无法归类为 `TestEmailFailed`）按码显示该查的项，失败 toast 保留到关闭；仍记 `setting.test-email-sent` | 前端单测（用真实状态码）+ 集成测试 |
 | T3 | 运维分组测试区 | 运维分组、部署允许配置导出且导出地址行显示（开关打开）→ 测试区是导出开关子项块的最后一项；测试区一个“测试”按钮；`POST api/v1/settings/telemetry/test` 用当前生效的导出地址与认证头探测，通过返回 200（空响应，与发信测试一致），失败按错误码返回 422；没有 `Settings.Operations` 返回 403；结果只 toast，操作记录数不变 | 后端单测 + 集成测试 + 前端单测；含一个不含邮件的生成场景 |
 | T4 | 测试用当前生效的值 | 同组有写入在排队 → 点测试先等写入完成再发请求；有保存失败的输入 → 不发请求并提示先修正 | 前端单测 |
 | T5 | 多项输入可展开 | 测试区声明可展开 → 默认收起为一行带箭头，点开在容器内显示表单，再点收起；触发器有 `aria-expanded` | 前端单测（组件自身，模板暂无多项输入的实际用例） |
@@ -77,12 +77,12 @@
 - 删除 `SmtpConnectionCheck`、`TelemetryExportCheck`、`AddSettingChecks`、`SettingCheckCompletedAuditHandler`、`SettingChecked` 动作及词条、两套迁移（快照回到 `516d64aa^1`）、`template.json` 两条登记；改写以“清除会删掉修改信息”解释 `setting.cleared` 的注释（新理由：清除删行，写入与清除是两种动作，操作记录要分开）。
 - 新增无条件的 `TelemetryExportController`：`POST api/v1/settings/telemetry/test`，`[Authorize(Policy = PermissionConstant.Settings.Operations)]`。读 `IOptionsMonitor<TelemetryExportOptions>.CurrentValue` 的地址与认证头，经自有具名 HttpClient（不跟随重定向、10 秒超时，不经 `TelemetryExportHandler`）向 `{地址}/v1/traces` 发空的 OTLP/HTTP 请求。导出开关关着也测（开启前先验证）。2xx 时动作正常结束（200 空响应，同发信测试）；其余抛业务异常：`TelemetryExportNotConfigured`（没有地址）、`TelemetryExportUnavailable`（部署关闭了 SDK，选项未注册）、`TelemetryExportAuthRejected`（401/403）、`TelemetryExportUnreachable`（连接失败或超时）、`TelemetryExportUnexpectedStatus`（其他状态）。纯探测，不记操作记录。
 - 错误码状态：上述码与发信测试的码都显式映射 422（请求有效、这组配置不可用），登记进 `ApiExceptionMappingsTests`。`TestEmailFailed` 由 503 改为 422，前端才能显示原因。
-- 发信测试按原因细分：`TestEmailUnreachable`（连不上服务器，含 TLS 握手与超时）、`TestEmailAuthRejected`（认证被拒，含服务器要求认证而未配账号）、`TestEmailRejected`（发件人、收件人或正文被拒），无法归类的仍为 `TestEmailFailed`。分类来自框架（见下），模板不接触 SMTP 客户端的异常类型。
+- 发信测试按原因细分：`TestEmailUnreachable`（连不上服务器，含 TLS 握手与超时）、`TestEmailAuthRejected`（认证被拒，含服务器要求认证而未配账号）、`TestEmailRejected`（发件人、收件人或正文被拒），无法归类的仍为 `TestEmailFailed`（含服务器回 4xx 的临时认证故障）。分类来自框架（见下），模板不接触 SMTP 客户端的异常类型。
 
 **模板前端。**
 
 - 新增通用测试区组件 `setting-test-panel`：Spartan Item（outline）承载图标、标题、说明与操作区，内容投影放输入与按钮；`expandable` 时整行为展开触发器（`aria-expanded`），表单在容器内展开。组件只管布局与展开；请求、等待写入队列、toast 由调用方负责。
-- `setting-section` 按分组渲染测试区：邮件分组改写 `email-test`（收件人 + 发送），运维分组新增 OTLP 测试（无输入）。测试区的位置与显隐统一按“被测的行”判定：被测行出现在哪一层，测试区就是那一层的最后一项——被测行是上级开关的子项时，测试区放在子项块末尾、与子项同一缩进；上级关闭或换成别的取值、被测行不在当前子项里时，测试区不出现（免得“先填地址”的提示指向看不到的输入框）。一组里有两块可测配置时各自贴在自己那块下面。后端端点本身不看开关。失败 toast 按 `error.code` 取本地词条（OTLP 各码、`TestEmailFailed`、兜底），不依赖服务端文案。
+- `setting-section` 按分组渲染测试区：邮件分组改写 `email-test`（收件人 + 发送），运维分组新增 OTLP 测试（无输入）。测试区的位置与显隐统一按“被测的行”判定：被测行出现在哪一层，测试区就是那一层的最后一项——被测行是上级开关的子项时，测试区放在子项块末尾、与子项同一缩进；上级关闭或换成别的取值、被测行不在当前子项里时，测试区不出现（免得“先填地址”的提示指向看不到的输入框）。一组里有两块可测配置时各自贴在自己那块下面。后端端点本身不看开关。失败 toast 按 `error.code` 取本地词条（OTLP 各码、发信三个细分码与 `TestEmailFailed`、未知码兜底），不依赖服务端文案。
 - 删除行内测试按钮、结论行、“已过期”徽章、修改信息行、内联英文表里的对应键与 `KNOWN_CHECK_FAILURES`；DTO 去掉字段；Mock 删 `checks` 路由与三份数据，新增 OTLP 测试路由（给出确定结论）。
 - `hlm-input-group-button` 的 `pointer-coarse:min-w-11` 与 `frontend-spartan.md` 那一行：没有其他使用者则撤回，有则改写理由。
 
@@ -98,7 +98,7 @@
 
 - 框架破坏性变更，提交写 `BREAKING CHANGE` 脚注，逐项列出：
   - 修改信息：`SettingModification`、`SettingModificationDto` 移除；`SettingRecord` 的 `LastModificationTime`、`LastModifierId`、`LastModifierName` 移除；`ISettingStore.SetAsync` 与 `EfCoreSettingStore<TDbContext>.SetAsync` 去掉修改信息参数，`GetModificationsAsync` 移除；`SettingOutputDto` 去掉 `UserModification`、`TenantModification`。
-  - 按设置测试：`Leistd.Settings.Checks` 命名空间下全部类型、`AddSettingCheck<T>`、`SettingCheckRecord` 及其配置、`SettingCheckResultDto`、`SettingOutputDto` 的 `IsCheckable` 与 `LastCheck`、`MapSettings` 的 `POST checks/{name}`、`SettingEndpoints.CheckName` 移除。
+  - 按设置测试：`Leistd.Settings.Checks` 命名空间下全部类型、`AddSettingCheck<T>`、`SettingCheckRecord` 及其配置、`EfCoreSettingCheckStore<TDbContext>`、`SettingCheckResultDto`、`SettingOutputDto` 的 `IsCheckable` 与 `LastCheck`、`MapSettings` 的 `POST checks/{name}`、`SettingEndpoints.CheckName` 移除。
   - 其他：`DefaultSettingManager` 构造函数去掉 `currentUser`、`timeProvider`、`checks`、`checkStore`；`IHostSettingBaseline` 移除；`SmtpEmailSender.ProbeAsync` 与 `SmtpProbeResult` 移除。
   - beta.510 的直接消费者需按上列同步；下游三仓尚未升级到 beta.510，不受影响。
 - 框架：`SmtpEmailSender` 对可归类的失败改抛 `EmailDeliveryException`（内部异常为原 MailKit 异常）；直接捕获 MailKit 异常类型的调用方需改为捕获它或检查内部异常。
