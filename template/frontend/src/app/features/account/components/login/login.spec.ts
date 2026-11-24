@@ -1064,6 +1064,34 @@ describe('Login', () => {
       expect(router.navigateByUrl).toHaveBeenCalled();
     });
 
+    // 在途时离开登录页再回来改租户：旧响应不再收尾，不写入新页面的租户、不导航到第二步
+    it('ignores a password response that arrives after the page was left', async () => {
+      byHost = of({ decision: 'undecided' as const });
+      await setUp();
+      component.tenantName.set('acme');
+      await component.onConfirmTenant();
+      let respond!: () => void;
+      authService.login.mockReturnValue(
+        new Observable((subscriber) => {
+          respond = () => {
+            subscriber.next({ requiresTwoFactor: true });
+            subscriber.complete();
+          };
+        }) as never,
+      );
+      fillValidCredentials();
+      const submitted = component.onSubmit();
+      await vi.waitFor(() => expect(authService.login).toHaveBeenCalled());
+
+      fixture.destroy();
+      TestBed.inject(TenantContextService).set('other');
+      respond();
+      await submitted;
+
+      expect(localStorage.getItem('app.tenant')).toBeNull();
+      expect(router.navigateByUrl).not.toHaveBeenCalled();
+    });
+
     // 「切换租户」展开的输入框：填名称切到该租户，留空回到宿主，应用后收起
     it('switches to the typed tenant and back to the host when left empty', async () => {
       byHost = of({ decision: 'undecided' as const });

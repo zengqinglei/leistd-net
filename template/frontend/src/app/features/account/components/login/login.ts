@@ -183,6 +183,11 @@ export class Login implements OnInit {
 
   private readonly accountService = inject(AccountService);
   private readonly destroyRef = inject(DestroyRef);
+  /**
+   * 页面已离开（如在途时转去找回密码）：认证结果不再由它收尾，不记住租户、不导航，
+   * 以免旧响应写入新页面上改过的租户、把用户从别处拉去第二步。
+   */
+  private destroyed = false;
 
   /** 这一次收到 `Auth:PasskeyUnavailable`（部署此刻没配）：收起通行密钥的入口。 */
   private readonly passkeyWithdrawn = signal(false);
@@ -229,7 +234,10 @@ export class Login implements OnInit {
         }
       });
     });
-    this.destroyRef.onDestroy(() => this.stopConditionalRequest());
+    this.destroyRef.onDestroy(() => {
+      this.destroyed = true;
+      this.stopConditionalRequest();
+    });
   }
 
   ngOnInit(): void {
@@ -261,6 +269,9 @@ export class Login implements OnInit {
         const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
 
         const result = await lastValueFrom(this.authService.login(loginInput));
+        if (this.destroyed) {
+          return;
+        }
         //#if (IncludeMultiTenancy)
         // 口令已被接受（含尚待第二步）：此时才把这个租户记为下次的预选，第二步页刷新也靠它带对租户
         this.tenantContext.remember();
@@ -297,6 +308,9 @@ export class Login implements OnInit {
    * @returns 是否已发起整页离开（离开时加载态不复位，原因见 {@link onSubmit}）。
    */
   private async onSignedIn(): Promise<boolean> {
+    if (this.destroyed) {
+      return false;
+    }
     //#if (IncludeMultiTenancy)
     this.tenantContext.remember();
     //#endif

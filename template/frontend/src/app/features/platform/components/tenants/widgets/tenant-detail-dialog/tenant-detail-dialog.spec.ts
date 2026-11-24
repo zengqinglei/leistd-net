@@ -14,6 +14,7 @@ import {
   renderSubmission,
   rejectedField,
 } from '../../../../../../core/validation/form-submission.testing';
+import { setCoarsePointer } from '../../../../../../shared/utils/coarse-pointer.testing';
 import { TenantConnectionDto } from '../../../../dtos/tenant-connection.dto';
 import { TenantOutputDto } from '../../../../dtos/tenant.dto';
 import { TenantConnectionService } from '../../../../services/tenant-connection-service';
@@ -171,7 +172,7 @@ describe('TenantDetailDialog', () => {
   });
 
   // 骨架按连接行的结构占位：带边框、右侧有两个按钮位，行高与交付后的连接行一致
-  it('shapes the connection skeleton like a registered connection row', async () => {
+  async function expectSkeletonMatchesRow(): Promise<void> {
     await setUp();
     await open(tenant('t-a', 'acme'));
     const skeleton = dialogHost()!.querySelector<HTMLElement>(
@@ -186,7 +187,20 @@ describe('TenantDetailDialog', () => {
       '[data-testid="tenant-connections"] > div',
     )!;
     expect(row.offsetHeight).toBe(skeletonHeight);
-  });
+  }
+
+  // 触屏下行内按钮升到 44px，骨架的按钮位要跟着升，否则加载完每行变高
+  it.each([false, true])(
+    'shapes the connection skeleton like a registered connection row (coarse pointer: %s)',
+    async (coarse) => {
+      await setCoarsePointer(coarse);
+      try {
+        await expectSkeletonMatchesRow();
+      } finally {
+        await setCoarsePointer(false);
+      }
+    },
+  );
 
   // 写后重取：已列出的连接保留并标忙，不换回骨架
   it('keeps the listed connections busy while they are refetched after a write', async () => {
