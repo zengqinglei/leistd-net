@@ -1,6 +1,6 @@
 # 设置测试改为配置块测试区，撤销设置组件的测试与修改信息存储
 
-状态：进行中 · 风险档：高 · 关联：#307（被本规格部分撤销）
+状态：已完成 · 风险档：高 · 关联：#307（被本规格部分撤销）、#314
 
 ## 1. 需求
 
@@ -115,3 +115,30 @@
 5. **回复下游**：在设置测试反馈文件末尾追加更正回复并通知。
 
 不做的事：业务三仓的代码、渠道对话框测试、演示站数据库清理（随下次更新）。
+
+## 4. 结果
+
+**交付：** #314（合并提交 `6264176f`），同一 PR 内另含 Spartan 1.10.0 升级与 Angular 路由文档改写（用户要求合并审查，避免两轮）。
+
+**与计划的偏差：**
+
+- **测试通过返回 200 空响应，不是 204。** 模板 API 规范里无返回值的动作是 200 空响应，发信测试同样如此。
+- **测试区位置按“被测的行”判定。** 采纳业务侧建议：被测行是开关子项时，测试区作为子项块最后一项、与子项同一缩进；被测行不显示时测试区不出现。遥测测试因此在导出开关打开后才出现；后端端点不看开关。
+- **发信失败按原因细分。** 审查要求告诉管理员该查哪一项。框架新增 `EmailDeliveryException` / `EmailDeliveryFailureKind`，`SmtpEmailSender` 分阶段归类（454 等 4xx 临时认证故障原样抛出，连接阶段问候、EHLO、STARTTLS 被拒归为连不上）；模板对应 `TestEmailUnreachable`、`TestEmailAuthRejected`、`TestEmailRejected`，兜底 `TestEmailFailed`，均为 422。
+- **遥测探测与真实导出共用认证头写入**（`TelemetryExportHandler.WriteHeaders`），大小写不同的同名头只取最后一个值。
+
+**验收：**
+
+- 框架：构建 0 警告；Email、Settings、Notifications、SignalR 测试项目全过。
+- 模板：PR CI 全绿（23 项，含 identity-all-features、identity、resource-capabilities、distributed-events、webhooks、standalone-external-login 等完整阶段）；审查修复前另有本机 runner 矩阵 4 场景全绿。
+- 有头浏览器 Mock 验收 1440 / 390，对照评审画布；成功与失败 toast。
+- 审查：方案审查 1 轮；Codex 代码审查 3 轮，第 3 轮通过。
+
+**遗留：**
+
+- 两个演示站库里仍有 `SettingCheckRecord` 表、`SettingRecord` 三列与迁移历史行，下次演示站更新时备份后删除。
+- 本机 runner 上 `OperationRecordLoggingTests.Security_log_is_emitted_only_after_the_real_business_transaction_commits(commit: True)` 在 resource-capabilities-03 失败一次，worker-01 与 CI 同场景通过，判为本机环境问题，未排查。
+- 下游三仓随新 beta 同步，同步项见设置测试反馈文件“框架更正回复（2026-11-24）”。
+
+**已上收：** `framework/docs/components/settings.md`、`email.md`（发信失败分类）；`template/docs/standards/settings.md`（配置块测试与审计规则）、`frontend-spartan.md`；`template/docs/deploy/configuration.md`（遥测排障）。
+
