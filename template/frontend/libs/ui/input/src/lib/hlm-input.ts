@@ -1,29 +1,19 @@
-import { computed, Directive, inject } from '@angular/core';
-import { BrnFieldControl, BrnFieldControlDescribedBy } from '@spartan-ng/brain/field';
+import { Directive } from '@angular/core';
+import { BrnFieldControlDescribedBy } from '@spartan-ng/brain/field';
 import { BrnInput } from '@spartan-ng/brain/input';
-import { classes, hlmAriaInvalid, syncHlmAriaInvalid } from '@spartan-ng/helm/utils';
+import { classes } from '@spartan-ng/helm/utils';
 
 @Directive({
   selector: '[hlmInput]',
   exportAs: 'hlmInput',
   hostDirectives: [
-    { directive: BrnInput, inputs: ['id', 'forceInvalid'] },
-    BrnFieldControlDescribedBy,
+    { directive: BrnInput, inputs: ['id', 'forceInvalid', 'aria-invalid'] },
+    { directive: BrnFieldControlDescribedBy, inputs: ['aria-describedby'] },
   ],
-  host: { 'data-slot': 'input', '[attr.aria-invalid]': '_ariaInvalid()' },
+  host: { 'data-slot': 'input' },
 })
 export class HlmInput {
-  private readonly _brain = inject(BrnInput);
-  private readonly _fieldControl = inject(BrnFieldControl);
-  protected readonly _ariaInvalid = computed(() =>
-    hlmAriaInvalid(this._brain.forceInvalid() || this._fieldControl.spartanInvalid()),
-  );
-
   constructor() {
-    // 无自身字段状态的内部输入由所属组合控件处理。
-    syncHlmAriaInvalid(null, () =>
-      this._fieldControl.controlState() ? this._ariaInvalid() === 'true' : undefined,
-    );
     classes(
       () =>
         'dark:bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 data-[matches-spartan-invalid=true]:ring-destructive/20 dark:data-[matches-spartan-invalid=true]:ring-destructive/40 data-[matches-spartan-invalid=true]:border-destructive dark:data-[matches-spartan-invalid=true]:border-destructive/50 h-9 pointer-coarse:h-11 rounded-md border bg-transparent px-2.5 py-1 text-base shadow-xs transition-[color,box-shadow] file:h-7 file:text-sm file:font-medium focus-visible:ring-3 data-[matches-spartan-invalid=true]:ring-3 md:text-sm file:text-foreground placeholder:text-muted-foreground w-full min-w-0 outline-none file:inline-flex file:border-0 file:bg-transparent disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',

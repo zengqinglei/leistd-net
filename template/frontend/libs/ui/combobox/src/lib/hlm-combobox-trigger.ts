@@ -10,14 +10,13 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideChevronDown } from '@ng-icons/lucide';
 import {
   BrnComboboxAnchor,
-  injectBrnComboboxBase,
   BrnComboboxPopoverTrigger,
   BrnComboboxTrigger,
 } from '@spartan-ng/brain/combobox';
 import { BrnFieldControlDescribedBy } from '@spartan-ng/brain/field';
 import { ButtonVariants, HlmButton } from '@spartan-ng/helm/button';
-import { hlm, hlmAriaInvalid, syncHlmAriaInvalid } from '@spartan-ng/helm/utils';
-import type { ClassValue } from 'clsx';
+import { hlm } from '@spartan-ng/helm/utils';
+import type { ClassValue } from 'cn';
 
 @Component({
   selector: 'hlm-combobox-trigger',
@@ -45,7 +44,6 @@ import type { ClassValue } from 'clsx';
       [class]="_computedClass()"
       [variant]="variant()"
       [forceInvalid]="forceInvalid()"
-      [attr.aria-invalid]="_ariaInvalid()"
     >
       <ng-content />
       <ng-icon name="lucideChevronDown" class="text-muted-foreground text-[length:--spacing(4)]" />
@@ -53,15 +51,7 @@ import type { ClassValue } from 'clsx';
   `,
 })
 export class HlmComboboxTrigger {
-  constructor() {
-    syncHlmAriaInvalid('button[brnComboboxTrigger]', () => this._ariaInvalid() === 'true');
-  }
-
   private static _id = 0;
-  private readonly _control = injectBrnComboboxBase();
-  protected readonly _ariaInvalid = computed(() =>
-    hlmAriaInvalid(this.forceInvalid() || this._control.controlState?.()?.spartanInvalid),
-  );
 
   public readonly userClass = input<ClassValue>('', {
     alias: 'class',

@@ -11,26 +11,38 @@ import { calendarLocale, provideAppCalendarLocale } from './calendar-locale';
 /** 日历文案跟随界面写法：中文界面不再出现英文星期与翻月读屏名。 */
 describe('calendarLocale', () => {
   it('writes weekdays, the month header and navigation labels in the given locale', () => {
-    const zh = calendarLocale('zh-CN', '上个月', '下个月');
+    const zh = calendarLocale('zh-CN', {
+      previousMonth: '上个月',
+      nextMonth: '下个月',
+      previousYear: '上一年',
+      nextYear: '下一年',
+      previousYears: '上一页年份',
+      nextYears: '下一页年份',
+    });
 
     expect(zh.formatWeekdayName!(0)).toBe('周日');
     expect(zh.formatWeekdayName!(1)).toBe('周一');
     expect(zh.formatHeader!(9, 2026)).toBe('2026年10月');
     expect(zh.labelPrevious!()).toBe('上个月');
     expect(zh.labelNext!()).toBe('下个月');
+    expect(zh.labelPreviousYear!()).toBe('上一年');
+    expect(zh.labelNextYear!()).toBe('下一年');
+    expect(zh.labelPreviousYears!()).toBe('上一页年份');
+    expect(zh.labelNextYears!()).toBe('下一页年份');
     expect(zh.months!()).toHaveLength(12);
   });
 
   it('starts the week on the locale convention, Monday for Chinese', () => {
     // 日历组件用 0 = 周日、1 = 周一
-    expect(calendarLocale('zh-CN', '', '').firstDayOfWeek!()).toBe(1);
-    expect([0, 1]).toContain(calendarLocale('en-US', '', '').firstDayOfWeek!());
+    expect(calendarLocale('zh-CN').firstDayOfWeek!()).toBe(1);
+    expect([0, 1]).toContain(calendarLocale('en-US').firstDayOfWeek!());
   });
 
   it('keeps working for an unknown locale', () => {
-    const unknown = calendarLocale('not a locale', 'Previous month', 'Next month');
+    const unknown = calendarLocale('not a locale');
 
     expect(unknown.formatWeekdayName!(0)).toBeTruthy();
+    expect(unknown.labelPreviousYears!()).toBe('Previous years');
     expect(unknown.formatHeader!(0, 2026)).toContain('2026');
   });
 

@@ -129,9 +129,8 @@ export class ConfirmDialog {
       event.keyCode === 229
     )
       return;
-    // 不让原 Esc 继续传给父级弹窗或全局浮层分派器。
+    // 标记为已处理：父级弹窗与浮层的 Esc 关闭会跳过已处理的按键（spartan#1858）。
     event.preventDefault();
-    event.stopPropagation();
     this.close(false);
   }
 

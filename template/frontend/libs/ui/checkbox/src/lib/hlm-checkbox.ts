@@ -18,8 +18,8 @@ import { lucideCheck } from '@ng-icons/lucide';
 import { BrnCheckbox } from '@spartan-ng/brain/checkbox';
 import { BrnFieldA11yService, BrnFieldControlDescribedBy } from '@spartan-ng/brain/field';
 import type { ChangeFn, TouchFn } from '@spartan-ng/brain/forms';
-import { hlm, syncHlmAriaInvalid } from '@spartan-ng/helm/utils';
-import type { ClassValue } from 'clsx';
+import { hlm } from '@spartan-ng/helm/utils';
+import type { ClassValue } from 'cn';
 
 export const HLM_CHECKBOX_VALUE_ACCESSOR = {
   provide: NG_VALUE_ACCESSOR,
@@ -153,10 +153,6 @@ export class HlmCheckbox implements ControlValueAccessor {
     this.checked.set(value);
     this.checkedChange.emit(value);
     this._onChange?.(value);
-  }
-
-  constructor() {
-    syncHlmAriaInvalid('[role="checkbox"]', () => this._spartanInvalid());
   }
 
   /** CONTROL VALUE ACCESSOR */

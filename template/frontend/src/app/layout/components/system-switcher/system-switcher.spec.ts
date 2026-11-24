@@ -1,6 +1,9 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+//#if (OpenIddictServer || RemoteTokenAuth)
+import { HlmSheetImports } from '@spartan-ng/helm/sheet';
+//#endif
 import { HlmSidebarImports } from '@spartan-ng/helm/sidebar';
 //#if (OpenIddictServer || RemoteTokenAuth)
 import { userEvent } from 'vitest/browser';
@@ -21,6 +24,21 @@ import { SystemSwitcher } from './system-switcher';
   template: '<div hlmSidebarWrapper><app-system-switcher /></div>',
 })
 class Host {}
+//#if (OpenIddictServer || RemoteTokenAuth)
+
+@Component({
+  selector: 'app-test-system-switcher-drawer',
+  imports: [SystemSwitcher, ...HlmSidebarImports, ...HlmSheetImports],
+  template: `
+    <hlm-sheet side="left" state="open">
+      <hlm-sheet-content *hlmSheetPortal>
+        <div hlmSidebarWrapper><app-system-switcher /></div>
+      </hlm-sheet-content>
+    </hlm-sheet>
+  `,
+})
+class DrawerHost {}
+//#endif
 
 describe('SystemSwitcher', () => {
   const identity = {
@@ -82,22 +100,24 @@ describe('SystemSwitcher', () => {
     expect(switchTo).toHaveBeenCalledWith(orders);
   });
 
-  it('consumes Escape inside the menu before it can close a containing drawer', async () => {
+  // 移动端侧栏是抽屉：菜单里的 Esc 只关菜单。CDK 菜单处理后标记为已处理，抽屉不再响应同一次按键
+  it('closes only the menu on Escape inside a real drawer', async () => {
     systems.set([identity, orders]);
-    const fixture = TestBed.createComponent(Host);
+    const fixture = TestBed.createComponent(DrawerHost);
     await fixture.whenStable();
-    await userEvent.click(fixture.nativeElement.querySelector('[data-testid="system-switcher"]'));
-    const escape = vi.fn();
-    document.addEventListener('keydown', escape);
-    onTestFinished(() => document.removeEventListener('keydown', escape));
+    const trigger = await vi.waitFor(() => {
+      const element = document.querySelector<HTMLElement>('[data-testid="system-switcher"]');
+      expect(element).not.toBeNull();
+      return element!;
+    });
+    await userEvent.click(trigger);
     document.querySelector<HTMLElement>('[data-system="orders"]')!.focus();
     await userEvent.keyboard('{Escape}');
     await fixture.whenStable();
     expect(document.querySelector('[role="menu"]')).toBeNull();
-    expect(escape).not.toHaveBeenCalled();
-    expect(document.activeElement).toBe(
-      fixture.nativeElement.querySelector('[data-testid="system-switcher"]'),
-    );
+    expect(document.querySelector('hlm-sheet-content')).not.toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    fixture.destroy();
   });
 
   it('falls back to the home link when the resource directory is empty', async () => {

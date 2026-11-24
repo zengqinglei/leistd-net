@@ -332,7 +332,6 @@
             >
               <hlm-select-trigger
                 [forceInvalid]="isInvalid(setting, scope())"
-                [aria-invalid]="isInvalid(setting, scope())"
                 [buttonId]="setting.name"
                 class="w-full"
                 [attr.title]="displayTextOf(setting, scope(), sourceLabels) || null"
@@ -355,7 +354,6 @@
              关闭拼写检查与自动大写。 -->
             <input
               [forceInvalid]="isInvalid(setting, scope())"
-              [attr.aria-invalid]="isInvalid(setting, scope()) ? 'true' : null"
               hlmInput
               class="flex-1 @md/field-group:w-64 @md/field-group:flex-none"
               [id]="setting.name"

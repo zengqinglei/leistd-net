@@ -86,7 +86,11 @@
     },
     "calendar": {
       "previousMonth": "上个月",
-      "nextMonth": "下个月"
+      "nextMonth": "下个月",
+      "previousYear": "上一年",
+      "nextYear": "下一年",
+      "previousYears": "上一页年份",
+      "nextYears": "下一页年份"
     },
     "twoFactorCodeReuseHint": "如果刚用过这个验证码，请等待新的验证码。",
     "reauthenticate": {

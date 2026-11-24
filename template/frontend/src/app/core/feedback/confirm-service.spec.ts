@@ -1,9 +1,8 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, provideZonelessChangeDetection } from '@angular/core';
+import { Component, DestroyRef, provideZonelessChangeDetection, viewChild } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { BrnDialogService } from '@spartan-ng/brain/dialog';
 import { toast } from '@spartan-ng/brain/sonner';
-import { HlmDialogService } from '@spartan-ng/helm/dialog';
+import { HlmDialog, HlmDialogImports, HlmDialogService } from '@spartan-ng/helm/dialog';
 import { EMPTY, of, Subject, throwError } from 'rxjs';
 import { userEvent } from 'vitest/browser';
 
@@ -18,6 +17,18 @@ import type { Mock } from 'vitest';
 
 @Component({ template: '' })
 class ExistingDialog {}
+
+@Component({
+  imports: [...HlmDialogImports],
+  template: `<hlm-dialog>
+    <hlm-dialog-content *hlmDialogPortal [showCloseButton]="false">
+      <p>Declarative dialog</p>
+    </hlm-dialog-content>
+  </hlm-dialog>`,
+})
+class DeclarativeDialogHost {
+  readonly dialog = viewChild.required(HlmDialog);
+}
 
 @Component({
   imports: [DialogClose],
@@ -68,20 +79,18 @@ describe('ConfirmService', () => {
     )!;
   }
 
-  // 两种打开方式各自生成默认 id：保留下一次服务打开会碰到的 id，确认框仍须一次打开。
-  it('opens on the first request when another dialog occupies the next default id', async () => {
-    const dialogs = TestBed.inject(BrnDialogService);
-    const warmup = dialogs.open(ExistingDialog);
-    const blocker = dialogs.open(ExistingDialog, undefined, undefined, {
-      id: `brn-dialog-${warmup.dialogId + 2}`,
-    });
+  // 声明式根与服务共用 Brain 的默认 id 序列：先建好的声明式对话框不会与确认框撞 id，确认框一次打开。
+  it('opens on the first request while a declarative dialog is open', async () => {
+    const fixture = TestBed.createComponent(DeclarativeDialogHost);
+    await fixture.whenStable();
+    const declarative = fixture.componentInstance.dialog();
+    declarative.open();
     const result = service.open({ message: 'Discard changes?', cancelText: 'Keep editing' });
     const outcome = expect(result).resolves.toBe(false);
     const dialog = await openedDialog();
     button(dialog, 'Keep editing').click();
     await outcome;
-    blocker.close();
-    warmup.close();
+    declarative.close();
   });
 
   it('keeps the discard confirmation open when Escape opened it', async () => {

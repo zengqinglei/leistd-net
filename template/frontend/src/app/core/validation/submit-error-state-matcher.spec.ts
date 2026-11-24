@@ -17,7 +17,7 @@ import { provideTranslocoTesting } from '../i18n/transloco.testing';
 //#endif
 import { injectFormSubmission } from './form-submission';
 import { renderSubmission, rejectedField } from './form-submission.testing';
-import { SubmitErrorStateMatcher } from './submit-error-state-matcher';
+import { markFormSubmitted, SubmitErrorStateMatcher } from './submit-error-state-matcher';
 
 @Component({
   selector: 'app-submission-test',
@@ -134,6 +134,33 @@ class SubmissionTest {
   }
 }
 
+/** 组合框在字段已无效时才渲染：内部输入框同时挂着 BrnInput 与 BrnComboboxInput 的 aria-invalid 绑定。 */
+@Component({
+  selector: 'app-late-combobox-test',
+  imports: [FormField, ...HlmFieldImports, ...HlmComboboxImports],
+  template: `
+    <div hlmField>
+      @if (shown()) {
+        <hlm-combobox [formField]="fields.combo">
+          <hlm-combobox-input [forceInvalid]="forceInvalid()" />
+          <hlm-combobox-content *hlmComboboxPortal
+            ><div hlmComboboxList>
+              <hlm-combobox-item value="Valid">Valid</hlm-combobox-item>
+            </div></hlm-combobox-content
+          >
+        </hlm-combobox>
+      }
+      <hlm-field-error validator="required">Required combo</hlm-field-error>
+    </div>
+  `,
+})
+class LateComboboxTest {
+  readonly shown = signal(false);
+  readonly forceInvalid = signal(false);
+  readonly model = signal({ combo: '' });
+  readonly fields = form(this.model, (path) => required(path.combo));
+}
+
 describe('SubmitErrorStateMatcher', () => {
   async function setup() {
     TestBed.configureTestingModule({
@@ -229,7 +256,8 @@ describe('SubmitErrorStateMatcher', () => {
     });
   }
 
-  it('synchronizes radio group and its native input, including later invalidation', async () => {
+  // ARIA 1.2 的 aria-invalid 只适用于 radiogroup，不适用于单个 radio：无效态只挂在组上，原生单选框不带
+  it('synchronizes the radio group invalid state, including later invalidation', async () => {
     const { fixture, host, component } = await setup();
     component.model.update((value) => ({ ...value, name: 'Valid', radio: '' }));
     await fixture.whenStable();
@@ -239,22 +267,21 @@ describe('SubmitErrorStateMatcher', () => {
     radio.blur();
     await fixture.whenStable();
     expect(group.getAttribute('aria-invalid')).toBeNull();
-    expect(radio.getAttribute('aria-invalid')).toBeNull();
+    expect(radio.hasAttribute('aria-invalid')).toBe(false);
     await renderSubmission(fixture, () => component.save());
     expect(group.getAttribute('aria-invalid')).toBe('true');
-    expect(radio.getAttribute('aria-invalid')).toBe('true');
+    expect(radio.hasAttribute('aria-invalid')).toBe(false);
     expect(document.activeElement).toBe(radio);
     radio.click();
     await fixture.whenStable();
     expect(group.getAttribute('aria-invalid')).toBeNull();
-    expect(radio.getAttribute('aria-invalid')).toBeNull();
     component.model.update((value) => ({ ...value, radio: '' }));
     await fixture.whenStable();
-    expect(radio.getAttribute('aria-invalid')).toBe('true');
+    expect(group.getAttribute('aria-invalid')).toBe('true');
+    expect(radio.hasAttribute('aria-invalid')).toBe(false);
     component.fields().reset();
     await fixture.whenStable();
     expect(group.getAttribute('aria-invalid')).toBeNull();
-    expect(radio.getAttribute('aria-invalid')).toBeNull();
   });
 
   it('includes forceInvalid on the real Helm controls', async () => {
@@ -301,4 +328,37 @@ describe('SubmitErrorStateMatcher', () => {
     await fixture.whenStable();
     expect(errors()).toHaveLength(0);
   });
+
+  for (const [state, prepare] of [
+    ['submitted invalid', (component: LateComboboxTest) => markFormSubmitted(component.fields)],
+    ['forced invalid', (component: LateComboboxTest) => component.forceInvalid.set(true)],
+  ] as const) {
+    it(`marks a combobox input created while its field is already ${state}`, async () => {
+      TestBed.configureTestingModule({
+        //#if (IncludeLocalization)
+        providers: [
+          provideErrorStateMatcher(SubmitErrorStateMatcher),
+          ...provideTranslocoTesting(),
+        ],
+        //#else
+        providers: [provideErrorStateMatcher(SubmitErrorStateMatcher)],
+        //#endif
+      });
+      const fixture = TestBed.createComponent(LateComboboxTest);
+      fixture.autoDetectChanges();
+      await fixture.whenStable();
+      const component = fixture.componentInstance;
+      prepare(component);
+      component.shown.set(true);
+      await fixture.whenStable();
+      const input = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        'hlm-combobox-input input',
+      )!;
+      expect(input.getAttribute('aria-invalid')).toBe('true');
+      component.forceInvalid.set(false);
+      component.model.set({ combo: 'Valid' });
+      await fixture.whenStable();
+      expect(input.getAttribute('aria-invalid')).toBeNull();
+    });
+  }
 });

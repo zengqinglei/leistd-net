@@ -86,7 +86,11 @@
     },
     "calendar": {
       "previousMonth": "Previous month",
-      "nextMonth": "Next month"
+      "nextMonth": "Next month",
+      "previousYear": "Previous year",
+      "nextYear": "Next year",
+      "previousYears": "Previous years",
+      "nextYears": "Next years"
     },
     "twoFactorCodeReuseHint": "If you just used this code, wait for a new one.",
     "reauthenticate": {

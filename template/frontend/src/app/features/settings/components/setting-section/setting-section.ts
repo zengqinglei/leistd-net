@@ -1,7 +1,5 @@
 import { NgComponentOutlet, NgTemplateOutlet } from '@angular/common';
 import {
-  afterRenderEffect,
-  ElementRef,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -283,29 +281,6 @@ export class SettingSection {
 
   /** 按行记录写入状态：用户会连续操作多个控件，整页一个状态无法把反馈落到对应行。 */
   private readonly rowState = signal<Record<string, RowState>>({});
-
-  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-  constructor() {
-    // aria-describedby 与输入框、下拉触发器的 aria-invalid 由 Helm 的字段关联或显式绑定给出。`hlm-switch` 与
-    // `hlm-combobox-trigger` 透传了 forceInvalid，Brain 只用它算样式上的无效态，可操作元素的 aria-invalid
-    // 不由它推导：只给这两种补 aria-invalid
-    afterRenderEffect(() => {
-      this.groupViews();
-      this.rowState();
-      this.serverErrors();
-      // 依赖子项按上级的草稿显隐：草稿变化重建的子项同样要补上
-      this.values();
-      for (const row of this.host.nativeElement.querySelectorAll<HTMLElement>(
-        '[data-setting-name]',
-      )) {
-        const control = row.querySelector<HTMLElement>(
-          '[role="switch"], [data-slot="combobox-trigger"]',
-        );
-        if (row.dataset['settingInvalid'] === 'true') control?.setAttribute('aria-invalid', 'true');
-        else control?.removeAttribute('aria-invalid');
-      }
-    });
-  }
 
   private readonly submitForm = injectFormSubmission();
   /** 写入链的队尾。见 {@link write} 里为什么必须串行。 */
