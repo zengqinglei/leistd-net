@@ -4,7 +4,8 @@ namespace Leistd.Email.Abstractions;
 /// <remarks>
 /// <para>实际投递的实现以收到投递设施（如 SMTP 服务器）的接受确认为成功；确认之后的取消或连接善后故障不改写这一结果。
 /// 正常返回不保证收件人最终收到。</para>
-/// <para>取得确认之前的失败通过异常报告，由调用方决定补偿；异常不保证对方没有接受这封信（例如确认回复在途中丢失）。</para>
+/// <para>取得确认之前的失败通过异常报告，由调用方决定补偿；异常不保证对方没有接受这封信（例如确认回复在途中丢失）。
+/// 能归类为连不上、认证被拒或投递被拒的失败以 <see cref="Leistd.Email.Exceptions.EmailDeliveryException"/> 报告。</para>
 /// <para>不需要实际投递的环境可显式注册 <see cref="Leistd.Email.NullEmailSender"/>，它正常返回但不投递，不是失败兜底。</para>
 /// </remarks>
 public interface IEmailSender

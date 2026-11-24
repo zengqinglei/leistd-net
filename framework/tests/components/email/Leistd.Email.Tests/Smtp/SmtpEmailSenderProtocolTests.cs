@@ -1,4 +1,6 @@
+using System.Net.Sockets;
 using Leistd.Email.Abstractions;
+using Leistd.Email.Exceptions;
 using Leistd.Email.Smtp;
 using Leistd.Email.Smtp.Options;
 using MailKit.Net.Smtp;
@@ -15,12 +17,17 @@ public sealed class SmtpEmailSenderProtocolTests
 {
     private readonly FakeLogger<SmtpEmailSender> _logger = new();
 
-    private SmtpEmailSender Sender(LoopbackSmtpServer server, int timeoutMilliseconds = 10_000)
+    private SmtpEmailSender Sender(LoopbackSmtpServer server, int timeoutMilliseconds = 10_000, string? username = null)
+        => Sender(server.Port, timeoutMilliseconds, username);
+
+    private SmtpEmailSender Sender(int port, int timeoutMilliseconds = 10_000, string? username = null)
         => new(new FixedOptionsMonitor(new SmtpOptions
         {
             Host = "127.0.0.1",
-            Port = server.Port,
+            Port = port,
             EnableSsl = false,
+            Username = username,
+            Password = username is null ? null : "wrong",
             DefaultFromAddress = "noreply@example.com",
         }), _logger)
         {
@@ -33,80 +40,6 @@ public sealed class SmtpEmailSenderProtocolTests
         Subject = "Verification Code",
         Body = "<p>123456</p>",
     };
-
-    // 探测只连接与认证，不发信：设置页据此判断配置能否用，而不是投递一封测试信
-    [Fact]
-    public async Task A_probe_connects_without_sending()
-    {
-        await using var server = new LoopbackSmtpServer();
-
-        Assert.Equal(SmtpProbeResult.Succeeded, await Sender(server).ProbeAsync());
-        Assert.False(server.Accepted);
-    }
-
-    // 给定的参数优先于当前配置：设置测试用刚读到的存储值探测，进程里的配置可能尚未刷新
-    [Fact]
-    public async Task A_probe_uses_the_given_options_instead_of_the_current_configuration()
-    {
-        await using var server = new LoopbackSmtpServer();
-        var sender = new SmtpEmailSender(new FixedOptionsMonitor(new SmtpOptions
-        {
-            Host = "127.0.0.1",
-            Port = 1,
-            EnableSsl = false,
-            DefaultFromAddress = "noreply@example.com",
-        }), _logger)
-        {
-            CreateClient = () => new SmtpClient { Timeout = 10_000 },
-        };
-
-        var result = await sender.ProbeAsync(new SmtpOptions { Host = "127.0.0.1", Port = server.Port, EnableSsl = false });
-
-        Assert.Equal(SmtpProbeResult.Succeeded, result);
-    }
-
-    [Fact]
-    public async Task A_probe_reports_rejected_credentials()
-    {
-        await using var server = new LoopbackSmtpServer(authReply: "535 5.7.8 authentication failed");
-        var sender = new SmtpEmailSender(new FixedOptionsMonitor(new SmtpOptions
-        {
-            Host = "127.0.0.1",
-            Port = server.Port,
-            EnableSsl = false,
-            Username = "user",
-            Password = "wrong",
-            DefaultFromAddress = "noreply@example.com",
-        }), _logger)
-        {
-            CreateClient = () => new SmtpClient { Timeout = 10_000 },
-        };
-
-        Assert.Equal(SmtpProbeResult.AuthenticationRejected, await sender.ProbeAsync());
-    }
-
-    [Fact]
-    public async Task A_probe_reports_a_server_it_cannot_reach()
-    {
-        int port;
-        await using (var server = new LoopbackSmtpServer())
-        {
-            port = server.Port;
-        }
-
-        var sender = new SmtpEmailSender(new FixedOptionsMonitor(new SmtpOptions
-        {
-            Host = "127.0.0.1",
-            Port = port,
-            EnableSsl = false,
-            DefaultFromAddress = "noreply@example.com",
-        }), _logger)
-        {
-            CreateClient = () => new SmtpClient { Timeout = 2_000 },
-        };
-
-        Assert.Equal(SmtpProbeResult.Unreachable, await sender.ProbeAsync());
-    }
 
     [Fact]
     public async Task An_accepted_message_is_sent()
@@ -142,13 +75,58 @@ public sealed class SmtpEmailSenderProtocolTests
         Assert.IsType<TimeoutException>(warning.Exception);
     }
 
-    [Fact]
-    public async Task A_rejected_message_throws()
+    /// <summary>服务器明确拒收收件人或正文：归为投递被拒，调用方据此提示检查发件地址与收件人；原异常保留为内层。</summary>
+    [Theory]
+    [InlineData("550 5.1.1 no such user", "250 2.0.0 accepted", SmtpErrorCode.RecipientNotAccepted)]
+    [InlineData("250 OK", "554 5.7.1 rejected", SmtpErrorCode.MessageNotAccepted)]
+    public async Task A_rejected_message_throws_a_delivery_rejection(
+        string recipientReply, string dataReply, SmtpErrorCode errorCode)
     {
-        await using var server = new LoopbackSmtpServer(dataReply: "554 5.7.1 rejected");
+        await using var server = new LoopbackSmtpServer(dataReply: dataReply, recipientReply: recipientReply);
 
-        await Assert.ThrowsAsync<SmtpCommandException>(() => Sender(server).SendAsync(Message()));
+        var exception = await Assert.ThrowsAsync<EmailDeliveryException>(() => Sender(server).SendAsync(Message()));
+
+        Assert.Equal(EmailDeliveryFailureKind.DeliveryRejected, exception.FailureKind);
+        Assert.Equal(errorCode, Assert.IsType<SmtpCommandException>(exception.InnerException).ErrorCode);
+        Assert.DoesNotContain("user@example.com", exception.Message);
         Assert.False(server.Accepted);
+    }
+
+    /// <summary>
+    /// 服务器拒绝凭据（535）或根本不支持认证：归为认证被拒，调用方据此提示检查用户名与口令。
+    /// 用户名常是邮箱，不进异常消息。
+    /// </summary>
+    [Theory]
+    [InlineData("535 5.7.8 authentication failed", typeof(MailKit.Security.AuthenticationException))]
+    [InlineData(null, typeof(NotSupportedException))]
+    public async Task Rejected_credentials_throw_an_authentication_rejection(string? authReply, Type innerType)
+    {
+        await using var server = new LoopbackSmtpServer(authReply: authReply);
+
+        var exception = await Assert.ThrowsAsync<EmailDeliveryException>(
+            () => Sender(server, username: "mailer@example.com").SendAsync(Message()));
+
+        Assert.Equal(EmailDeliveryFailureKind.AuthenticationRejected, exception.FailureKind);
+        Assert.IsType(innerType, exception.InnerException);
+        Assert.DoesNotContain("mailer@example.com", exception.Message);
+        Assert.False(server.Accepted);
+    }
+
+    /// <summary>端口上没有服务在听：归为连不上，调用方据此提示检查地址、端口与 TLS。</summary>
+    [Fact]
+    public async Task A_server_that_cannot_be_reached_throws_an_unreachable_failure()
+    {
+        int port;
+        await using (var server = new LoopbackSmtpServer())
+        {
+            port = server.Port;
+        }
+
+        var exception = await Assert.ThrowsAsync<EmailDeliveryException>(
+            () => Sender(port, timeoutMilliseconds: 2_000).SendAsync(Message()));
+
+        Assert.Equal(EmailDeliveryFailureKind.Unreachable, exception.FailureKind);
+        Assert.IsAssignableFrom<SocketException>(exception.InnerException);
     }
 
     [Fact]
@@ -161,6 +139,7 @@ public sealed class SmtpEmailSenderProtocolTests
         Assert.False(server.Accepted);
     }
 
+    // 发送阶段的超时归不进三类（信可能已在对方手里），原样抛出。
     [Fact]
     public async Task A_timeout_before_acceptance_throws()
     {
