@@ -25,7 +25,8 @@ import { renderSubmission } from '../../../../../../../../core/validation/form-s
 import { focusWithKeyboard } from '../../../../../../../../shared/utils/keyboard-focus.testing';
 import { RoleBriefDto } from '../../../../../../dtos/role.dto';
 import { TenantStaffOutputDto } from '../../../../../../dtos/tenant-staff.dto';
-import { TENANT_STAFF_CANDIDATE_LIMIT, TenantStaffEditDialog } from './tenant-staff-edit-dialog';
+import { TENANT_STAFF_CANDIDATE_LIMIT } from '../../../../../../dtos/tenant-staff.dto';
+import { TenantStaffEditDialog } from './tenant-staff-edit-dialog';
 
 import type { MockInstance } from 'vitest';
 

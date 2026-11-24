@@ -18,6 +18,7 @@ import { TENANTS,
   //#endif
 } from '../data/tenant';
 //#if (LocalIdentity)
+import { TENANT_STAFF_CANDIDATE_LIMIT } from '../../src/app/features/platform/dtos/tenant-staff.dto';
 import { USERS } from '../data/user';
 //#endif
 import { STAFF_ACCESS } from '../data/workspace';
@@ -84,7 +85,7 @@ export const WORKSPACE_API = {
         !user.homeUserId &&
         (!keyword || `${user.username} ${user.displayName ?? ''}`.toLowerCase().includes(keyword)),
     )
-      .slice(0, 200)
+      .slice(0, TENANT_STAFF_CANDIDATE_LIMIT)
       .map(({ id, username, displayName }) => ({ id, username, displayName }));
   },
   'GET /api/v1/tenants/:tenantId/staff/roles': () => {

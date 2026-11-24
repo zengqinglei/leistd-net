@@ -31,6 +31,9 @@ public sealed class TenantStaffAppService(
     IQueryableAsyncExecuter asyncExecuter,
     IClock clock) : BaseAppService, ITenantStaffAppService
 {
+    /// <summary>候选人单次最多返回的条数；前端 <c>TENANT_STAFF_CANDIDATE_LIMIT</c> 与它一致，满额时提示继续输入。</summary>
+    public const int CandidateLimit = 200;
+
     public async Task<IReadOnlyList<TenantStaffOutputDto>> GetListAsync(Guid tenantId, CancellationToken cancellationToken = default)
     {
         var tenant = await GetTenantAsync(tenantId, cancellationToken);
@@ -80,7 +83,7 @@ public sealed class TenantStaffAppService(
                     (user.DisplayName != null && user.DisplayName.ToLower().Contains(term)));
             }
             return await asyncExecuter.ToListAsync(query.OrderByDescending(user => user.CreationTime).ThenBy(user => user.Id)
-                .Take(200).Select(user => new TenantStaffCandidateOutputDto(user.Id, user.Username, user.DisplayName)), cancellationToken);
+                .Take(CandidateLimit).Select(user => new TenantStaffCandidateOutputDto(user.Id, user.Username, user.DisplayName)), cancellationToken);
         }
     }
 

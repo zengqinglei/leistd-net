@@ -47,12 +47,10 @@ import { englishText } from '../../../../../../../../shared/utils/english-text';
 //#endif
 import { RoleBriefDto } from '../../../../../../dtos/role.dto';
 import {
+  TENANT_STAFF_CANDIDATE_LIMIT,
   TenantStaffCandidateOutputDto,
   TenantStaffOutputDto,
 } from '../../../../../../dtos/tenant-staff.dto';
-
-/** 候选人接口单次最多返回的条数（`TenantStaffAppService.GetCandidatesAsync`），返回满额时提示继续输入。 */
-export const TENANT_STAFF_CANDIDATE_LIMIT = 200;
 
 /** 授予时这些业务码指向所选人员（关联账号用户名被占用、宿主用户已不存在），挂在人员字段下。 */
 const PERSON_ERROR_CODES = ['User:UsernameTaken', 'User:NotFound'];
