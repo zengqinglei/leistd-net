@@ -78,7 +78,7 @@ app.MapNotificationHub();
 
 `INotificationChannel` 可注册多个；`INotificationStore` 必须且只能注册一个。只要瞬态推送而不要历史时使用[实时通信](./realtime.md)。
 
-映射通知中心端点（只作用于当前用户）：
+映射通知中心端点（只作用于当前用户）。端点把参数越界与不可操作的身份以异常报告，宿主须接入[全局异常处理](./exception-handling.md#注册)（`AddGlobalExceptionHandler()` 与 `UseGlobalExceptionHandler()`），它们才会按约定成为 400 与对应状态码，否则是 500：
 
 ```csharp
 // 策略名必填：组件不内置默认策略，也不在路由组上套宿主默认策略
@@ -161,7 +161,7 @@ public class MessageCenter(INotificationStore notificationStore)
 | `INotificationStore.SaveAsync(notification, userId, ct)` | 保存通知 |
 | `INotificationStore.GetByUserAsync(userId, page, unreadOnly, ct)` | 按创建时间倒序分页获取用户通知，`unreadOnly` 只取未读；返回 `PagedResult<NotificationOutputDto>` |
 | `INotificationStore.DeleteAsync(notificationId, userId, ct)` / `DeleteAllAsync(userId, ct)` | 删除用户自己的一条 / 全部通知；删除账号时调用后者清理孤儿行 |
-| `MapNotifications(configure)` | AspNetCore 包：`AccessPolicy` 必填；`GET /`（`maxCount` 收敛到 1–`NotificationEndpoints.MaximumListCount`，可加 `unreadOnly`）、`GET /unread-count`、`PUT /{id}/read`、`PUT /read-all`、`DELETE /`、`DELETE /{id}` |
+| `MapNotifications(configure)` | AspNetCore 包：`AccessPolicy` 必填；`GET /`（`offset` / `limit` / `unreadOnly`，按 `GetNotificationsInputDto` 校验，越界抛 `ValidationException`、经全局异常处理为 400；返回 `PagedResult<NotificationOutputDto>`）、`GET /unread-count`、`PUT /{id}/read`、`PUT /read-all`、`DELETE /`、`DELETE /{id}` |
 | 默认 HTTP 状态 | 组件默认状态：`NotificationErrorCodes.IdentityCannotOperate` → 403。由 `AddNotifications()` 自动登记；宿主 `MapCode` 可覆盖 |
 | `AddNotificationRetention<TDbContext>(configure?, configSectionPath?)` | EF 包：绑定 `configSectionPath`（默认 `Leistd:Notifications:Retention`）并启动期校验，校验消息按实际路径报键，重复调用换用另一配置节时抛出；登记集群周期任务 `notifications.retention` |
 | `AddNotificationPreferences(configure?)` | Settings 桥接包：以 `NotificationPreferenceOptions`（前缀、必达组合）替换默认投递过滤器 |
@@ -171,6 +171,7 @@ public class MessageCenter(INotificationStore notificationStore)
 | `INotificationStore.MarkAllAsReadAsync(userId, ct)` | 标记用户所有通知为已读 |
 | `INotificationStore.GetUnreadCountAsync(userId, ct)` | 获取用户未读通知数量 |
 | `NotificationInputDto` | 发布输入：`Title`（必填）、`Content?`、`Type`（业务自定义字符串，默认 `"System"`）、`Link?`、`Icon?`、`RelatedEntityId?`、`RelatedEntityType?`、`Metadata?`；`Id`、`CreationTime`、`IsRead` 由发布器按收件人定案 |
+| `GetNotificationsInputDto` | 通知列表查询入参，派生 `PageRequest`：`Limit` 默认 `DefaultLimit`（50）、取值 1–`MaximumLimit`（100），`UnreadOnly` 只取未读；`Sorting` 不生效 |
 | `NotificationOutputDto` | 读取与实时传输输出：在 `NotificationInputDto` 的字段上加 `Id`、`IsRead`、`CreationTime`；`Id` 是该用户那条记录的标识，标记已读时使用 |
 
 ## 实现行为

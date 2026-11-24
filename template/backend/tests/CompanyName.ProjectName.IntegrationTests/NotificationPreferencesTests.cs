@@ -151,7 +151,7 @@ public sealed class NotificationPreferencesTests(ProjectWebApplicationFactory fa
     private static async Task<List<JsonElement>> ReadNotificationsAsync(HttpClient client)
     {
         using var body = JsonDocument.Parse(await client.GetStringAsync("/api/v1/notifications"));
-        return body.RootElement.EnumerateArray().Select(e => e.Clone()).ToList();
+        return body.RootElement.GetProperty("items").EnumerateArray().Select(e => e.Clone()).ToList();
     }
 
     private static async Task<string> GetUserIdAsync(WebApplicationFactory<Program> host, string username)
@@ -276,7 +276,7 @@ public sealed class NotificationPreferencesTests(ProjectWebApplicationFactory fa
     private static async Task<List<JsonElement>> ReadNotificationsAsync(HttpClient client)
     {
         using var body = JsonDocument.Parse(await client.GetStringAsync("/api/v1/notifications"));
-        return body.RootElement.EnumerateArray().Select(e => e.Clone()).ToList();
+        return body.RootElement.GetProperty("items").EnumerateArray().Select(e => e.Clone()).ToList();
     }
 #endif
 }

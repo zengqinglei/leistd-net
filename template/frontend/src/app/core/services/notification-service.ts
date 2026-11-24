@@ -10,6 +10,7 @@ import {
 import { lastValueFrom } from 'rxjs';
 
 import { NotificationOutputDto } from '../../shared/dtos/notification.dto';
+import { PagedResultDto } from '../../shared/dtos/paged-result.dto';
 import { SignalRService } from './signalr-service';
 
 /** 一个图标：键是 lucide 图标名，值是图标数据，用简写 `{ lucideXxx }` 写出，名称与数据同源。 */
@@ -71,7 +72,8 @@ export class NotificationService {
     await this.signalR.connect();
   }
 
-  async loadNotifications(maxCount = 50): Promise<void> {
+  /** 加载最近的历史通知；`limit` 取值 1–100（后端越界返回 400），默认 50。 */
+  async loadNotifications(limit = 50): Promise<void> {
     // 记下发起请求时的认证代际：请求在途时登出/换人登录，响应回来仍会写同一个
     // 共享 signal——那就是把上一个用户的历史通知落到下一个人的界面上。
     const generation = this.signalR.authGeneration;
@@ -79,13 +81,13 @@ export class NotificationService {
     this.loading.set(true);
     this.loadFailed.set(false);
     try {
-      const items = await lastValueFrom(
-        this.http.get<NotificationOutputDto[]>('/api/v1/notifications', {
-          params: { maxCount: maxCount.toString() },
+      const page = await lastValueFrom(
+        this.http.get<PagedResultDto<NotificationOutputDto>>('/api/v1/notifications', {
+          params: { limit: limit.toString() },
         }),
       );
 
-      const incoming = items ?? [];
+      const incoming = page?.items ?? [];
       // 合并 SignalR 已推送但不在历史中的通知
       const pushed = this.signalR.notifications();
       const merged = [...incoming];
