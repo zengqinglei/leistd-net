@@ -275,6 +275,31 @@ const templateClassSyntax = [
   },
 ];
 
+/*
+ * 加载态（frontend-ui.md 第 1 节）：首次加载用骨架占位，hlm-spinner 只放在按钮、链接按钮与菜单项里
+ * （模板里都是 button / a）。单独成规则，例外在元素上一行局部关闭本规则
+ * （`<!-- eslint-disable-next-line local/spinner-placement -->`），不按文件豁免、不连带类名检查。
+ */
+const spinnerPlacement = {
+  meta: {
+    type: 'suggestion',
+    schema: [],
+    messages: {
+      placement:
+        'Use a skeleton for first loads; hlm-spinner belongs inside a button, link button or menu item (frontend-ui.md §1).',
+    },
+  },
+  create(context) {
+    return {
+      "Element[name='hlm-spinner']:not(Element[name=/^(button|a)$/] Element[name='hlm-spinner'])"(
+        node,
+      ) {
+        context.report({ node, messageId: 'placement' });
+      },
+    };
+  },
+};
+
 /** 提交按钮保持可点，字段错误由提交入口统一展示。 */
 const noInvalidDisabled = {
   meta: {
@@ -440,10 +465,15 @@ export default defineConfig(
   {
     files: ['**/*.html'],
     extends: [...angular.configs.templateRecommended, ...angular.configs.templateAccessibility],
-    plugins: { local: { rules: { 'no-invalid-disabled': noInvalidDisabled } } },
+    plugins: {
+      local: {
+        rules: { 'no-invalid-disabled': noInvalidDisabled, 'spinner-placement': spinnerPlacement },
+      },
+    },
     rules: {
       'no-restricted-syntax': ['error', ...templateClassSyntax],
       'local/no-invalid-disabled': 'error',
+      'local/spinner-placement': 'error',
     },
   },
 );

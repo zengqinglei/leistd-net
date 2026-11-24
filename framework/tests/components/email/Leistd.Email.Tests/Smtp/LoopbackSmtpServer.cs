@@ -14,11 +14,18 @@ internal sealed class LoopbackSmtpServer : IAsyncDisposable
     private readonly string _recipientReply;
     private readonly string? _startTlsReply;
 
+    /// <summary>作为 <c>authReply</c> 传入时，收到 AUTH 后直接断开连接。</summary>
+    internal const string DisconnectOnAuth = "<disconnect>";
+
+    /// <summary>作为 <c>authReply</c> 传入时，收到 AUTH 后不回复（挂住客户端）。</summary>
+    internal const string NoReplyToAuth = "<no-reply>";
+
     /// <param name="dataReply">收到正文结束符后的回复；<see langword="null"/> 表示不回复（挂住客户端）。</param>
     /// <param name="onDataEnd">收到正文结束符、回复之前调用。</param>
     /// <param name="onQuit">收到 QUIT 时调用。</param>
     /// <param name="replyToQuit">是否回复 QUIT；<see langword="false"/> 让客户端等到读超时或取消。</param>
-    /// <param name="authReply">不为 <see langword="null"/> 时 EHLO 声明支持 AUTH PLAIN，并以它回复 AUTH 命令。</param>
+    /// <param name="authReply">不为 <see langword="null"/> 时 EHLO 声明支持 AUTH PLAIN，并以它回复 AUTH 命令；
+    /// 也可传 <see cref="DisconnectOnAuth"/> 或 <see cref="NoReplyToAuth"/>。</param>
     /// <param name="recipientReply">对 RCPT TO 的回复。</param>
     /// <param name="startTlsReply">不为 <see langword="null"/> 时 EHLO 声明支持 STARTTLS，并以它回复 STARTTLS 命令。</param>
     public LoopbackSmtpServer(
@@ -89,7 +96,17 @@ internal sealed class LoopbackSmtpServer : IAsyncDisposable
             }
             else if (_authReply is not null && line.StartsWith("AUTH", StringComparison.Ordinal))
             {
-                await writer.WriteLineAsync(_authReply);
+                switch (_authReply)
+                {
+                    case DisconnectOnAuth:
+                        return;
+                    case NoReplyToAuth:
+                        await HoldAsync();
+                        return;
+                    default:
+                        await writer.WriteLineAsync(_authReply);
+                        break;
+                }
             }
             else if (line.StartsWith("RCPT", StringComparison.Ordinal))
             {

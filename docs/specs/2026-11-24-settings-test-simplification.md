@@ -142,3 +142,13 @@
 
 **已上收：** `framework/docs/components/settings.md`、`email.md`（发信失败分类）；`template/docs/standards/settings.md`（配置块测试与审计规则）、`frontend-spartan.md`；`template/docs/deploy/configuration.md`（遥测排障）。
 
+
+**后续修复（下游反馈）：** 认证阶段原先只归类"凭据被拒"。连接中断、协议错误、超时和 4xx 临时拒绝都原样抛出，调用方分不出"未投递、可重试"与未知失败。
+
+- 现在这几种失败都归 `Unreachable`：此时邮件尚未提交，与连接阶段问候、EHLO 或 STARTTLS 被拒归 `Unreachable` 同理。
+- 下游建议为 4xx 另设临时类别，未采纳。`Unreachable` 已经表示"此刻用不了、可重试"，再加一个类别是重复的。相应地扩写了枚举说明与模板提示文案（"或稍后重试"）。
+- 回归用例：
+  - `SmtpEmailSenderProtocolTests.A_temporary_authentication_failure_throws_an_unreachable_failure`；
+  - `A_network_failure_during_authentication_throws_an_unreachable_failure`，分断开、不回复两种情形。
+  - 修复前这 3 条失败。
+- 原用例 `A_temporary_authentication_failure_is_not_reported_as_rejected_credentials` 被新的第一条取代。

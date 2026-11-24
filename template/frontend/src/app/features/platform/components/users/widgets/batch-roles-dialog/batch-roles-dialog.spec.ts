@@ -42,6 +42,32 @@ describe('BatchRolesDialog', () => {
 
   afterEach(() => fixture.destroy());
 
+  // 高度在打开时确定：加载中只有行骨架，不叠加空态、选择提示与裸 spinner；加载完成（含为空）弹窗高度不变
+  it('keeps the dialog height from loading to an empty or filled role list', async () => {
+    const roles = [{ id: 'role-1', name: 'editor', displayName: 'Editor' }];
+    fixture.componentRef.setInput('availableRoles', []);
+    fixture.componentRef.setInput('rolesLoading', true);
+    await fixture.whenStable();
+    const content = document.querySelector<HTMLElement>('[data-slot="dialog-content"]')!;
+    const shown = () =>
+      ['app-list-loading', '[data-testid="roles-empty"]', 'p[role="status"]', 'fieldset'].map(
+        (selector) => !!content.querySelector(selector),
+      );
+    expect(shown()).toEqual([true, false, false, false]);
+    expect(content.querySelector('[data-dialog-body] hlm-spinner')).toBeNull();
+    const height = content.offsetHeight;
+
+    fixture.componentRef.setInput('rolesLoading', false);
+    await fixture.whenStable();
+    expect(shown()).toEqual([false, true, false, false]);
+    expect(content.offsetHeight).toBe(height);
+
+    fixture.componentRef.setInput('availableRoles', roles);
+    await fixture.whenStable();
+    expect(shown()).toEqual([false, false, true, true]);
+    expect(content.offsetHeight).toBe(height);
+  });
+
   it('review R1 explains the zero-selection prerequisite and does not save', async () => {
     const button = document.querySelector<HTMLButtonElement>(
       'hlm-dialog-footer button[type="submit"]',
@@ -78,7 +104,7 @@ describe('BatchRolesDialog', () => {
     fixture.componentInstance.reloadRoles.subscribe(reload);
     fixture.componentRef.setInput('rolesError', 'Role options failed');
     await fixture.whenStable();
-    document.querySelector<HTMLButtonElement>('[role="alert"] button')!.click();
+    document.querySelector<HTMLButtonElement>('[data-testid="roles-retry"]')!.click();
     expect(reload).toHaveBeenCalledOnce();
     expect(document.querySelector('[role="alert"]')!.textContent).toContain('Role options failed');
     fixture.componentInstance.toggle('role-1');

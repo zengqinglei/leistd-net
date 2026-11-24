@@ -160,8 +160,9 @@ public sealed class NotificationTests(ProjectWebApplicationFactory factory)
 
         // 身份由发布器在收件人边界定案，调用方并不知道它——因此这里断言的是那条保证本身：
         // 推送里的 ID 必须就是落库那条的 ID，否则客户端拿推送的 ID 去标记已读会命不中。
-        var notifications = await admin.Client.GetFromJsonAsync<List<NotificationOutputDto>>("/api/v1/notifications");
-        var stored = Assert.Single(notifications!);
+        var notifications = await admin.Client.GetFromJsonAsync<NotificationPage>("/api/v1/notifications");
+        Assert.Equal(1, notifications!.TotalCount);
+        var stored = Assert.Single(notifications.Items);
         Assert.Equal(stored.Id, pushed.Id);
         Assert.False(stored.IsRead);
         Assert.Equal(notification.Title, stored.Title);
@@ -175,19 +176,23 @@ public sealed class NotificationTests(ProjectWebApplicationFactory factory)
         var clearOne = await admin.Client.DeleteAsync($"/api/v1/notifications/{notificationId}");
         Assert.Equal(HttpStatusCode.NoContent, clearOne.StatusCode);
 
-        var afterClearOne = await admin.Client.GetFromJsonAsync<List<NotificationOutputDto>>("/api/v1/notifications");
-        Assert.DoesNotContain(afterClearOne!, item => item.Id == notificationId);
+        var afterClearOne = await admin.Client.GetFromJsonAsync<NotificationPage>("/api/v1/notifications");
+        Assert.DoesNotContain(afterClearOne!.Items, item => item.Id == notificationId);
 
         // 清空全部：持久删除当前用户的通知记录
         var clearAll = await admin.Client.DeleteAsync("/api/v1/notifications");
         Assert.Equal(HttpStatusCode.NoContent, clearAll.StatusCode);
 
-        var afterClear = await admin.Client.GetFromJsonAsync<List<NotificationOutputDto>>("/api/v1/notifications");
-        Assert.Empty(afterClear!);
+        var afterClear = await admin.Client.GetFromJsonAsync<NotificationPage>("/api/v1/notifications");
+        Assert.Equal(0, afterClear!.TotalCount);
+        Assert.Empty(afterClear.Items);
 
         // 显式停止连接，排空 SignalR 后台循环（持有 CTS），避免与 await using 释放竞争导致类清理期 ObjectDisposedException
         await connection.StopAsync();
     }
+
+    // 框架的 PagedResult 有两个公共构造函数，System.Text.Json 不能直接反序列化
+    private sealed record NotificationPage(long TotalCount, List<NotificationOutputDto> Items);
 
     private static HubConnection CreateHubConnection(
         WebApplicationFactory<Program> application,

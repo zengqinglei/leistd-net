@@ -21,6 +21,7 @@ import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmSeparator } from '@spartan-ng/helm/separator';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { firstValueFrom, catchError, EMPTY, finalize, Subscription, tap } from 'rxjs';
 
@@ -67,6 +68,7 @@ interface ConnectionEditorModel {
     HlmButton,
     HlmInput,
     HlmSeparator,
+    HlmSkeleton,
     HlmSpinner,
     ...HlmDialogImports,
     ...HlmFieldImports,
@@ -136,6 +138,8 @@ export class TenantDetailDialog {
 
   /** 刷新令牌：写操作成功后递增，复用加载 effect 那条带取消语义的路径重新拉列表。 */
   private readonly reloadToken = signal(0);
+  /** 当前列出的是哪个租户、哪一次令牌：令牌变了而租户没变是写后重取，保留已列出的连接。 */
+  private listed: { tenantId: string; token: number } | null = null;
 
   protected readonly editorModel = signal<ConnectionEditorModel>({
     name: '',
@@ -153,13 +157,17 @@ export class TenantDetailDialog {
     effect((onCleanup) => {
       const tenant = this.tenant();
       // 读一次刷新令牌，把"写完重新拉一遍"也并到这条路径上
-      this.reloadToken();
+      const token = this.reloadToken();
 
       if (!this.open() || !tenant || !this.canManage()) {
+        this.listed = null;
         return;
       }
 
-      const subscription = this.loadConnections(tenant.id);
+      // 打开或换租户从头加载；写后重取与重试保留已列出的连接
+      const refetch = this.listed?.tenantId === tenant.id && this.listed.token !== token;
+      this.listed = { tenantId: tenant.id, token };
+      const subscription = this.loadConnections(tenant.id, refetch);
 
       // 关闭或换租户时取消上一次查询，否则 A 的慢响应会配到 B 的标识上。
       onCleanup(() => subscription.unsubscribe());
@@ -174,8 +182,10 @@ export class TenantDetailDialog {
     });
   }
 
-  private loadConnections(tenantId: string): Subscription {
-    this.connections.set(null);
+  private loadConnections(tenantId: string, keepList: boolean): Subscription {
+    if (!keepList) {
+      this.connections.set(null);
+    }
     this.connectionsError.set(null);
     this.connectionsLoading.set(true);
 
@@ -307,7 +317,8 @@ export class TenantDetailDialog {
     }
   }
 
-  private reload(): void {
+  /** 写后重取与读取失败后的重试：保留已列出的连接。 */
+  protected reload(): void {
     this.reloadToken.update((token) => token + 1);
   }
 
@@ -349,6 +360,8 @@ const ENGLISH: Record<string, string> = {
   'tenants.inactive': 'Inactive',
   'tenants.colCreatedAt': 'Created at',
   'tenants.detailSectionConnections': 'Database connections',
+  'app.startup.loading': 'Loading...',
+  'common.retry': 'Retry',
   'tenants.addConnection': 'Add connection',
   'tenants.shardRequiresInactive':
     'To give this tenant a database of its own, deactivate it first: its data currently lives in the database each service is configured with, and registering a connection does not move it.',

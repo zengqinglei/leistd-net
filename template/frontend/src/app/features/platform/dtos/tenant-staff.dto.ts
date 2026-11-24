@@ -1,6 +1,9 @@
 //#if (TenantWorkspace)
 import { RoleBriefDto } from './role.dto';
 
+/** 候选人接口单次最多返回的条数（后端 `TenantStaffAppService.CandidateLimit`），返回满额时提示继续输入。 */
+export const TENANT_STAFF_CANDIDATE_LIMIT = 200;
+
 export interface TenantStaffCandidateOutputDto {
   id: string;
   username: string;

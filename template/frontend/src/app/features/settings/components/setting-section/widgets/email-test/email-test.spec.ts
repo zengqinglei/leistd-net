@@ -35,7 +35,8 @@ const texts: TranslocoLoader = {
           sentDescription: 'Delivered to {{to}}. Check the inbox',
           failed: "The test email wasn't sent",
           failure: {
-            unreachable: "Couldn't reach the SMTP server. Check the host, port and TLS setting",
+            unreachable:
+              "Couldn't reach the SMTP server, or it's temporarily unavailable. Check the host, port and TLS setting, or try again later",
             authRejected: 'The SMTP server rejected the sign-in. Check the username and password',
             rejected:
               'The SMTP server refused the message. Check the sender address and the recipient',
@@ -214,7 +215,7 @@ describe('EmailTest', () => {
   it.each([
     [
       'AppSetting:TestEmailUnreachable',
-      "Couldn't reach the SMTP server. Check the host, port and TLS setting",
+      "Couldn't reach the SMTP server, or it's temporarily unavailable. Check the host, port and TLS setting, or try again later",
     ],
     [
       'AppSetting:TestEmailAuthRejected',

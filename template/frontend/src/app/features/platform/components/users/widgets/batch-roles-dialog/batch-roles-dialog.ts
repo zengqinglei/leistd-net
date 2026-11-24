@@ -17,6 +17,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
+import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { firstValueFrom, Observable } from 'rxjs';
@@ -24,6 +25,7 @@ import { firstValueFrom, Observable } from 'rxjs';
 import { DialogClose } from '../../../../../../core/components/dialog-close/dialog-close';
 import { injectFormSubmission } from '../../../../../../core/validation/form-submission';
 import { isSubmittedInvalid } from '../../../../../../core/validation/submit-error-state-matcher';
+import { ListLoading } from '../../../../../../shared/components/list-loading/list-loading';
 import { ImeGuard } from '../../../../../../shared/directives/ime-guard';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
@@ -40,7 +42,9 @@ import { RoleBriefDto } from '../../../../dtos/role.dto';
   imports: [ImeGuard, DialogClose,
     HlmButton,
     HlmSpinner,
+    ListLoading,
     ...HlmDialogImports,
+    ...HlmEmptyImports,
     ...HlmFieldImports,
     ...HlmCheckboxImports,
     //#if (IncludeLocalization)
@@ -105,6 +109,7 @@ export class BatchRolesDialog {
 const ENGLISH: Record<string, string> = {
   'app.startup.loading': 'Loading...',
   'common.retry': 'Retry',
+  'common.loadFailed': "Couldn't load the list",
   'users.batch.selectRolesHint': 'Select at least one role to add.',
   'users.batch.rolesTitle': 'Add roles to {{count}} users',
   'users.batch.rolesDescription':

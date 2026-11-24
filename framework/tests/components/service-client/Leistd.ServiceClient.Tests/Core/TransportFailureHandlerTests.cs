@@ -1,3 +1,4 @@
+using Leistd.ExceptionHandling;
 using Leistd.ServiceClient.Exceptions;
 using Leistd.ServiceClient.Handlers;
 using Xunit;
@@ -5,7 +6,7 @@ using Leistd.TestBase.Doubles;
 
 namespace Leistd.ServiceClient.Tests.Core;
 
-/// <summary>传输异常统一为带故障类别的 <see cref="ServiceClientException"/>；调用方取消原样传出。</summary>
+/// <summary>传输异常统一为带故障类别的 <see cref="ServiceClientException"/>；调用方取消与内层处理器的业务异常原样传出。</summary>
 public class TransportFailureHandlerTests
 {
     private static HttpMessageInvoker Create(HttpMessageHandler inner) =>
@@ -32,6 +33,19 @@ public class TransportFailureHandlerTests
         var invoker = Create(new ThrowingHttpMessageHandler(_ => original));
 
         var exception = await Assert.ThrowsAsync<ServiceClientException>(() =>
+            invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://demo/api"), CancellationToken.None));
+
+        Assert.Same(original, exception);
+    }
+
+    /// <summary>内层处理器抛出的业务异常已是本服务对调用方的语义，包成上游故障会让宿主答 500。</summary>
+    [Fact]
+    public async Task A_business_failure_from_an_inner_handler_passes_through_unchanged()
+    {
+        var original = new BusinessException("Demo:Rejected", "Rejected by an inner handler.");
+        var invoker = Create(new ThrowingHttpMessageHandler(_ => original));
+
+        var exception = await Assert.ThrowsAsync<BusinessException>(() =>
             invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://demo/api"), CancellationToken.None));
 
         Assert.Same(original, exception);

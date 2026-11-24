@@ -43,6 +43,7 @@
           </span>
           @if (avatarBusy()) {
             <span class="absolute inset-0 flex items-center justify-center bg-black/40 text-white">
+              <!-- eslint-disable-next-line local/spinner-placement -- 头像上传进度：遮在头像上，不在按钮里 -->
               <hlm-spinner class="text-base" />
             </span>
           }

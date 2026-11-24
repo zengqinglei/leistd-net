@@ -2,8 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
+using System.Text.Json;
 using Leistd.Data.Paging;
-using Leistd.ExceptionHandling;
+using Leistd.ExceptionHandling.AspNetCore;
 using Leistd.Notifications.Errors;
 using Leistd.Notifications.Stores;
 using Leistd.Notifications.AspNetCore.Endpoints;
@@ -13,7 +14,6 @@ using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,7 +24,7 @@ using Xunit;
 
 namespace Leistd.Notifications.Tests.AspNetCore;
 
-/// <summary>通知中心端点：走宿主给的具名策略、只作用于当前用户、列表条数有上限。</summary>
+/// <summary>通知中心端点：走宿主给的具名策略、只作用于当前用户、列表按偏移分页且条数有上限。</summary>
 /// <remarks>收件人若可由参数指定，任何登录用户都能读、删别人的通知；条数没有上限时一次请求能把整张表拉回来。</remarks>
 public sealed class NotificationEndpointTests : IAsyncLifetime
 {
@@ -43,6 +43,8 @@ public sealed class NotificationEndpointTests : IAsyncLifetime
                 {
                     services.AddRouting();
                     services.AddSecurity();
+                    services.AddNotifications();
+                    services.AddGlobalExceptionHandler();
                     services.AddSingleton<INotificationStore>(_store);
                     services.AddAuthentication("Test").AddScheme<AuthenticationSchemeOptions, SubjectHandler>("Test", _ => { });
                     services.AddAuthorizationBuilder()
@@ -50,24 +52,10 @@ public sealed class NotificationEndpointTests : IAsyncLifetime
                 })
                 .Configure(app =>
                 {
+                    app.UseGlobalExceptionHandler();
                     app.UseRouting();
                     app.UseAuthentication();
                     app.UseAuthorization();
-                    // 把业务异常换成状态码与错误码头，只为断言；宿主里由异常处理组件输出 Problem Details
-                    app.Use(async (context, next) =>
-                    {
-                        try
-                        {
-                            await next(context);
-                        }
-                        catch (BusinessException exception)
-                        {
-                            context.Response.StatusCode = exception.Code == NotificationErrorCodes.IdentityCannotOperate
-                                ? StatusCodes.Status403Forbidden
-                                : StatusCodes.Status400BadRequest;
-                            context.Response.Headers["X-Error-Code"] = exception.Code;
-                        }
-                    });
                     app.UseEndpoints(endpoints => endpoints.MapGroup("/api/v1/notifications")
                         .MapNotifications(options => options.AccessPolicy = AccessPolicy));
                 }))
@@ -120,27 +108,53 @@ public sealed class NotificationEndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync(HttpMethod.Get, "/api/v1/notifications", null)).StatusCode);
     }
 
-    /// <summary>收件人取自当前主体，列表条数收敛到上限。</summary>
-    [Fact]
-    public async Task The_list_belongs_to_the_current_user_and_is_capped()
+    /// <summary>收件人取自当前主体；偏移、条数与未读过滤原样交给存储，总数与当前页一并返回。</summary>
+    [Theory]
+    [InlineData("", 0, GetNotificationsInputDto.DefaultLimit, false)]
+    [InlineData("?offset=20&limit=100&unreadOnly=true", 20, GetNotificationsInputDto.MaximumLimit, true)]
+    [InlineData("?limit=1", 0, 1, false)]
+    public async Task The_list_belongs_to_the_current_user_and_pages_by_offset_and_limit(
+        string query, int offset, int limit, bool unreadOnly)
     {
-        var response = await SendAsync(HttpMethod.Get, "/api/v1/notifications?maxCount=5000&unreadOnly=true", UserId.ToString());
+        var response = await SendAsync(HttpMethod.Get, "/api/v1/notifications" + query, UserId.ToString());
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal((UserId.ToString(), NotificationEndpoints.MaximumListCount, true), _store.LastQuery);
-        Assert.Equal("n1", (await response.Content.ReadFromJsonAsync<NotificationOutputDto[]>())![0].Title);
+        Assert.Equal((UserId.ToString(), offset, limit, unreadOnly), _store.LastQuery);
+        var page = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(CapturingStore.TotalCount, page.GetProperty("totalCount").GetInt64());
+        Assert.Equal("n1", Assert.Single(page.GetProperty("items").EnumerateArray()).GetProperty("title").GetString());
     }
 
-    /// <summary>当前身份不是用户（机器客户端）：读取返回空，写入以带码的 403 拒绝。</summary>
+    /// <summary>越界不再静默收敛：400 字段错误、不带业务码，也不查询存储。</summary>
+    [Theory]
+    [InlineData("?limit=0", "limit")]
+    [InlineData("?limit=101", "limit")]
+    [InlineData("?offset=-1", "offset")]
+    public async Task Out_of_range_paging_is_400_with_the_field(string query, string field)
+    {
+        var response = await SendAsync(HttpMethod.Get, "/api/v1/notifications" + query, UserId.ToString());
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.False(document.RootElement.TryGetProperty("code", out _));
+        Assert.Equal(field, Assert.Single(document.RootElement.GetProperty("errors").EnumerateArray()).GetProperty("field").GetString());
+        Assert.Null(_store.LastQuery);
+    }
+
+    /// <summary>当前身份不是用户（机器客户端）：读取返回空页，写入以带码的 403 拒绝。</summary>
     [Fact]
     public async Task A_non_user_identity_reads_nothing_and_cannot_modify()
     {
         var list = await SendAsync(HttpMethod.Get, "/api/v1/notifications", "client:reporting");
         var clear = await SendAsync(HttpMethod.Delete, "/api/v1/notifications", "client:reporting");
 
-        Assert.Equal("[]", await list.Content.ReadAsStringAsync());
+        var page = await list.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, page.GetProperty("totalCount").GetInt64());
+        Assert.Empty(page.GetProperty("items").EnumerateArray());
+        Assert.Null(_store.LastQuery);
         Assert.Equal(HttpStatusCode.Forbidden, clear.StatusCode);
-        Assert.Equal(NotificationErrorCodes.IdentityCannotOperate, clear.Headers.GetValues("X-Error-Code").Single());
+        using var problem = JsonDocument.Parse(await clear.Content.ReadAsStringAsync());
+        Assert.Equal(NotificationErrorCodes.IdentityCannotOperate, problem.RootElement.GetProperty("code").GetString());
         Assert.Null(_store.LastDeletedUser);
     }
 
@@ -159,7 +173,9 @@ public sealed class NotificationEndpointTests : IAsyncLifetime
 
     private sealed class CapturingStore : INotificationStore
     {
-        public (string UserId, int Limit, bool UnreadOnly)? LastQuery { get; private set; }
+        public const long TotalCount = 7;
+
+        public (string UserId, int Offset, int Limit, bool UnreadOnly)? LastQuery { get; private set; }
         public string? LastModifiedUser { get; private set; }
         public string? LastDeletedUser { get; private set; }
 
@@ -167,8 +183,8 @@ public sealed class NotificationEndpointTests : IAsyncLifetime
 
         public Task<PagedResult<NotificationOutputDto>> GetByUserAsync(string userId, PageRequest page, bool unreadOnly = false, CancellationToken ct = default)
         {
-            LastQuery = (userId, page.Limit, unreadOnly);
-            return Task.FromResult(new PagedResult<NotificationOutputDto>(1,
+            LastQuery = (userId, page.Offset, page.Limit, unreadOnly);
+            return Task.FromResult(new PagedResult<NotificationOutputDto>(TotalCount,
                 [new NotificationOutputDto { Id = "n1", Title = "n1", CreationTime = DateTime.UtcNow }]));
         }
 

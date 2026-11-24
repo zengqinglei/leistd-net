@@ -31,6 +31,7 @@ import { DialogClose } from '../../../../../../core/components/dialog-close/dial
 import { injectFormSubmission } from '../../../../../../core/validation/form-submission';
 import { isSubmittedInvalid } from '../../../../../../core/validation/submit-error-state-matcher';
 import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
+import { ListLoading } from '../../../../../../shared/components/list-loading/list-loading';
 import { DialogFocus } from '../../../../../../shared/directives/dialog-focus';
 import { ImeGuard } from '../../../../../../shared/directives/ime-guard';
 //#if (!IncludeLocalization)
@@ -86,6 +87,7 @@ function isAbsoluteHttpUrl(value: string): boolean {
     ImeGuard,
     DialogClose,
     DialogLoading,
+    ListLoading,
     FormField,
     NgIcon,
     HlmButton,

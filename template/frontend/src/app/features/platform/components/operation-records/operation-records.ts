@@ -36,6 +36,7 @@ import {
   HlmInputGroupInput,
   HlmInputGroupAddon,
 } from '@spartan-ng/helm/input-group';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 // 导出与刷新按钮上的 hlmTooltip 指令要在作用域内，否则只是无效属性。
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
@@ -87,6 +88,7 @@ import { OperationRecordTable } from './widgets/operation-record-table/operation
 @Component({
   selector: 'app-operation-records',
   imports: [
+    HlmSkeleton,
     HlmSpinner,
     NgIcon,
     HlmButton,

@@ -354,7 +354,7 @@ public sealed partial class CredentialChangeTransactionTests(CredentialChangeTra
 #if (IncludeNotifications)
         // 锁定只挡新登录，已有会话照常可读通知；提醒写入若跟着改口令回滚，这里就是空的
         using var body = JsonDocument.Parse(await session.Client.GetStringAsync("/api/v1/notifications"));
-        Assert.Single(body.RootElement.EnumerateArray(), n => n.GetProperty("type").GetString() == "Security");
+        Assert.Single(body.RootElement.GetProperty("items").EnumerateArray(), n => n.GetProperty("type").GetString() == "Security");
 #endif
     }
 #if (OpenIddictServer)

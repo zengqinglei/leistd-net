@@ -389,12 +389,18 @@ describe('httpErrorInterceptor', () => {
     expect(caught).toBeInstanceOf(ApplicationHttpError);
   });
   //#if (IncludeMultiTenancy)
+  // 租户失效时连记住的那个一起清（本地身份形态）；资源服务形态只有内存态
+  //#if (LocalIdentity)
+  const tenantReset = 'forget';
+  //#else
+  const tenantReset = 'clear';
+  //#endif
 
   // 「租户没了」与「是否重新认证」正交：认证路由上的静默请求带这个头时，租户必须清，会话与认证不动。
   it('clears an invalid tenant even on an auth route, without touching the session', () => {
     openAt('/auth/login');
     const tenantContext = TestBed.inject(TenantContextService);
-    const clearTenantSpy = vi.spyOn(tenantContext, 'clear').mockReturnValue(undefined);
+    const clearTenantSpy = vi.spyOn(tenantContext, tenantReset).mockReturnValue(undefined);
     const context = new HttpContext().set(SILENT_AUTH, true);
 
     runInterceptor(httpError(401, null, { [TENANT_INVALID_HEADER]: '1' }), { context });
@@ -406,7 +412,7 @@ describe('httpErrorInterceptor', () => {
 
   it('clears the selected tenant on a 401 marked X-Tenant-Invalid', () => {
     const tenantContext = TestBed.inject(TenantContextService);
-    const clearTenantSpy = vi.spyOn(tenantContext, 'clear').mockReturnValue(undefined);
+    const clearTenantSpy = vi.spyOn(tenantContext, tenantReset).mockReturnValue(undefined);
 
     runInterceptor(httpError(401, null, { [TENANT_INVALID_HEADER]: '1' }));
 
@@ -416,7 +422,7 @@ describe('httpErrorInterceptor', () => {
 
   it('does not treat an ordinary 401 as an invalid tenant', () => {
     const tenantContext = TestBed.inject(TenantContextService);
-    const clearTenantSpy = vi.spyOn(tenantContext, 'clear').mockReturnValue(undefined);
+    const clearTenantSpy = vi.spyOn(tenantContext, tenantReset).mockReturnValue(undefined);
 
     runInterceptor(httpError(401));
 
@@ -427,7 +433,7 @@ describe('httpErrorInterceptor', () => {
 
   it('clears the tenant on a silent 401 marked X-Tenant-Invalid, without touching auth or routing', () => {
     const tenantContext = TestBed.inject(TenantContextService);
-    const clearTenantSpy = vi.spyOn(tenantContext, 'clear').mockReturnValue(undefined);
+    const clearTenantSpy = vi.spyOn(tenantContext, tenantReset).mockReturnValue(undefined);
     const context = new HttpContext().set(SILENT_AUTH, true);
 
     runInterceptor(httpError(401, null, { [TENANT_INVALID_HEADER]: '1' }), { context });

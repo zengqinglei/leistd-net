@@ -71,9 +71,11 @@ public sealed class ConnectController(
         var now = new DateTimeOffset(DateTime.SpecifyKind(clock.Now, DateTimeKind.Utc)).ToUnixTimeSeconds();
         // 请求缓存下 prompt/max_age 存在 request token 里，从 URL 删掉它们改变不了请求本身。
         // prompt=login 与 max_age=0 每次都要求认证，靠"本请求的重新认证已完成"的证明兑现（证明之后新建的会话）；
-        // 正数 max_age 始终按当前认证年龄判断，证明不能让一次早先的认证一直算数。
+        // 正数 max_age 始终按当前认证年龄判断，证明不能让一次早先的认证一直算数；
+        // 按 OIDC Core §3.1.2.1，经过时间大于 max_age 才算超期，恰好等于仍在允许范围内。max_age=0 单独判为恒超期，
+        // 不随之放宽成"同一秒仍新鲜"。
         var loginPrompted = request.HasPromptValue(PromptValues.Login);
-        var maxAgeExceeded = request.MaxAge is { } maxAge && (!fresh || now - authenticatedAt >= maxAge);
+        var maxAgeExceeded = request.MaxAge is { } maxAge && (!fresh || maxAge == 0 || now - authenticatedAt > maxAge);
         var proof = Request.Query[ConnectInteractionProtector.ReauthenticationParameter].ToString();
         var proven = (loginPrompted || request.MaxAge == 0) && result.Succeeded && !string.IsNullOrEmpty(proof) &&
             interactions.IsReauthenticated(proof, request.RequestUri, await sessionAppService.GetCurrentSessionStartTimeAsync(cancellationToken));

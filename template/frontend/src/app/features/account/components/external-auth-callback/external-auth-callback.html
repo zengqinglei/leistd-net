@@ -19,6 +19,7 @@
         </div>
       } @else if (processing()) {
         <div class="flex flex-col items-center gap-4">
+          <!-- eslint-disable-next-line local/spinner-placement -- 外部登录回调：整页处理，没有可预知的内容形状 -->
           <hlm-spinner [attr.aria-label]="t('account.externalCallback.processingAria')" />
           <p class="text-muted-foreground">{{ t('account.externalCallback.processing') }}</p>
         </div>

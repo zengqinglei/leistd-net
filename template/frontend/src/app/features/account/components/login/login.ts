@@ -183,6 +183,11 @@ export class Login implements OnInit {
 
   private readonly accountService = inject(AccountService);
   private readonly destroyRef = inject(DestroyRef);
+  /**
+   * 页面已离开（如在途时转去找回密码）：认证结果不再由它收尾，不记住租户、不导航，
+   * 以免旧响应写入新页面上改过的租户、把用户从别处拉去第二步。
+   */
+  private destroyed = false;
 
   /** 这一次收到 `Auth:PasskeyUnavailable`（部署此刻没配）：收起通行密钥的入口。 */
   private readonly passkeyWithdrawn = signal(false);
@@ -229,7 +234,10 @@ export class Login implements OnInit {
         }
       });
     });
-    this.destroyRef.onDestroy(() => this.stopConditionalRequest());
+    this.destroyRef.onDestroy(() => {
+      this.destroyed = true;
+      this.stopConditionalRequest();
+    });
   }
 
   ngOnInit(): void {
@@ -261,6 +269,13 @@ export class Login implements OnInit {
         const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
 
         const result = await lastValueFrom(this.authService.login(loginInput));
+        if (this.destroyed) {
+          return;
+        }
+        //#if (IncludeMultiTenancy)
+        // 口令已被接受（含尚待第二步）：此时才把这个租户记为下次的预选，第二步页刷新也靠它带对租户
+        this.tenantContext.remember();
+        //#endif
         if (result?.requiresTwoFactor) {
           // 还要第二步：服务端只写了待完成登录的临时 Cookie，第二步在独立页面完成，刷新也能接着做
           await this.router.navigateByUrl(this.returnUrls.twoFactorLogin(returnUrl));
@@ -293,6 +308,12 @@ export class Login implements OnInit {
    * @returns 是否已发起整页离开（离开时加载态不复位，原因见 {@link onSubmit}）。
    */
   private async onSignedIn(): Promise<boolean> {
+    if (this.destroyed) {
+      return false;
+    }
+    //#if (IncludeMultiTenancy)
+    this.tenantContext.remember();
+    //#endif
     this._isLoading.set(true);
     let left = false;
     try {
@@ -463,6 +484,14 @@ export class Login implements OnInit {
   );
 
   /**
+   * 认证在途（口令、通行密钥，从发起到交接完成）也不许改租户：成功后记住的、第二步沿用的都是当前租户，
+   * 中途改了就与已发出的请求对不上。与 {@link tenantSelectionBlocked} 分开：只禁用，不收起「切换租户」。
+   */
+  readonly tenantChangeBlocked = computed(
+    () => this.tenantSelectionBlocked() || this.isLoading() || this.passkeyBusy(),
+  );
+
+  /**
    * 租户上下文未定案时认证入口一律等待。与 {@link tenantSelectionBlocked} 不同：已定案时
    * 不许选择但允许登录；探测未回来或失败时提交会落到与界面不一致的上下文。
    */
@@ -475,15 +504,15 @@ export class Login implements OnInit {
 
   async onConfirmTenant(): Promise<void> {
     const name = this.tenantName().trim();
-    // 探测未回来 / 域名已定案时不接受手选：前者会被随后的探测结果覆盖，后者本就不该能改。
-    if (!name || this.tenantSelectionBlocked()) {
+    // 探测未回来 / 域名已定案时不接受手选：前者会被随后的探测结果覆盖，后者本就不该能改；认证在途同样不接受。
+    if (!name || this.tenantChangeBlocked()) {
       return;
     }
 
     this.tenantError.set(null);
 
     // 不向服务端确认这个租户是否存在：那会让任何人靠这个接口枚举租户。
-    // 名字直接记进上下文；租户不存在或已停用时，请求会被中间件按统一的 404 挡住
+    // 名字直接写进上下文（只在内存，凭据被接受后才记住）；租户不存在或已停用时，请求会被中间件按统一的 404 挡住
     // （两种情形不区分，停用状态本身也是情报），不是由登录接口判凭据。
     this.tenantContext.set(name);
     this.tenantName.set('');
@@ -493,7 +522,7 @@ export class Login implements OnInit {
 
   clearTenant(): void {
     // 与手选同一条闸门：清除也是一次手动改租户，探测未回来或失败时同样不该放行。
-    if (this.tenantSelectionBlocked()) {
+    if (this.tenantChangeBlocked()) {
       return;
     }
 
@@ -507,6 +536,9 @@ export class Login implements OnInit {
 
   /** 应用输入框里的租户：填了名称切到该租户，留空回到宿主。 */
   async applyTenantInput(): Promise<void> {
+    if (this.tenantChangeBlocked()) {
+      return;
+    }
     if (this.tenantName().trim()) {
       await this.onConfirmTenant();
     } else {

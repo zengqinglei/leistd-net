@@ -6,6 +6,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideLogOut } from '@ng-icons/lucide';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
@@ -32,6 +33,7 @@ import { AuthShell } from '../auth-shell/auth-shell';
   imports: [
     NgIcon,
     HlmButton,
+    HlmSkeleton,
     HlmSpinner,
     AuthShell,
     //#if (IncludeLocalization)

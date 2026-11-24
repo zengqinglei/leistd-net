@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 
 import { NotificationOutputDto } from '../../shared/dtos/notification.dto';
+import { PagedResultDto } from '../../shared/dtos/paged-result.dto';
 import { NOTIFICATION_ICONS, NotificationService } from './notification-service';
 import { SignalRService } from './signalr-service';
 
@@ -16,6 +17,10 @@ describe('NotificationService', () => {
 
   function notification(id: string, creationTime: string): NotificationOutputDto {
     return { id, title: id, type: 'info', isRead: false, creationTime };
+  }
+
+  function page(...items: NotificationOutputDto[]): PagedResultDto<NotificationOutputDto> {
+    return { totalCount: items.length, items };
   }
 
   beforeEach(() => {
@@ -39,17 +44,30 @@ describe('NotificationService', () => {
 
   it('does not open a second connection when initialized twice', async () => {
     const first = service.init();
-    httpMock.expectOne((req) => req.url === '/api/v1/notifications').flush([]);
+    httpMock.expectOne((req) => req.url === '/api/v1/notifications').flush(page());
     await first;
 
     const second = service.init();
-    httpMock.expectOne((req) => req.url === '/api/v1/notifications').flush([]);
+    httpMock.expectOne((req) => req.url === '/api/v1/notifications').flush(page());
     await second;
 
     // 幂等由 SignalRService.connect() 自身保证；这里锁住的是"调用方没有绕过它"，
     // 例如自己缓存一个 initialized 标志、或改成直接建连接。
     expect(signalR.connect).toHaveBeenCalledTimes(2);
     expect(signalR.connect).toHaveBeenCalledWith();
+  });
+
+  // 后端按 offset/limit 分页、越界返回 400：只传 limit，拿到的是分页结果而不是数组
+  it('requests the newest page by limit and reads its items', async () => {
+    const load = service.loadNotifications();
+    const request = httpMock.expectOne((req) => req.url === '/api/v1/notifications');
+    expect(request.request.params.get('limit')).toBe('50');
+    expect(request.request.params.has('maxCount')).toBe(false);
+
+    request.flush({ totalCount: 3, items: [notification('n-1', '2026-01-01T00:00:00Z')] });
+    await load;
+
+    expect(service.notifications().map((item) => item.id)).toEqual(['n-1']);
   });
 
   it('merges history with pushed notifications, newest first and without duplicates', async () => {
@@ -59,10 +77,12 @@ describe('NotificationService', () => {
     const init = service.init();
     httpMock
       .expectOne((req) => req.url === '/api/v1/notifications')
-      .flush([
-        notification('old', '2026-01-01T00:00:00Z'),
-        notification('pushed', '2026-01-02T00:00:00Z'),
-      ]);
+      .flush(
+        page(
+          notification('old', '2026-01-01T00:00:00Z'),
+          notification('pushed', '2026-01-02T00:00:00Z'),
+        ),
+      );
     await init;
 
     // 推送那条已经在历史里，不能再插一遍——否则铃铛会显示两条一模一样的。
@@ -76,7 +96,7 @@ describe('NotificationService', () => {
     // 响应还没回来就登出/换人登录：reset 递增认证代际并清空列表。
     await signalR.reset();
 
-    request.flush([notification('a-1', '2026-01-01T00:00:00Z')]);
+    request.flush(page(notification('a-1', '2026-01-01T00:00:00Z')));
     await init;
 
     // 旧响应无条件写回共享 signal，就是把上一个用户的历史通知落到下一个人界面上。
@@ -90,7 +110,7 @@ describe('NotificationService', () => {
     const request = httpMock.expectOne((req) => req.url === '/api/v1/notifications');
 
     await signalR.reset();
-    request.flush([]);
+    request.flush(page());
     await init;
 
     // 服务端 Cookie 此刻可能仍有效：这一轮 init 建成的连接会把 principal 定在
@@ -142,7 +162,7 @@ describe('NotificationService', () => {
     expect(service.loadFailed()).toBe(false);
     httpMock
       .expectOne((req) => req.url === '/api/v1/notifications')
-      .flush([notification('n-1', '2026-01-01T00:00:00Z')]);
+      .flush(page(notification('n-1', '2026-01-01T00:00:00Z')));
     await retry;
 
     expect(service.loadFailed()).toBe(false);
@@ -168,11 +188,11 @@ describe('NotificationService', () => {
     const [requestA, requestB] = httpMock.match((req) => req.url === '/api/v1/notifications');
 
     // A 的请求在 B 加载途中结束：它的 finally 不能替 B 关掉加载状态。
-    requestA.flush([]);
+    requestA.flush(page());
     await loadA;
     expect(service.loading()).toBe(true);
 
-    requestB.flush([]);
+    requestB.flush(page());
     await loadB;
     expect(service.loading()).toBe(false);
   });

@@ -376,6 +376,26 @@ describe('Notifications', () => {
   });
 
   // 图标由使用方自己整组注册（测试不在父级预先提供）：漏注册不会报错，面板里只剩一块空白
+  // 首次加载：通知行骨架占住列表的位置，不在空态图标位放 spinner；加载完再给空态
+  it('shows notification row skeletons on the first load and the empty state afterwards', async () => {
+    (service.loading as WritableSignal<boolean>).set(true);
+    const fixture = TestBed.createComponent(Notifications);
+    fixture.detectChanges();
+    fixture.componentInstance.notificationOpen.set('open');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(document.querySelector('[data-testid="notifications-loading"]')).not.toBeNull();
+    expect(document.querySelector('[data-slot="empty"]')).toBeNull();
+    expect(document.querySelector('hlm-popover-content hlm-spinner')).toBeNull();
+
+    (service.loading as WritableSignal<boolean>).set(false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(document.querySelector('[data-testid="notifications-loading"]')).toBeNull();
+    expect(document.querySelector('[data-slot="empty"]')).not.toBeNull();
+    fixture.destroy();
+  });
+
   it('registers the type icons it shows', async () => {
     service.getIcon.mockImplementation((type: string) =>
       NotificationService.prototype.getIcon.call(service, type),

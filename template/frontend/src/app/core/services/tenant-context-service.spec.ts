@@ -21,12 +21,28 @@ describe('TenantContextService', () => {
     expect(create().current()).toBeNull();
   });
 
-  it('writes both the signal and localStorage on set', () => {
+  // 选定只是这一次的尝试，凭据被接受后才记住，选错且登录失败不改变下次的预选
+  it('changes only the signal on set, and persists on remember', () => {
     const service = create();
     service.set(tenantName);
 
     expect(service.current()).toEqual({ key: tenantName });
+    expect(localStorage.getItem('app.tenant')).toBeNull();
+
+    service.remember();
     expect(localStorage.getItem('app.tenant')).toContain(tenantName);
+  });
+
+  it('forgets the remembered tenant when remembering the host', () => {
+    const service = create();
+    service.set(tenantName);
+    service.remember();
+    service.clear();
+
+    expect(localStorage.getItem('app.tenant')).toContain(tenantName);
+
+    service.remember();
+    expect(localStorage.getItem('app.tenant')).toBeNull();
   });
 
   // 上下文里刻意**不存**"来自域名还是手填"：那是每次打开登录页现探的结论，不是租户的属性。
@@ -47,16 +63,19 @@ describe('TenantContextService', () => {
     expect(create().current()).toBeNull();
   });
 
-  it('restores the context from localStorage in a new instance', () => {
-    create().set(tenantName);
+  it('restores the remembered context from localStorage in a new instance', () => {
+    const service = create();
+    service.set(tenantName);
+    service.remember();
 
     expect(create().current()?.key).toBe(tenantName);
   });
 
-  it('clears both the signal and localStorage on clear', () => {
+  it('clears both the signal and localStorage on forget', () => {
     const service = create();
     service.set(tenantName);
-    service.clear();
+    service.remember();
+    service.forget();
 
     expect(service.current()).toBeNull();
     expect(localStorage.getItem('app.tenant')).toBeNull();

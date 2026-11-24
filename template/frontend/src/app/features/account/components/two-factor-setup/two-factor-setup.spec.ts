@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import {
   confirmWithCode,
@@ -75,6 +75,17 @@ describe('TwoFactorSetup', () => {
     expect(host().querySelector('[data-testid="two-factor-secret"]')?.textContent?.trim()).toBe(
       'JBSW Y3DP EHPK 3PXP',
     );
+  });
+
+  // 首次加载：骨架占住二维码与密钥的位置，不放居中 spinner
+  it('shows a skeleton in place of the key while the setup starts', async () => {
+    const pending = new Subject<never>();
+    account.beginTwoFactorSetup.mockReturnValue(pending);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(host().querySelector('[data-testid="two-factor-setup-loading"]')).not.toBeNull();
+    expect(host().querySelector('hlm-spinner')).toBeNull();
   });
 
   it('labels the code input through the field label', async () => {

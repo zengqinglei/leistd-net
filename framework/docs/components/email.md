@@ -120,7 +120,7 @@ await emailSender.SendAsync(new EmailMessage
 
 实际投递的实现收到投递设施的接受确认后，`SendAsync` 正常返回，不保证收件人最终收到；收到确认之后的取消或断开故障不会再让它抛出。
 尚未收到确认时的失败以异常报告，重试和补偿由调用方决定。能归类为连不上、认证被拒或投递被拒的失败抛 `EmailDeliveryException`，
-据 `FailureKind` 提示管理员检查地址与端口、凭据或收发件地址；无法归类的失败与取消原样抛出。
+据 `FailureKind` 提示管理员检查地址与端口、凭据或收发件地址；`Unreachable` 时邮件尚未提交，可以稍后重试。无法归类的失败与取消原样抛出。
 异常不保证服务器没有接受（例如接受回复在途中丢失），按失败补偿的调用方要能容忍偶发的"信已到、却按失败处理"。
 显式注册的 `NullEmailSender` 例外：它正常返回但不投递。`NullEmailSender` 只能显式注册，不会在 SMTP 配置或发送失败时自动回落。
 
@@ -140,7 +140,8 @@ await emailSender.SendAsync(new EmailMessage
   | 阶段 | `FailureKind` | 归入的异常 |
   | --- | --- | --- |
   | 连接 | `Unreachable` | `SocketException`、`SslHandshakeException`、`IOException`、`SmtpProtocolException`、`TimeoutException`；要求 STARTTLS 而服务器不支持时的 `NotSupportedException`；问候、EHLO 或 STARTTLS 被拒的 `SmtpCommandException` |
-  | 认证 | `AuthenticationRejected` | MailKit 的 `AuthenticationException`、`SaslException`；服务器不支持认证时的 `NotSupportedException`。服务器回 4xx（如 454 暂时无法认证）属临时故障，原样抛出 |
+  | 认证 | `AuthenticationRejected` | MailKit 的 `AuthenticationException`（服务器回 4xx 的除外，见下一行）、`SaslException`；服务器不支持认证时的 `NotSupportedException` |
+  | 认证 | `Unreachable` | `SocketException`、`IOException`、`SmtpProtocolException`、`TimeoutException`；服务器回 4xx（如 454 暂时无法认证）的 `AuthenticationException`。邮件尚未提交，可以重试 |
   | 发送 | `AuthenticationRejected` | 服务器要求认证而未配置账号（`ServiceNotAuthenticatedException`，如 530） |
   | 发送 | `DeliveryRejected` | `ErrorCode` 为 `SenderNotAccepted`、`RecipientNotAccepted`、`MessageNotAccepted` 的 `SmtpCommandException`；`SmtpUtf8AddressException` |
 

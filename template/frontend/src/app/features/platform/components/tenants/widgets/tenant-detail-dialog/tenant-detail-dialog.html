@@ -79,15 +79,29 @@
                 </p>
               }
 
-              @if (connectionsLoading()) {
-                <div class="flex items-center gap-2 py-2">
-                  <hlm-spinner class="text-base" />
+              @if (connectionsError(); as error) {
+                <!-- 连接段单独降级：标识段照常呈现，不因一个副请求失败把整个详情打空；
+                重取失败时已列出的连接保留在下方 -->
+                <div class="flex flex-col items-start gap-2" role="alert">
+                  <p class="text-destructive text-sm">{{ error }}</p>
+                  <button
+                    hlmBtn
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                    data-testid="tenant-connections-retry"
+                    (click)="reload()"
+                  >
+                    {{ t('common.retry') }}
+                  </button>
                 </div>
-              } @else if (connectionsError(); as error) {
-                <!-- 连接段单独降级：标识段照常呈现，不因一个副请求失败把整个详情打空 -->
-                <p class="text-destructive text-sm" role="alert">{{ error }}</p>
-              } @else if (connections(); as list) {
-                <div class="flex flex-col gap-2">
+              }
+              @if (connections(); as list) {
+                <div
+                  class="flex flex-col gap-2"
+                  data-testid="tenant-connections"
+                  [attr.aria-busy]="connectionsLoading() ? true : null"
+                >
                   @for (connection of list; track connection.name) {
                     <div
                       class="border-border flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
@@ -220,6 +234,31 @@
                 } @else if (actionError(); as error) {
                   <p class="text-destructive text-sm" role="alert">{{ error }}</p>
                 }
+              } @else if (connectionsLoading()) {
+                <!-- 首次加载：按连接行的结构占位（带边框，左侧名称与版本，右侧两个操作按钮） -->
+                <div
+                  class="flex flex-col gap-2"
+                  role="status"
+                  aria-live="polite"
+                  data-testid="tenant-connections-loading"
+                >
+                  <span class="sr-only">{{ t('app.startup.loading') }}</span>
+                  @for (row of [0, 1]; track row) {
+                    <div
+                      class="border-border flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+                      aria-hidden="true"
+                    >
+                      <div class="flex min-w-0 flex-col gap-1.5">
+                        <div hlmSkeleton class="h-4 w-28 max-w-full"></div>
+                        <div hlmSkeleton class="h-3.5 w-16 max-w-full"></div>
+                      </div>
+                      <div class="flex shrink-0 items-center gap-2">
+                        <div hlmSkeleton class="h-8 w-36 rounded-md pointer-coarse:h-11"></div>
+                        <div hlmSkeleton class="h-8 w-16 rounded-md pointer-coarse:h-11"></div>
+                      </div>
+                    </div>
+                  }
+                </div>
               }
             </section>
           }

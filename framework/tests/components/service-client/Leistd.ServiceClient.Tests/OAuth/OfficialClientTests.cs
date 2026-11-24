@@ -6,6 +6,7 @@ using Leistd.ExceptionHandling;
 using Leistd.ServiceClient.Abstractions;
 using Leistd.ServiceClient.Exceptions;
 using Leistd.ServiceClient.OAuth;
+using Leistd.ServiceClient.Options;
 using Leistd.ServiceClient.OAuth.Handlers;
 using Leistd.ServiceClient.OAuth.Options;
 using Microsoft.AspNetCore.Builder;
@@ -91,7 +92,7 @@ public sealed class OfficialClientTests : IAsyncLifetime
     public Task DisposeAsync() => host.DisposeAsync().AsTask();
 
     private ServiceProvider Caller(bool exchange, Accessor? accessor = null, bool reject = false,
-        Destination? destination = null, IDistributedCache? distributed = null)
+        Destination? destination = null, IDistributedCache? distributed = null, bool standardPipeline = false)
     {
         var services = new ServiceCollection();
         services.AddLogging(logging => logging.AddConsole());
@@ -106,6 +107,8 @@ public sealed class OfficialClientTests : IAsyncLifetime
         });
         services.AddSingleton<IUserAccessTokenAccessor>(accessor ?? new Accessor("subject-one"));
         var http = services.AddHttpClient("Billing").ConfigurePrimaryHttpMessageHandler(() => destination ?? new Destination());
+        // 服务客户端注册入口先挂标准管道，令牌处理器在它内层。
+        if (standardPipeline) http.AddServiceClientPipeline<ServiceClientOptions>("Billing");
         if (exchange) http.AddTokenExchange(value => { value.Audience = "billing-api"; value.Scope = "billing-api"; });
         else http.AddClientCredentials(value => value.Scope = "billing-api");
         return services.BuildServiceProvider();
@@ -226,11 +229,13 @@ public sealed class OfficialClientTests : IAsyncLifetime
         Assert.Equal(0, machineRequests);
     }
 
-    // 身份服务不再接受用户凭据（invalid_grant）时需要重新认证，原拒绝留作诊断；其他 OAuth 错误仍是远端故障
-    [Fact]
-    public async Task Exchange_rejected_with_invalid_grant_requires_authentication()
+    /// <summary>普通客户端和标准管道中的令牌交换遇到 <c>invalid_grant</c> 时都要求重新认证，并保留原拒绝作为内层异常。</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Exchange_rejected_with_invalid_grant_requires_authentication(bool standardPipeline)
     {
-        await using var provider = Caller(exchange: true, new Accessor("rejected:invalid_grant"));
+        await using var provider = Caller(exchange: true, new Accessor("rejected:invalid_grant"), standardPipeline: standardPipeline);
         var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient("Billing");
 
         var exception = await Assert.ThrowsAsync<AuthenticationRequiredException>(() => client.GetAsync("https://billing.test/"));
@@ -240,10 +245,12 @@ public sealed class OfficialClientTests : IAsyncLifetime
         Assert.Equal("invalid_grant", cause.ErrorCode);
     }
 
-    [Fact]
-    public async Task Exchange_rejected_for_other_oauth_reasons_stays_a_remote_failure()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Exchange_rejected_for_other_oauth_reasons_stays_a_remote_failure(bool standardPipeline)
     {
-        await using var provider = Caller(exchange: true, new Accessor("rejected:invalid_target"));
+        await using var provider = Caller(exchange: true, new Accessor("rejected:invalid_target"), standardPipeline: standardPipeline);
         var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient("Billing");
 
         var exception = await Assert.ThrowsAsync<RemoteServiceException>(() => client.GetAsync("https://billing.test/"));

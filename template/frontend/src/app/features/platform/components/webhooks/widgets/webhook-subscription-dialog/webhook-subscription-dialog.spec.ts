@@ -112,6 +112,37 @@ describe('WebhookSubscriptionDialog', () => {
     ).toEqual(['uri']);
   });
 
+  // 高度在打开时确定：详情与事件类型加载完成后弹窗高度不变；事件类型加载中是行骨架，不放裸 spinner
+  it('keeps the dialog height from loading to the loaded form', async () => {
+    fixture.componentRef.setInput('loading', true);
+    fixture.componentRef.setInput('eventTypesLoading', true);
+    open();
+    await fixture.whenStable();
+    const content = document.querySelector<HTMLElement>('[data-slot="dialog-content"]')!;
+    expect(content.querySelector('app-dialog-loading')).not.toBeNull();
+    const height = content.offsetHeight;
+
+    fixture.componentRef.setInput('loading', false);
+    await fixture.whenStable();
+    const events = content.querySelector('[data-testid="webhook-event-types"]')!;
+    expect(events.querySelector('app-list-loading')).not.toBeNull();
+    expect(events.querySelector('hlm-spinner')).toBeNull();
+    expect(content.offsetHeight).toBe(height);
+    // 事件项是单行勾选：骨架每行一个勾选框加一行文字，勾选框与最终的事件勾选框同一缩进
+    const skeletonRows = [...events.querySelectorAll('app-list-loading [aria-hidden="true"]')];
+    expect(skeletonRows.length).toBeGreaterThan(0);
+    for (const row of skeletonRows)
+      expect(row.querySelectorAll('[hlmSkeleton]:not(.size-4)')).toHaveLength(1);
+    const skeletonLeft = skeletonRows[0].querySelector('.size-4')!.getBoundingClientRect().left;
+
+    fixture.componentRef.setInput('eventTypesLoading', false);
+    await fixture.whenStable();
+    const eventCheckbox = content.querySelector('[id="webhook-event-user.created"]')!;
+    expect(eventCheckbox).not.toBeNull();
+    expect(eventCheckbox.getBoundingClientRect().left).toBe(skeletonLeft);
+    expect(content.offsetHeight).toBe(height);
+  });
+
   it('fills the form from the subscription being edited', () => {
     open({
       id: 'sub-1',

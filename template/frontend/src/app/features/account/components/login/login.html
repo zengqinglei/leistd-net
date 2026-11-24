@@ -19,7 +19,7 @@
             hlmInputGroupInput
             id="tenantName"
             autocomplete="off"
-            [disabled]="tenantSelectionBlocked()"
+            [disabled]="tenantChangeBlocked()"
             [value]="tenantName()"
             (input)="tenantName.set($any($event.target).value); tenantError.set(null)"
             (keydown.enter)="$event.preventDefault(); applyTenantInput()"
@@ -29,7 +29,7 @@
             hlmInputGroupButton
             type="button"
             align="inline-end"
-            [disabled]="tenantSelectionBlocked()"
+            [disabled]="tenantChangeBlocked()"
             (click)="applyTenantInput()"
           >
             {{ t('account.login.tenantConfirm') }}
@@ -50,6 +50,7 @@
               size="sm"
               class="ms-auto px-0"
               data-testid="tenant-switch"
+              [disabled]="tenantChangeBlocked()"
               (click)="tenantName.set(tenantContext.current()?.key ?? ''); tenantEditing.set(true)"
             >
               {{ t('account.login.tenantSwitch') }}

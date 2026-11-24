@@ -14,6 +14,7 @@ import {
   renderSubmission,
   rejectedField,
 } from '../../../../../../core/validation/form-submission.testing';
+import { setCoarsePointer } from '../../../../../../shared/utils/coarse-pointer.testing';
 import { TenantConnectionDto } from '../../../../dtos/tenant-connection.dto';
 import { TenantOutputDto } from '../../../../dtos/tenant.dto';
 import { TenantConnectionService } from '../../../../services/tenant-connection-service';
@@ -153,6 +154,122 @@ describe('TenantDetailDialog', () => {
     expect(text()).toContain('globex-billing');
     // 取消掉的那次请求不该再写回界面，否则 globex 的身份信息会配上 acme 的连接列表
     expect(text()).not.toContain('acme-legacy');
+  });
+
+  // 首次加载：行骨架占住连接列表的位置，不放裸 spinner；交付后骨架让位给列表
+  it('shows row skeletons in place of the connection list until it arrives', async () => {
+    await setUp();
+    await open(tenant('t-a', 'acme'));
+
+    expect(
+      dialogHost()!.querySelector('[data-testid="tenant-connections-loading"]'),
+    ).not.toBeNull();
+    expect(dialogHost()!.querySelector('[data-dialog-body] hlm-spinner')).toBeNull();
+
+    await resolve('t-a', []);
+    expect(dialogHost()!.querySelector('[data-testid="tenant-connections-loading"]')).toBeNull();
+    expect(text()).toContain(label('tenants.connectionsEmpty'));
+  });
+
+  // 骨架按连接行的结构占位：带边框、右侧有两个按钮位，行高与交付后的连接行一致
+  async function expectSkeletonMatchesRow(): Promise<void> {
+    await setUp();
+    await open(tenant('t-a', 'acme'));
+    const skeleton = dialogHost()!.querySelector<HTMLElement>(
+      '[data-testid="tenant-connections-loading"] [aria-hidden="true"]',
+    )!;
+    expect(skeleton.classList).toContain('border');
+    expect(skeleton.lastElementChild!.querySelectorAll('[hlmSkeleton]')).toHaveLength(2);
+    const skeletonHeight = skeleton.offsetHeight;
+
+    await resolve('t-a', [connectionOf('t-a', 'default')]);
+    const row = dialogHost()!.querySelector<HTMLElement>(
+      '[data-testid="tenant-connections"] > div',
+    )!;
+    expect(row.offsetHeight).toBe(skeletonHeight);
+  }
+
+  // 触屏下行内按钮升到 44px，骨架的按钮位要跟着升，否则加载完每行变高
+  it.each([false, true])(
+    'shapes the connection skeleton like a registered connection row (coarse pointer: %s)',
+    async (coarse) => {
+      await setCoarsePointer(coarse);
+      try {
+        await expectSkeletonMatchesRow();
+      } finally {
+        await setCoarsePointer(false);
+      }
+    },
+  );
+
+  // 写后重取：已列出的连接保留并标忙，不换回骨架
+  it('keeps the listed connections busy while they are refetched after a write', async () => {
+    await setUp();
+    const existing = connectionOf('t-a', 'default', 3);
+    await openWith(tenant('t-a', 'acme'), [existing]);
+
+    await component.removeConnection(existing);
+    await fixture.whenStable();
+
+    expect(requested).toEqual(['t-a', 't-a']);
+    expect(dialogHost()!.querySelector('[data-testid="tenant-connections-loading"]')).toBeNull();
+    expect(
+      dialogHost()!.querySelector('[data-testid="tenant-connections"]')!.getAttribute('aria-busy'),
+    ).toBe('true');
+    expect(text()).toContain('default');
+
+    await resolve('t-a', []);
+    expect(text()).toContain(label('tenants.connectionsEmpty'));
+    expect(
+      dialogHost()!.querySelector('[data-testid="tenant-connections"]')!.hasAttribute('aria-busy'),
+    ).toBe(false);
+  });
+
+  // 重取失败：保留已列出的连接，就地说明原因并给重试
+  it('keeps the listed connections and retries in place when a refetch fails', async () => {
+    await setUp();
+    const existing = connectionOf('t-a', 'default', 3);
+    await openWith(tenant('t-a', 'acme'), [existing]);
+    await component.removeConnection(existing);
+    await fixture.whenStable();
+    expect(requested).toEqual(['t-a', 't-a']);
+    pending.get('t-a')!.error(new Error('Connections unavailable'));
+    await fixture.whenStable();
+
+    expect(text()).toContain('Connections unavailable');
+    expect(text()).toContain('default');
+
+    dialogHost()!
+      .querySelector<HTMLButtonElement>('[data-testid="tenant-connections-retry"]')!
+      .click();
+    await fixture.whenStable();
+    expect(requested).toHaveLength(3);
+    expect(text()).not.toContain('Connections unavailable');
+    expect(text()).toContain('default');
+
+    await resolve('t-a', []);
+    expect(text()).toContain(label('tenants.connectionsEmpty'));
+  });
+
+  // 首次读取失败后重试：错误先撤下，期间只有骨架
+  it('retries a failed first load in place and shows the skeleton meanwhile', async () => {
+    await setUp();
+    await open(tenant('t-a', 'acme'));
+    pending.get('t-a')!.error(new Error('Connections unavailable'));
+    await fixture.whenStable();
+    expect(text()).toContain('Connections unavailable');
+
+    dialogHost()!
+      .querySelector<HTMLButtonElement>('[data-testid="tenant-connections-retry"]')!
+      .click();
+    await fixture.whenStable();
+
+    expect(text()).not.toContain('Connections unavailable');
+    expect(
+      dialogHost()!.querySelector('[data-testid="tenant-connections-loading"]'),
+    ).not.toBeNull();
+    await resolve('t-a', [connectionOf('t-a', 'default')]);
+    expect(text()).toContain('default');
   });
 
   // 一条登记都没有就是"不单独分库"这一档。这句话是界面上唯一能看出当前状态的东西：

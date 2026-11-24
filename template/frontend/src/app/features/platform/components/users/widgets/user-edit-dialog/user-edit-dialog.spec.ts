@@ -43,7 +43,9 @@ import { UserEditDialog } from './user-edit-dialog';
       (retry)="retried = retried + 1"
       [user]="user()"
       [availableRoles]="roles"
+      [rolesLoading]="rolesLoading()"
       [rolesError]="rolesError()"
+      (reloadRoles)="rolesReloaded = rolesReloaded + 1"
       [canAssignRoles]="canAssignRoles()"
       [saveAction]="saveAction"
     />
@@ -55,7 +57,9 @@ class HostComponent {
   readonly loadError = signal<string | null>(null);
   retried = 0;
   readonly loading = signal(false);
+  readonly rolesLoading = signal(false);
   readonly rolesError = signal<string | null>(null);
+  rolesReloaded = 0;
   readonly saving = signal(false);
   readonly user = signal<UserManagementOutputDto | null>(null);
   readonly canAssignRoles = signal(false);
@@ -431,6 +435,24 @@ describe('UserEditDialog', () => {
     // 清空选择：同一个文件再选一次仍要触发 change
     expect(picker.value).toBe('');
   });
+  // 角色候选首次加载：骨架占住选择框的位置，不在正文末尾放裸 spinner；失败在同一位置给原因和重试
+  it('shows the role options loading and failure inside the role field', async () => {
+    host.canAssignRoles.set(true);
+    host.rolesLoading.set(true);
+    await fixture.whenStable();
+    const field = document.querySelector('label[for="user-roles"]')!.closest('[hlmField]')!;
+    expect(field.querySelector('[data-testid="user-roles-loading"]')).not.toBeNull();
+    expect(document.querySelector('[data-dialog-body] hlm-spinner')).toBeNull();
+
+    host.rolesLoading.set(false);
+    host.rolesError.set('Role options failed');
+    await fixture.whenStable();
+    expect(field.querySelector('[data-testid="user-roles-loading"]')).toBeNull();
+    expect(field.querySelector('[role="alert"]')?.textContent).toContain('Role options failed');
+    field.querySelector<HTMLButtonElement>('[role="alert"] button')!.click();
+    expect(host.rolesReloaded).toBe(1);
+  });
+
   it('keeps edit intent after a detail failure and exposes retry instead of a create form', async () => {
     host.editing.set(true);
     host.loadError.set('Unable to load this user');

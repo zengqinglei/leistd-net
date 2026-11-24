@@ -64,6 +64,13 @@ public sealed class SmtpEmailSender(
                     $"The SMTP server {current.Host}:{current.Port} rejected the credentials or does not support authentication.",
                     exception);
             }
+            catch (Exception exception) when (IsUnavailableDuringAuthentication(exception))
+            {
+                throw new EmailDeliveryException(
+                    EmailDeliveryFailureKind.Unreachable,
+                    $"The SMTP server {current.Host}:{current.Port} could not complete authentication; the message was not submitted.",
+                    exception);
+            }
         }
 
         try
@@ -113,12 +120,21 @@ public sealed class SmtpEmailSender(
         => exception is SocketException or SslHandshakeException or IOException or SmtpProtocolException
             or TimeoutException or NotSupportedException or SmtpCommandException;
 
-    // 认证阶段：凭据被拒或服务器不支持认证。服务器回 4xx（如 454 暂时无法认证）是临时故障，凭据未必有错，原样抛出。
+    // 认证阶段：凭据被拒或服务器不支持认证。服务器回 4xx（如 454 暂时无法认证）是临时故障，凭据未必有错，不归这里。
     private static bool IsAuthenticationRejected(Exception exception)
         => exception switch
         {
             AuthenticationException { InnerException: SmtpCommandException command } => (int)command.StatusCode is < 400 or >= 500,
             AuthenticationException or SaslException or NotSupportedException => true,
+            _ => false,
+        };
+
+    // 认证阶段的连接中断、超时与 4xx 临时拒绝：邮件尚未提交，和连接阶段一样表示这台服务器此刻用不了，可以重试。
+    private static bool IsUnavailableDuringAuthentication(Exception exception)
+        => exception switch
+        {
+            SocketException or IOException or SmtpProtocolException or TimeoutException => true,
+            AuthenticationException { InnerException: SmtpCommandException command } => (int)command.StatusCode is >= 400 and < 500,
             _ => false,
         };
 

@@ -1,4 +1,7 @@
 //#if (TenantWorkspace)
+//#if (LocalIdentity)
+import { TENANT_STAFF_CANDIDATE_LIMIT } from '../../src/app/features/platform/dtos/tenant-staff.dto';
+//#endif
 // prettier-ignore
 import { MockException,
   //#if (LocalIdentity)
@@ -84,7 +87,7 @@ export const WORKSPACE_API = {
         !user.homeUserId &&
         (!keyword || `${user.username} ${user.displayName ?? ''}`.toLowerCase().includes(keyword)),
     )
-      .slice(0, 200)
+      .slice(0, TENANT_STAFF_CANDIDATE_LIMIT)
       .map(({ id, username, displayName }) => ({ id, username, displayName }));
   },
   'GET /api/v1/tenants/:tenantId/staff/roles': () => {

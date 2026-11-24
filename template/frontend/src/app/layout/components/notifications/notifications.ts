@@ -19,7 +19,7 @@ import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmPopoverImports } from '@spartan-ng/helm/popover';
-import { HlmSpinner } from '@spartan-ng/helm/spinner';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { defer, interval } from 'rxjs';
 
 import { applicationErrorMessage } from '../../../core/errors/application-http-error';
@@ -55,7 +55,7 @@ import { resolveDisplayTimeZone } from '../../../shared/utils/zoned-time';
     NgIcon,
     HlmButton,
     HlmBadge,
-    HlmSpinner,
+    HlmSkeleton,
     RelativeTimeLabel,
     ...HlmPopoverImports,
     PopoverAria,

@@ -852,6 +852,7 @@ describe('Login', () => {
       await setUp();
 
       expect(TestBed.inject(TenantContextService).current()).toBeNull();
+      expect(localStorage.getItem('app.tenant')).toBeNull();
       expect(component.tenantLocked()).toBe(true);
     });
 
@@ -988,6 +989,107 @@ describe('Login', () => {
       await component.onConfirmTenant();
 
       expect(TestBed.inject(TenantContextService).current()).toBeNull();
+    });
+
+    // 记住的应是上次成功进入的租户：选错后凭据被拒，下次打开仍预选原来那个
+    it('remembers a manually selected tenant only after the credentials are accepted', async () => {
+      byHost = of({ decision: 'undecided' as const });
+      rememberTenant();
+      await setUp();
+      component.tenantName.set('acme');
+      await component.onConfirmTenant();
+
+      authService.login.mockReturnValue(throwError(() => new Error('bad credentials')));
+      fillValidCredentials();
+      await component.onSubmit();
+      expect(TestBed.inject(TenantContextService).current()?.key).toBe('acme');
+      expect(localStorage.getItem('app.tenant')).toContain('remembered');
+
+      authService.login.mockReturnValue(of({ requiresTwoFactor: true }) as never);
+      await component.onSubmit();
+      expect(localStorage.getItem('app.tenant')).toContain('acme');
+    });
+
+    it('forgets the remembered tenant once the credentials are accepted on the host', async () => {
+      byHost = of({ decision: 'undecided' as const });
+      rememberTenant();
+      await setUp();
+      component.clearTenant();
+      expect(localStorage.getItem('app.tenant')).toContain('remembered');
+
+      fillValidCredentials();
+      await component.onSubmit();
+
+      expect(localStorage.getItem('app.tenant')).toBeNull();
+    });
+
+    // 口令请求按发起时的租户发出：在途期间不接受改租户，记住的、第二步带的都是它
+    it('keeps the tenant the password was sent under until the response arrives', async () => {
+      byHost = of({ decision: 'undecided' as const });
+      await setUp();
+      const tenantContext = TestBed.inject(TenantContextService);
+      const host = fixture.nativeElement as HTMLElement;
+      component.tenantName.set('acme');
+      await component.onConfirmTenant();
+      let respond!: () => void;
+      authService.login.mockReturnValue(
+        new Observable((subscriber) => {
+          respond = () => {
+            subscriber.next({ requiresTwoFactor: true });
+            subscriber.complete();
+          };
+        }) as never,
+      );
+      fillValidCredentials();
+      const submitted = component.onSubmit();
+      await vi.waitFor(() => expect(authService.login).toHaveBeenCalled());
+      fixture.detectChanges();
+
+      expect(host.querySelector<HTMLButtonElement>('[data-testid="tenant-switch"]')!.disabled).toBe(
+        true,
+      );
+      component.tenantEditing.set(true);
+      fixture.detectChanges();
+      expect(host.querySelector<HTMLInputElement>('#tenantName')!.disabled).toBe(true);
+      component.tenantName.set('other');
+      await component.applyTenantInput();
+      await component.onConfirmTenant();
+      component.clearTenant();
+      expect(tenantContext.current()?.key).toBe('acme');
+
+      respond();
+      await submitted;
+
+      expect(localStorage.getItem('app.tenant')).toContain('acme');
+      expect(router.navigateByUrl).toHaveBeenCalled();
+    });
+
+    // 在途时离开登录页再回来改租户：旧响应不再收尾，不写入新页面的租户、不导航到第二步
+    it('ignores a password response that arrives after the page was left', async () => {
+      byHost = of({ decision: 'undecided' as const });
+      await setUp();
+      component.tenantName.set('acme');
+      await component.onConfirmTenant();
+      let respond!: () => void;
+      authService.login.mockReturnValue(
+        new Observable((subscriber) => {
+          respond = () => {
+            subscriber.next({ requiresTwoFactor: true });
+            subscriber.complete();
+          };
+        }) as never,
+      );
+      fillValidCredentials();
+      const submitted = component.onSubmit();
+      await vi.waitFor(() => expect(authService.login).toHaveBeenCalled());
+
+      fixture.destroy();
+      TestBed.inject(TenantContextService).set('other');
+      respond();
+      await submitted;
+
+      expect(localStorage.getItem('app.tenant')).toBeNull();
+      expect(router.navigateByUrl).not.toHaveBeenCalled();
     });
 
     // 「切换租户」展开的输入框：填名称切到该租户，留空回到宿主，应用后收起
@@ -1269,6 +1371,44 @@ describe('Login', () => {
       expect(router.navigate).toHaveBeenCalledWith(['/workspace']);
       //#endif
     });
+    //#if (IncludeMultiTenancy)
+
+    // 仪式在取选项时绑定租户：交回断言前不接受改租户，记住的是发起时的那个
+    it('keeps the tenant the passkey ceremony began under until sign-in completes', async () => {
+      vi.spyOn(navigator.credentials, 'get').mockResolvedValue(fakeAssertion());
+      await setUpPasskeys();
+      const tenantContext = TestBed.inject(TenantContextService);
+      component.tenantName.set('acme');
+      await component.onConfirmTenant();
+      let respond!: () => void;
+      completePasskeySignIn.mockReturnValue(
+        new Observable<void>((subscriber) => {
+          respond = () => {
+            subscriber.next();
+            subscriber.complete();
+          };
+        }),
+      );
+      passkeyButton()!.click();
+      await vi.waitFor(() => expect(completePasskeySignIn).toHaveBeenCalled());
+      fixture.detectChanges();
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+          '[data-testid="tenant-switch"]',
+        )!.disabled,
+      ).toBe(true);
+      component.tenantName.set('other');
+      await component.onConfirmTenant();
+      component.clearTenant();
+      expect(tenantContext.current()?.key).toBe('acme');
+
+      respond();
+      await vi.waitFor(() => expect(authService.loadUser).toHaveBeenCalled());
+
+      expect(localStorage.getItem('app.tenant')).toContain('acme');
+    });
+    //#endif
 
     it('shows a neutral note when the user cancels and keeps the form usable', async () => {
       vi.spyOn(navigator.credentials, 'get').mockRejectedValue(webAuthnError('NotAllowedError'));

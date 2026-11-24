@@ -240,11 +240,15 @@ describe('ExternalLoginProviders', () => {
     expect(rowsOf('gitee')).toEqual(['ExternalLogin.Gitee.Enabled']);
   });
 
-  it('shows the rows with a spinner but no state while loading', async () => {
+  // 首次加载：状态位放徽章形骨架，不放裸 spinner（刷新按钮里的 spinner 属于按钮）
+  it('shows the rows with a state skeleton but no state while loading', async () => {
     await render(new Subject<ExternalLoginStatusOutputDto>());
 
     expect(rowsOf('github')).toHaveLength(2);
-    expect(cardOf('github').querySelector('hlm-spinner')).not.toBeNull();
+    expect(
+      cardOf('github').querySelector('[data-testid="external-login-state-loading"]'),
+    ).not.toBeNull();
+    expect(cardOf('github').querySelector('hlm-spinner')).toBeNull();
     expect(stateOf('github')).toBeNull();
     expect(cardOf('github').querySelector('[data-testid="external-login-credentials"]')).toBeNull();
     expect(host().querySelector('[data-testid="external-login-status-error"]')).toBeNull();
@@ -269,6 +273,21 @@ describe('ExternalLoginProviders', () => {
 
     expect(host().querySelector('[data-testid="external-login-status-error"]')).toBeNull();
     expect(stateOf('github')).toBe(text('off', 'Off'));
+  });
+
+  // 重试在途时只有加载态：上一次的失败说明先撤下，不与状态骨架同屏
+  it('drops the previous failure as soon as a retry starts', async () => {
+    await render(throwError(() => new Error('The status service is unavailable.')));
+    expect(host().querySelector('[data-testid="external-login-status-error"]')).not.toBeNull();
+
+    getStatus.mockReturnValue(new Subject<ExternalLoginStatusOutputDto>());
+    host().querySelector<HTMLButtonElement>('[data-testid="external-login-status-retry"]')!.click();
+    await settle();
+
+    expect(host().querySelector('[data-testid="external-login-status-error"]')).toBeNull();
+    expect(
+      cardOf('github').querySelector('[data-testid="external-login-state-loading"]'),
+    ).not.toBeNull();
   });
 
   it('shows each provider as off with its callback URL when none is enabled', async () => {

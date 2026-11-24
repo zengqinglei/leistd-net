@@ -16,8 +16,10 @@ export interface TenantContext {
 
 //#if (LocalIdentity)
 /**
- * 前端租户上下文：signal + localStorage 双写。只影响匿名请求（登录等）的租户提示头；
+ * 前端租户上下文：内存 signal，另在 localStorage 记住上次成功进入的租户。只影响匿名请求（登录等）的租户提示头；
  * 已登录用户的租户由服务端 cookie claim 定案。
+ *
+ * 选定与清除只改内存；凭据被接受后才 {@link remember} 持久化，一次选错且登录失败不改变下次的预选。
  */
 //#else
 /** 前端租户上下文：仅内存 signal，唯一来源是后端已验证会话中的 tenant_id，不接受本地线索改写。 */
@@ -40,13 +42,32 @@ export class TenantContextService {
   public readonly current = this._current.asReadonly();
 
   //#if (LocalIdentity)
+  /** 切到该租户（只改内存）。 */
   set(tenantName: string): void {
-    const context: TenantContext = { key: tenantName };
-    this._current.set(context);
+    this._current.set({ key: tenantName });
+  }
+
+  /** 凭据被接受后调用：把当前上下文记为下次的预选；当前是宿主时清掉记住的租户。 */
+  remember(): void {
+    const context = this._current();
     try {
-      localStorage.setItem(TENANT_STORAGE_KEY, JSON.stringify(context));
+      if (context) {
+        localStorage.setItem(TENANT_STORAGE_KEY, JSON.stringify(context));
+      } else {
+        localStorage.removeItem(TENANT_STORAGE_KEY);
+      }
     } catch {
       // 存储不可用（隐私模式/配额）时仅保留内存态，不影响当前会话。
+    }
+  }
+
+  /** 租户已不可用（不存在、已停用、域名指向宿主）：内存与记住的一起清掉。 */
+  forget(): void {
+    this._current.set(null);
+    try {
+      localStorage.removeItem(TENANT_STORAGE_KEY);
+    } catch {
+      // 同上：清除失败不阻断流程。
     }
   }
   //#else
@@ -56,15 +77,11 @@ export class TenantContextService {
   }
   //#endif
 
+  //#if (LocalIdentity)
+  /** 回到宿主（只改内存）。 */
+  //#endif
   clear(): void {
     this._current.set(null);
-    //#if (LocalIdentity)
-    try {
-      localStorage.removeItem(TENANT_STORAGE_KEY);
-    } catch {
-      // 同上：清除失败不阻断流程。
-    }
-    //#endif
   }
 }
 //#if (LocalIdentity)

@@ -85,6 +85,8 @@ var order = await response.ReadContentAsync<OrderDto>();
 
 默认 Refit 配置通过 `TransportExceptionFactory` 原样传递发送阶段的异常，保留标准管道的故障分类与 .NET 原生取消语义。全局异常处理中，远端故障映射为 502、不可达映射为 503、弹性管道超时映射为 504。`Task<ApiResponse<T>>` 的发送阶段遇到组件异常时也会直接抛出，不写入 Refit 的 `Error`；自定义配置请从 `ServiceClientRefitSettings.Create()` 开始，以保留此契约。
 
+管道内处理器抛出的 `BusinessException`（如令牌交换要求重新认证的 `AuthenticationRequiredException`）是本服务对调用方的语义，标准管道不把它包成 `ServiceClientException`，`Task<T>`、`Task<ApiResponse<T>>` 与手写客户端都原样抛出，由全局异常处理生成响应，`AuthenticationRequiredException` 默认返回 401。宿主自加的处理器要表达上游或内部故障时，抛 `ServiceClientException` 及其派生类型。
+
 远程错误映射为：
 
 | 响应 | 结果 |

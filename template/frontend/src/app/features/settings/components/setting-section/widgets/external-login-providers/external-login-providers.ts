@@ -20,6 +20,7 @@ import { lucideCheck, lucideCopy, lucideRefreshCw } from '@ng-icons/lucide';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { finalize, Subscription } from 'rxjs';
@@ -134,6 +135,7 @@ export interface SettingRowContext {
     NgTemplateOutlet,
     HlmBadge,
     HlmButton,
+    HlmSkeleton,
     HlmSpinner,
     StatusDot,
     ...HlmFieldImports,
@@ -165,7 +167,7 @@ export class ExternalLoginProviders {
 
   protected readonly status = signal<ExternalLoginStatusOutputDto | null>(null);
   protected readonly loading = signal(false);
-  /** 最近一次读取的失败原因；已有状态时保留原内容，只在上方提示。 */
+  /** 最近一次读取的失败原因；已有状态时保留原内容，只在上方提示。再次读取时先清掉，与加载态不同屏。 */
   protected readonly loadError = signal<string | null>(null);
   /** 最近复制了哪个提供方的回调地址：同一个复制动作服务所有分区，「已复制」只落在点过的那一节。 */
   protected readonly copiedProvider = signal<string | null>(null);
@@ -197,6 +199,7 @@ export class ExternalLoginProviders {
 
   protected load(): void {
     this.pending?.unsubscribe();
+    this.loadError.set(null);
     this.loading.set(true);
     this.pending = this.settingService
       .getExternalLoginStatus()
@@ -205,10 +208,7 @@ export class ExternalLoginProviders {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe({
-        next: (status) => {
-          this.loadError.set(null);
-          this.status.set(status);
-        },
+        next: (status) => this.status.set(status),
         error: (error: unknown) => this.loadError.set(applicationErrorMessage(error)),
       });
   }
