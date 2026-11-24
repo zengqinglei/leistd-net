@@ -1,6 +1,6 @@
 # 通知列表分页对齐规范与候选上限写明边界
 
-状态：进行中 · 风险档：中 · 关联：待开 PR
+状态：已完成 · 风险档：中 · 关联：#316
 
 ## 1. 需求
 
@@ -35,4 +35,16 @@
 
 ## 4. 结果
 
-待交付后填写。
+- **交付：** #316（合并提交 `0c06629e`）。通知分页是框架的破坏性变更，提交脚注写明了：
+  - 改传 `limit`、改读 `items`；
+  - 用 `GetNotificationsInputDto.MaximumLimit` 替代删掉的常量；
+  - 宿主必须接入全局异常处理，越界才会返回 400，未接入时是 500。
+- **偏差：**
+  - 上限常量放在输入类型 `GetNotificationsInputDto` 上（`DefaultLimit = 50`、`MaximumLimit = 100`），而不是端点类。原因是 `[Range]` 校验要用到它，而 Core 包不能引用 AspNetCore 包。
+  - Mock 只接受 Int32 范围内的十进制整数。Codex 还建议对齐 ASP.NET 的其他绑定细节（首尾空格、重复参数、布尔大小写），没有采纳，理由是 Mock 只需覆盖界面实际发出的参数。
+- **验收：**
+  - `NotificationEndpointTests` 覆盖 R1–R3，修复前的收敛用例已改为断言越界返回 400；
+  - 模板 `NotificationTests` 等集成测试改为读取 `items`；
+  - 前端与 Mock 的 spec 覆盖 R4；
+  - 全场景矩阵 CI 通过。
+- **已上收的常驻文档：** `framework/docs/components/notifications.md`，包括接口参考与"须接入全局异常处理"的接入说明。
