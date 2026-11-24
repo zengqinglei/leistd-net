@@ -113,29 +113,29 @@
 
   <!-- 遥测导出测试区：出现位置由 telemetryTestTarget 决定（导出地址行所在那一层的末尾） -->
   <ng-template #telemetryTest let-group>
-        <app-setting-test-panel
-          icon="lucideActivity"
-          data-testid="telemetry-test"
-          [heading]="t('settings.telemetryTest.title')"
-          [description]="t('settings.telemetryTest.description')"
-        >
-          <button
-            hlmBtn
-            type="button"
-            variant="outline"
-            data-testid="telemetry-test-run"
-            [disabled]="telemetryTesting()"
-            (click)="testTelemetryExport(group)"
-          >
-            @if (telemetryTesting()) {
-              <hlm-spinner class="text-base" data-icon="inline-start" />
-              {{ t('settings.telemetryTest.running') }}
-            } @else {
-              <ng-icon name="lucideActivity" data-icon="inline-start" />
-              {{ t('settings.telemetryTest.run') }}
-            }
-          </button>
-        </app-setting-test-panel>
+    <app-setting-test-panel
+      icon="lucideActivity"
+      data-testid="telemetry-test"
+      [heading]="t('settings.telemetryTest.title')"
+      [description]="t('settings.telemetryTest.description')"
+    >
+      <button
+        hlmBtn
+        type="button"
+        variant="outline"
+        data-testid="telemetry-test-run"
+        [disabled]="telemetryTesting()"
+        (click)="testTelemetryExport(group)"
+      >
+        @if (telemetryTesting()) {
+          <hlm-spinner class="text-base" data-icon="inline-start" />
+          {{ t('settings.telemetryTest.running') }}
+        } @else {
+          <ng-icon name="lucideActivity" data-icon="inline-start" />
+          {{ t('settings.telemetryTest.run') }}
+        }
+      </button>
+    </app-setting-test-panel>
   </ng-template>
 
   <!-- 一行设置的渲染：普通分组与外部登录的提供方卡片共用，控件、校验与即改即存只有这一份。
