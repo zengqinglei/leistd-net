@@ -41,7 +41,7 @@ public class EmailSettingsAppService(
             var (code, message) = (ex as EmailDeliveryException)?.FailureKind switch
             {
                 EmailDeliveryFailureKind.Unreachable => (AppSettingErrorCodes.TestEmailUnreachable,
-                    "The email server could not be reached. Check the host, port and TLS settings."),
+                    "The email server could not be reached or is temporarily unavailable. Check the host, port and TLS settings, or try again later."),
                 EmailDeliveryFailureKind.AuthenticationRejected => (AppSettingErrorCodes.TestEmailAuthRejected,
                     "The email server rejected the sign-in. Check the username and password."),
                 EmailDeliveryFailureKind.DeliveryRejected => (AppSettingErrorCodes.TestEmailRejected,

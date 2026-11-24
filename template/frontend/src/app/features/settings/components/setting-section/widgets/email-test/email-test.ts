@@ -146,7 +146,7 @@ const ENGLISH: Record<string, string> = {
   'settings.emailTest.sentDescription': 'Delivered to {{to}}. Check the inbox',
   'settings.emailTest.failed': "The test email wasn't sent",
   'settings.emailTest.failure.unreachable':
-    "Couldn't reach the SMTP server. Check the host, port and TLS setting",
+    "Couldn't reach the SMTP server, or it's temporarily unavailable. Check the host, port and TLS setting, or try again later",
   'settings.emailTest.failure.authRejected':
     'The SMTP server rejected the sign-in. Check the username and password',
   'settings.emailTest.failure.rejected':

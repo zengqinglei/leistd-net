@@ -112,17 +112,37 @@ public sealed class SmtpEmailSenderProtocolTests
         Assert.False(server.Accepted);
     }
 
-    /// <summary>服务器回 454（暂时无法认证）：临时故障不归为认证被拒，凭据未必有错，原样抛出。</summary>
+    /// <summary>服务器回 454（暂时无法认证）：凭据未必有错，和连接阶段的临时拒绝一样归为此刻用不了，尚未提交邮件，可以重试。</summary>
     [Fact]
-    public async Task A_temporary_authentication_failure_is_not_reported_as_rejected_credentials()
+    public async Task A_temporary_authentication_failure_throws_an_unreachable_failure()
     {
         await using var server = new LoopbackSmtpServer(authReply: "454 4.7.0 Temporary authentication failure");
 
-        var exception = await Assert.ThrowsAsync<MailKit.Security.AuthenticationException>(
+        var exception = await Assert.ThrowsAsync<EmailDeliveryException>(
             () => Sender(server, username: "mailer@example.com").SendAsync(Message()));
 
-        var command = Assert.IsType<SmtpCommandException>(exception.InnerException);
+        Assert.Equal(EmailDeliveryFailureKind.Unreachable, exception.FailureKind);
+        var command = Assert.IsType<SmtpCommandException>(
+            Assert.IsType<MailKit.Security.AuthenticationException>(exception.InnerException).InnerException);
         Assert.Equal(454, (int)command.StatusCode);
+        Assert.DoesNotContain("mailer@example.com", exception.Message);
+        Assert.False(server.Accepted);
+    }
+
+    /// <summary>认证阶段连接断开或超时：尚未提交邮件，归为连不上，调用方可以重试。</summary>
+    [Theory]
+    [InlineData(LoopbackSmtpServer.DisconnectOnAuth)]
+    [InlineData(LoopbackSmtpServer.NoReplyToAuth)]
+    public async Task A_network_failure_during_authentication_throws_an_unreachable_failure(string authReply)
+    {
+        await using var server = new LoopbackSmtpServer(authReply: authReply);
+
+        var exception = await Assert.ThrowsAsync<EmailDeliveryException>(
+            () => Sender(server, timeoutMilliseconds: 500, username: "mailer@example.com").SendAsync(Message()));
+
+        Assert.Equal(EmailDeliveryFailureKind.Unreachable, exception.FailureKind);
+        Assert.NotNull(exception.InnerException);
+        Assert.DoesNotContain("mailer@example.com", exception.Message);
         Assert.False(server.Accepted);
     }
 

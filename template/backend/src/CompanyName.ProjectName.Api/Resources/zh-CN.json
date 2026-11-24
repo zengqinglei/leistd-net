@@ -285,7 +285,7 @@
     "AppSetting:TestEmailAuthRejected": "邮件服务器拒绝了登录，请检查用户名和口令。",
     "AppSetting:TestEmailFailed": "测试邮件发送失败，请检查邮件设置和服务端日志。",
     "AppSetting:TestEmailRejected": "邮件服务器拒收了这封信，请检查发件地址和收件人。",
-    "AppSetting:TestEmailUnreachable": "无法连接邮件服务器，请检查主机、端口和 TLS 设置。",
+    "AppSetting:TestEmailUnreachable": "无法连接邮件服务器或它暂时不可用，请检查主机、端口和 TLS 设置，或稍后重试。",
     "AppSetting:TelemetryEndpointInvalid": "地址必须是绝对的 http 或 https 地址，不能带凭据、查询串或片段。",
     "AppSetting:TelemetryExportAuthRejected": "导出地址拒绝了认证（HTTP {Status}），请检查认证头。",
     "AppSetting:TelemetryExportNotConfigured": "尚未配置导出地址。",

@@ -139,7 +139,7 @@
     "sentDescription": "已投递到 {{to}}，请到收件箱查看",
     "failed": "测试邮件没有发出",
     "failure": {
-      "unreachable": "连不上 SMTP 服务器。请检查主机、端口与 TLS 设置",
+      "unreachable": "连不上 SMTP 服务器，或它暂时不可用。请检查主机、端口与 TLS 设置，或稍后重试",
       "authRejected": "SMTP 服务器拒绝了登录。请检查用户名与口令",
       "rejected": "SMTP 服务器拒收了这封信。请检查发件地址与收件人",
       "sendFailed": "连接、认证或投递失败。请检查主机、端口、TLS 与凭据，详情见服务端日志"

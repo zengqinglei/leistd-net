@@ -139,7 +139,7 @@
     "sentDescription": "Delivered to {{to}}. Check the inbox",
     "failed": "The test email wasn't sent",
     "failure": {
-      "unreachable": "Couldn't reach the SMTP server. Check the host, port and TLS setting",
+      "unreachable": "Couldn't reach the SMTP server, or it's temporarily unavailable. Check the host, port and TLS setting, or try again later",
       "authRejected": "The SMTP server rejected the sign-in. Check the username and password",
       "rejected": "The SMTP server refused the message. Check the sender address and the recipient",
       "sendFailed": "Couldn't connect, sign in or deliver through the SMTP server. Check the host, port, TLS and credentials; the server logs have the details"
