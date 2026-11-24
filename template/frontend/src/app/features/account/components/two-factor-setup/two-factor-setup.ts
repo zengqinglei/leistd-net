@@ -19,6 +19,7 @@ import { lucideCheck, lucideCopy } from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { toDataURL } from 'qrcode';
 import { firstValueFrom } from 'rxjs';
@@ -57,6 +58,7 @@ import { AccountService } from '../../services/account-service';
     NgIcon,
     HlmButton,
     ...HlmFieldImports,
+    HlmSkeleton,
     HlmSpinner,
     OtpCodeInput,
     ReauthenticateDialog,
@@ -274,6 +276,7 @@ function errorCode(error: unknown): string | undefined {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  'app.startup.loading': 'Loading...',
   'common.requestError': 'Request error',
   'common.retry': 'Retry',
   'common.cancel': 'Cancel',

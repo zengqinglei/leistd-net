@@ -251,36 +251,59 @@
                 <label hlmFieldLabel for="application-permissions">{{
                   t('openApp.field.permissions')
                 }}</label>
-                <hlm-select-multiple class="w-full" [formField]="applicationForm.permissions">
-                  <hlm-select-trigger buttonId="application-permissions" class="w-full">
-                    <hlm-select-placeholder>{{
-                      t('openApp.permissions.placeholder')
-                    }}</hlm-select-placeholder>
-                    <ng-template hlmSelectValues let-values>
-                      <hlm-select-values-content>
-                        {{ permissionLabels()[values[0]] ?? values[0] }}
-                        @if (values.length > 1) {
-                          (+{{ values.length - 1 }})
+                <!-- 授权选项随作用域目录加载：骨架占住选择框的位置；失败在同一位置给原因和重试 -->
+                @if (scopesLoading()) {
+                  <div
+                    hlmSkeleton
+                    class="h-9 w-full pointer-coarse:h-11"
+                    data-testid="application-permissions-loading"
+                  ></div>
+                  <span class="sr-only" role="status">{{ t('app.startup.loading') }}</span>
+                } @else if (scopesError(); as error) {
+                  <div role="alert" class="flex flex-wrap items-center gap-3 text-sm">
+                    <span>{{ error }}</span>
+                    <button
+                      hlmBtn
+                      variant="outline"
+                      size="sm"
+                      type="button"
+                      (click)="reloadScopes.emit()"
+                    >
+                      {{ t('common.retry') }}
+                    </button>
+                  </div>
+                } @else {
+                  <hlm-select-multiple class="w-full" [formField]="applicationForm.permissions">
+                    <hlm-select-trigger buttonId="application-permissions" class="w-full">
+                      <hlm-select-placeholder>{{
+                        t('openApp.permissions.placeholder')
+                      }}</hlm-select-placeholder>
+                      <ng-template hlmSelectValues let-values>
+                        <hlm-select-values-content>
+                          {{ permissionLabels()[values[0]] ?? values[0] }}
+                          @if (values.length > 1) {
+                            (+{{ values.length - 1 }})
+                          }
+                        </hlm-select-values-content>
+                      </ng-template>
+                    </hlm-select-trigger>
+                    <hlm-select-content *hlmSelectPortal>
+                      <hlm-select-group>
+                        @for (option of availablePermissions(); track option.value) {
+                          <hlm-select-item
+                            [value]="option.value"
+                            [disabled]="isServiceTemplate() && !option.value.startsWith('scp:')"
+                          >
+                            <div class="flex w-full items-center justify-between gap-3">
+                              <span>{{ option.label }}</span>
+                              <span class="text-xs text-muted-foreground">{{ option.value }}</span>
+                            </div>
+                          </hlm-select-item>
                         }
-                      </hlm-select-values-content>
-                    </ng-template>
-                  </hlm-select-trigger>
-                  <hlm-select-content *hlmSelectPortal>
-                    <hlm-select-group>
-                      @for (option of availablePermissions(); track option.value) {
-                        <hlm-select-item
-                          [value]="option.value"
-                          [disabled]="isServiceTemplate() && !option.value.startsWith('scp:')"
-                        >
-                          <div class="flex w-full items-center justify-between gap-3">
-                            <span>{{ option.label }}</span>
-                            <span class="text-xs text-muted-foreground">{{ option.value }}</span>
-                          </div>
-                        </hlm-select-item>
-                      }
-                    </hlm-select-group>
-                  </hlm-select-content>
-                </hlm-select-multiple>
+                      </hlm-select-group>
+                    </hlm-select-content>
+                  </hlm-select-multiple>
+                }
               </div>
 
               @if (!isServiceType()) {
@@ -367,18 +390,6 @@
                 </div>
               }
             </div>
-
-            @if (scopesError(); as error) {
-              <p role="alert">
-                {{ error }}
-                <button hlmBtn variant="outline" type="button" (click)="reloadScopes.emit()">
-                  {{ t('common.retry') }}
-                </button>
-              </p>
-            }
-            @if (scopesLoading()) {
-              <hlm-spinner [aria-label]="t('app.startup.loading')" />
-            }
           </div>
           <hlm-dialog-footer>
             <button

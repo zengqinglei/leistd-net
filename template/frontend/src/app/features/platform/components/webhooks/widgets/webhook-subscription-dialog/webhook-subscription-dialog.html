@@ -16,7 +16,7 @@
       [appDialogFocus]="loading()"
       [showCloseButton]="false"
       (keydown.escape)="closeGuard.requestClose($event)"
-      class="min-w-[min(42rem,calc(100vw_-_2rem))] sm:max-w-2xl"
+      class="h-160 min-w-[min(42rem,calc(100vw_-_2rem))] sm:max-w-2xl"
     >
       <hlm-dialog-header>
         <h2 hlmDialogTitle tabindex="-1">
@@ -119,7 +119,7 @@
                 </label>
               </div>
               @if (eventTypesLoading()) {
-                <hlm-spinner [aria-label]="t('app.startup.loading')" />
+                <app-list-loading class="ps-5" [rows]="3" checkbox />
               } @else if (eventTypesError(); as error) {
                 <p role="alert" class="text-sm">
                   {{ error }}

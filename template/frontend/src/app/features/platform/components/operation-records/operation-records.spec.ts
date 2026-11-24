@@ -400,6 +400,28 @@ describe('OperationRecords', () => {
     expect(service.getOperationRecords).toHaveBeenCalledOnce();
   });
 
+  // 筛选项首次加载：骨架占住两个筛选按钮的位置，不在页面左上角放裸 spinner；失败在同一位置给原因和重试
+  it('shows the filter options loading and failure in place of the filters', async () => {
+    const pending = new Subject<OperationRecordFilterOptionsDto>();
+    service.getFilterOptions.mockReturnValue(pending);
+
+    await open();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="operation-filters-loading"]')).not.toBeNull();
+    expect(host.querySelectorAll('app-faceted-filter')).toHaveLength(1);
+    expect(host.querySelector('hlm-spinner:not(button hlm-spinner)')).toBeNull();
+
+    pending.error(new Error('Filter options unavailable'));
+    await fixture.whenStable();
+    expect(host.querySelector('[data-testid="operation-filters-loading"]')).toBeNull();
+    service.getFilterOptions.mockReturnValue(of(filterOptions));
+    host.querySelector<HTMLButtonElement>('[data-testid="operation-filters-retry"]')!.click();
+    await fixture.whenStable();
+    expect(service.getFilterOptions).toHaveBeenCalledTimes(2);
+    expect(host.querySelectorAll('app-faceted-filter')).toHaveLength(3);
+  });
+
   it('shows a failed first load as a retryable error state, not as an empty list', async () => {
     service.getOperationRecords.mockReturnValue(failure());
 

@@ -20,6 +20,7 @@ import { lucideCheck, lucideCopy, lucideRefreshCw } from '@ng-icons/lucide';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { finalize, Subscription } from 'rxjs';
@@ -134,6 +135,7 @@ export interface SettingRowContext {
     NgTemplateOutlet,
     HlmBadge,
     HlmButton,
+    HlmSkeleton,
     HlmSpinner,
     StatusDot,
     ...HlmFieldImports,

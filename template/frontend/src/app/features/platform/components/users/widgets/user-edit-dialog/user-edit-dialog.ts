@@ -51,6 +51,7 @@ import {
 //#endif
 import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSeparator } from '@spartan-ng/helm/separator';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmSwitch } from '@spartan-ng/helm/switch';
 import { firstValueFrom, Observable } from 'rxjs';
@@ -91,6 +92,7 @@ import {
     FormField,
     NgIcon,
     HlmButton,
+    HlmSkeleton,
     HlmSpinner,
     HlmInput,
     //#if (LocalIdentity)

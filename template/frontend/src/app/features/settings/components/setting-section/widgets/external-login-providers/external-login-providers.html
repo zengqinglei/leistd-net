@@ -100,7 +100,13 @@
                   }
                 }
               } @else if (loading()) {
-                <hlm-spinner class="text-muted-foreground text-base" />
+                <!-- 首次加载：徽章形骨架占住状态的位置 -->
+                <div
+                  hlmSkeleton
+                  class="h-5 w-14 shrink-0 rounded-full"
+                  aria-hidden="true"
+                  data-testid="external-login-state-loading"
+                ></div>
               }
             </div>
             @if (card.status; as status) {

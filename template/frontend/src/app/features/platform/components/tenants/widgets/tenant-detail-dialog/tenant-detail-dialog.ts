@@ -29,6 +29,7 @@ import { applicationErrorMessage } from '../../../../../../core/errors/applicati
 import { ConfirmService } from '../../../../../../core/feedback/confirm-service';
 import { AccountPreferencesService } from '../../../../../../core/services/account-preferences-service';
 import { injectFormSubmission } from '../../../../../../core/validation/form-submission';
+import { ListLoading } from '../../../../../../shared/components/list-loading/list-loading';
 import { ImeGuard } from '../../../../../../shared/directives/ime-guard';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
 //#if (!IncludeLocalization)
@@ -68,6 +69,7 @@ interface ConnectionEditorModel {
     HlmInput,
     HlmSeparator,
     HlmSpinner,
+    ListLoading,
     ...HlmDialogImports,
     ...HlmFieldImports,
     //#if (IncludeLocalization)

@@ -80,9 +80,8 @@
               }
 
               @if (connectionsLoading()) {
-                <div class="flex items-center gap-2 py-2">
-                  <hlm-spinner class="text-base" />
-                </div>
+                <!-- 首次加载：行骨架占住连接列表的位置 -->
+                <app-list-loading [rows]="2" data-testid="tenant-connections-loading" />
               } @else if (connectionsError(); as error) {
                 <!-- 连接段单独降级：标识段照常呈现，不因一个副请求失败把整个详情打空 -->
                 <p class="text-destructive text-sm" role="alert">{{ error }}</p>

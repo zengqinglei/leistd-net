@@ -187,6 +187,27 @@ describe('DistributedEventRecordSheet', () => {
     return document.querySelector('[data-testid=event-detail]')!;
   }
 
+  // 详情首次加载：表单形骨架占住正文，不放裸 spinner；失败在同一位置给原因，重试只重发详情请求
+  it('shows a skeleton while the detail loads and retries a failed detail in place', async () => {
+    const pending = new Subject<DistributedEventOutboxDetailOutputDto>();
+    const getOutbox = vi.fn().mockReturnValueOnce(pending).mockReturnValueOnce(of(DETAIL));
+    const sheet = await open({ getOutbox }, { recordId: DETAIL.record.id });
+    expect(sheet.querySelector('app-dialog-loading')).not.toBeNull();
+    expect(sheet.querySelector('hlm-spinner')).toBeNull();
+
+    pending.error(new Error('Detail unavailable'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(sheet.querySelector('app-dialog-loading')).toBeNull();
+    sheet.querySelector<HTMLButtonElement>('[data-testid=event-detail-retry]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(getOutbox).toHaveBeenCalledTimes(2);
+    expect(sheet.querySelector('[data-testid=event-detail-retry]')).toBeNull();
+    expect(sheet.querySelector('[data-testid=event-detail-status]')).not.toBeNull();
+  });
+
   it('puts the status next to the title and the view, record and event IDs on the meta line', async () => {
     const sheet = await open({ getOutbox: () => of(DETAIL) }, { recordId: DETAIL.record.id });
     const title = sheet.querySelector('[hlmSheetTitle]')!;

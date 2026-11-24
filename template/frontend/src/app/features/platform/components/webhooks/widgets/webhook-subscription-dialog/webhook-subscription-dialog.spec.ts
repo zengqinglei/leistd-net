@@ -112,6 +112,29 @@ describe('WebhookSubscriptionDialog', () => {
     ).toEqual(['uri']);
   });
 
+  // 高度在打开时确定：详情与事件类型加载完成后弹窗高度不变；事件类型加载中是行骨架，不放裸 spinner
+  it('keeps the dialog height from loading to the loaded form', async () => {
+    fixture.componentRef.setInput('loading', true);
+    fixture.componentRef.setInput('eventTypesLoading', true);
+    open();
+    await fixture.whenStable();
+    const content = document.querySelector<HTMLElement>('[data-slot="dialog-content"]')!;
+    expect(content.querySelector('app-dialog-loading')).not.toBeNull();
+    const height = content.offsetHeight;
+
+    fixture.componentRef.setInput('loading', false);
+    await fixture.whenStable();
+    const events = content.querySelector('[data-testid="webhook-event-types"]')!;
+    expect(events.querySelector('app-list-loading')).not.toBeNull();
+    expect(events.querySelector('hlm-spinner')).toBeNull();
+    expect(content.offsetHeight).toBe(height);
+
+    fixture.componentRef.setInput('eventTypesLoading', false);
+    await fixture.whenStable();
+    expect(content.querySelector('[id="webhook-event-user.created"]')).not.toBeNull();
+    expect(content.offsetHeight).toBe(height);
+  });
+
   it('fills the form from the subscription being edited', () => {
     open({
       id: 'sub-1',

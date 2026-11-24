@@ -9,13 +9,13 @@
     [state]="visible() ? 'open' : 'closed'"
     (stateChanged)="onDialogStateChange($event)"
   >
-    <!-- 定宽：切换口令/验证码、出现错误时对话框不随内容变宽变窄 -->
+    <!-- 定宽定高：切换验证方式、出现错误时对话框尺寸不变，标题与按钮不跳动 -->
     <hlm-dialog-content
       appImeGuard
       *hlmDialogPortal
       [showCloseButton]="false"
       (keydown.escape)="closeGuard.requestClose($event)"
-      class="min-w-[min(28rem,calc(100vw_-_2rem))] sm:max-w-md"
+      class="h-96 min-w-[min(28rem,calc(100vw_-_2rem))] sm:max-w-md"
     >
       <hlm-dialog-header>
         <h2 hlmDialogTitle>{{ t('common.reauthenticate.header') }}</h2>

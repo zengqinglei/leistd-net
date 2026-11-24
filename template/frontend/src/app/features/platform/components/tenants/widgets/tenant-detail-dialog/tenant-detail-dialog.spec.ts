@@ -155,6 +155,21 @@ describe('TenantDetailDialog', () => {
     expect(text()).not.toContain('acme-legacy');
   });
 
+  // 首次加载：行骨架占住连接列表的位置，不放裸 spinner；交付后骨架让位给列表
+  it('shows row skeletons in place of the connection list until it arrives', async () => {
+    await setUp();
+    await open(tenant('t-a', 'acme'));
+
+    expect(
+      dialogHost()!.querySelector('[data-testid="tenant-connections-loading"]'),
+    ).not.toBeNull();
+    expect(dialogHost()!.querySelector('[data-dialog-body] hlm-spinner')).toBeNull();
+
+    await resolve('t-a', []);
+    expect(dialogHost()!.querySelector('[data-testid="tenant-connections-loading"]')).toBeNull();
+    expect(text()).toContain(label('tenants.connectionsEmpty'));
+  });
+
   // 一条登记都没有就是"不单独分库"这一档。这句话是界面上唯一能看出当前状态的东西：
   // 没有它，"故意不分库"与"漏登记"就长得一模一样。
   it('states explicitly that the tenant has no separate database when the list is empty', async () => {

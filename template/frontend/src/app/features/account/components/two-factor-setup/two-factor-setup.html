@@ -13,8 +13,19 @@
       </div>
     }
     @case ('loading') {
-      <div class="flex justify-center py-6">
-        <hlm-spinner class="text-muted-foreground text-xl" />
+      <!-- 首次加载：骨架占住说明、二维码与密钥的位置 -->
+      <div class="flex flex-col gap-3" data-testid="two-factor-setup-loading">
+        <span class="sr-only" role="status">{{ t('app.startup.loading') }}</span>
+        <div hlmSkeleton class="h-4 w-48 max-w-full" aria-hidden="true"></div>
+        <div hlmSkeleton class="h-4 w-full max-w-md" aria-hidden="true"></div>
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center" aria-hidden="true">
+          <div hlmSkeleton class="size-40 shrink-0 self-center sm:self-auto"></div>
+          <div class="flex min-w-0 flex-1 flex-col gap-2">
+            <div hlmSkeleton class="h-3 w-40 max-w-full"></div>
+            <div hlmSkeleton class="h-9 w-full max-w-xs"></div>
+            <div hlmSkeleton class="h-8 w-24"></div>
+          </div>
+        </div>
       </div>
     }
     @case ('reauth') {

@@ -121,6 +121,7 @@ export function reasonKey(reason: string): string | null {
 /** 不含本地化时的界面文案，与 en.json 同步。 */
 //#if (!IncludeLocalization)
 export const ENGLISH: Record<string, string> = {
+  'common.retry': 'Retry',
   'distributedEvents.title': 'Distributed events',
   'distributedEvents.noTransport': 'No transport',
   'distributedEvents.transportChanged': 'Status changed',

@@ -197,30 +197,53 @@
                     <label hlmFieldLabel for="user-roles">{{
                       t('users.editDialog.rolesLabel')
                     }}</label>
-                    <hlm-select-multiple class="w-full" [formField]="userForm.roleIds">
-                      <hlm-select-trigger buttonId="user-roles" class="w-full">
-                        <hlm-select-placeholder>{{
-                          t('users.editDialog.rolesPlaceholder')
-                        }}</hlm-select-placeholder>
-                        <ng-template hlmSelectValues let-values>
-                          <hlm-select-values-content>
-                            {{ roleLabel(values[0]) }}
-                            @if (values.length > 1) {
-                              (+{{ values.length - 1 }})
+                    <!-- 角色候选首次加载：骨架占住选择框的位置；失败在同一位置给原因和重试 -->
+                    @if (rolesLoading()) {
+                      <div
+                        hlmSkeleton
+                        class="h-9 w-full pointer-coarse:h-11"
+                        data-testid="user-roles-loading"
+                      ></div>
+                      <span class="sr-only" role="status">{{ t('app.startup.loading') }}</span>
+                    } @else if (rolesError(); as error) {
+                      <div role="alert" class="flex flex-wrap items-center gap-3 text-sm">
+                        <span>{{ error }}</span>
+                        <button
+                          hlmBtn
+                          variant="outline"
+                          size="sm"
+                          type="button"
+                          (click)="reloadRoles.emit()"
+                        >
+                          {{ t('common.retry') }}
+                        </button>
+                      </div>
+                    } @else {
+                      <hlm-select-multiple class="w-full" [formField]="userForm.roleIds">
+                        <hlm-select-trigger buttonId="user-roles" class="w-full">
+                          <hlm-select-placeholder>{{
+                            t('users.editDialog.rolesPlaceholder')
+                          }}</hlm-select-placeholder>
+                          <ng-template hlmSelectValues let-values>
+                            <hlm-select-values-content>
+                              {{ roleLabel(values[0]) }}
+                              @if (values.length > 1) {
+                                (+{{ values.length - 1 }})
+                              }
+                            </hlm-select-values-content>
+                          </ng-template>
+                        </hlm-select-trigger>
+                        <hlm-select-content *hlmSelectPortal>
+                          <hlm-select-group>
+                            @for (option of roleOptions(); track option.value) {
+                              <hlm-select-item [value]="option.value">{{
+                                option.label
+                              }}</hlm-select-item>
                             }
-                          </hlm-select-values-content>
-                        </ng-template>
-                      </hlm-select-trigger>
-                      <hlm-select-content *hlmSelectPortal>
-                        <hlm-select-group>
-                          @for (option of roleOptions(); track option.value) {
-                            <hlm-select-item [value]="option.value">{{
-                              option.label
-                            }}</hlm-select-item>
-                          }
-                        </hlm-select-group>
-                      </hlm-select-content>
-                    </hlm-select-multiple>
+                          </hlm-select-group>
+                        </hlm-select-content>
+                      </hlm-select-multiple>
+                    }
                   </div>
                 }
 
@@ -263,18 +286,6 @@
                 <!--#endif-->
               </section>
             </div>
-
-            @if (showRoleField() && rolesError(); as error) {
-              <p role="alert">
-                {{ error }}
-                <button hlmBtn variant="outline" type="button" (click)="reloadRoles.emit()">
-                  {{ t('common.retry') }}
-                </button>
-              </p>
-            }
-            @if (showRoleField() && rolesLoading()) {
-              <hlm-spinner [aria-label]="t('app.startup.loading')" />
-            }
           </div>
           <hlm-dialog-footer>
             <button

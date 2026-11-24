@@ -37,7 +37,8 @@ import type { Mock } from 'vitest';
     <app-user-roles-dialog
       [(open)]="open"
       [user]="user()"
-      [availableRoles]="roles"
+      [availableRoles]="availableRoles()"
+      [rolesLoading]="rolesLoading()"
       (saved)="savedCount = savedCount + 1"
     />
   `,
@@ -50,6 +51,8 @@ class HostComponent {
     { id: 'role-auditor', name: 'auditor', displayName: 'Auditor' },
     { id: 'role-viewer', name: 'viewer', displayName: 'Viewer' },
   ];
+  readonly availableRoles = signal(this.roles);
+  readonly rolesLoading = signal(false);
   savedCount = 0;
 }
 
@@ -134,6 +137,29 @@ describe('UserRolesDialog', () => {
     await tapAt(document.getElementById('role-role-admin')!, -20, 0);
     await fixture.whenStable();
     expect(dialog.isSelected('role-admin')).toBe(true);
+  });
+
+  // 高度在打开时确定：加载中只有行骨架（不叠加空态、不放裸 spinner），加载完成（含为空）弹窗高度不变
+  it('keeps the dialog height from loading to an empty or filled role list', async () => {
+    host.availableRoles.set([]);
+    host.rolesLoading.set(true);
+    await fixture.whenStable();
+    const content = document.querySelector<HTMLElement>('[data-slot="dialog-content"]')!;
+    const empty = () => content.querySelector('[data-testid="roles-empty"]');
+    const loading = () => content.querySelector('app-list-loading');
+    expect([loading(), empty()].map(Boolean)).toEqual([true, false]);
+    expect(content.querySelector('[data-dialog-body] hlm-spinner')).toBeNull();
+    const height = content.offsetHeight;
+
+    host.rolesLoading.set(false);
+    await fixture.whenStable();
+    expect([loading(), empty()].map(Boolean)).toEqual([false, true]);
+    expect(content.offsetHeight).toBe(height);
+
+    host.availableRoles.set(host.roles);
+    await fixture.whenStable();
+    expect([loading(), empty()].map(Boolean)).toEqual([false, false]);
+    expect(content.offsetHeight).toBe(height);
   });
 
   it('starts from the roles the user already has', async () => {

@@ -29,6 +29,7 @@ import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSeparator } from '@spartan-ng/helm/separator';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmSwitch } from '@spartan-ng/helm/switch';
 import { firstValueFrom, Observable } from 'rxjs';
@@ -96,6 +97,7 @@ const authorizationCodePermissions = [
     HlmBadge,
     HlmButton,
     HlmInput,
+    HlmSkeleton,
     HlmSpinner,
     HlmSeparator,
     HlmSwitch,

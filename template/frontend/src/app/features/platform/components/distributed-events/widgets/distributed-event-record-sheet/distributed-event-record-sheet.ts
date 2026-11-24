@@ -34,6 +34,7 @@ import { Observable, catchError, finalize, of, switchMap, tap } from 'rxjs';
 
 import { applicationErrorMessage } from '../../../../../../core/errors/application-http-error';
 import { AccountPreferencesService } from '../../../../../../core/services/account-preferences-service';
+import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
 import { StatusDot } from '../../../../../../shared/directives/status-dot';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
 import { injectCopyToClipboard } from '../../../../../../shared/utils/clipboard';
@@ -91,6 +92,7 @@ const CATALOG_LINK_FIELDS = ['pendingOutbox', 'pendingInbox', 'deadLettered', 'f
     ...HlmSheetImports,
     HlmSpinner,
     ...HlmTooltipImports,
+    DialogLoading,
     StatusDot,
     AppDate,
     //#if (IncludeLocalization)
@@ -139,6 +141,11 @@ export class DistributedEventRecordSheet {
   readonly detail = signal<EventDetail | null>(null);
   protected readonly detailError = signal<string | null>(null);
   protected readonly detailLoading = signal(false);
+  /** 详情加载失败后就地重试：只重发当前记录的详情请求。 */
+  private readonly retryVersion = signal(0);
+  protected retryDetail(): void {
+    this.retryVersion.update((version) => version + 1);
+  }
   readonly payload = signal<string | null>(null);
   protected readonly payloadError = signal<string | null>(null);
   readonly payloadLoading = signal(false);
@@ -234,6 +241,7 @@ export class DistributedEventRecordSheet {
         id: this.recordId(),
         view: this.view(),
         refresh: this.refreshVersion(),
+        retry: this.retryVersion(),
       })),
     )
       .pipe(

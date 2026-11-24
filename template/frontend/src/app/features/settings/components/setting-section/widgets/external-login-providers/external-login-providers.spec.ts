@@ -240,11 +240,15 @@ describe('ExternalLoginProviders', () => {
     expect(rowsOf('gitee')).toEqual(['ExternalLogin.Gitee.Enabled']);
   });
 
-  it('shows the rows with a spinner but no state while loading', async () => {
+  // 首次加载：状态位放徽章形骨架，不放裸 spinner（刷新按钮里的 spinner 属于按钮）
+  it('shows the rows with a state skeleton but no state while loading', async () => {
     await render(new Subject<ExternalLoginStatusOutputDto>());
 
     expect(rowsOf('github')).toHaveLength(2);
-    expect(cardOf('github').querySelector('hlm-spinner')).not.toBeNull();
+    expect(
+      cardOf('github').querySelector('[data-testid="external-login-state-loading"]'),
+    ).not.toBeNull();
+    expect(cardOf('github').querySelector('hlm-spinner')).toBeNull();
     expect(stateOf('github')).toBeNull();
     expect(cardOf('github').querySelector('[data-testid="external-login-credentials"]')).toBeNull();
     expect(host().querySelector('[data-testid="external-login-status-error"]')).toBeNull();

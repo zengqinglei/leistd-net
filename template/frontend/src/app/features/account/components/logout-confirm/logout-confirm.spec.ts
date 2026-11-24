@@ -1,7 +1,7 @@
 //#if (OpenIddictServer)
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { isObservable, Observable, of, Subject, throwError } from 'rxjs';
 
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
@@ -27,11 +27,17 @@ describe('LogoutConfirm', () => {
 
   async function render(
     query: Record<string, string>,
-    response: LogoutConfirmationOutputDto | Error,
+    response: LogoutConfirmationOutputDto | Error | Observable<LogoutConfirmationOutputDto>,
   ): Promise<void> {
     getLogoutConfirmation = vi
       .fn()
-      .mockReturnValue(response instanceof Error ? throwError(() => response) : of(response));
+      .mockReturnValue(
+        response instanceof Error
+          ? throwError(() => response)
+          : isObservable(response)
+            ? response
+            : of(response),
+      );
     TestBed.configureTestingModule({
       imports: [LogoutConfirm],
       providers: [
@@ -79,6 +85,14 @@ describe('LogoutConfirm', () => {
       confirmation: 'protected',
       __RequestVerificationToken: 'csrf-token',
     });
+  });
+
+  // 首次加载：骨架占住说明文字的位置，不放 spinner
+  it('shows a text skeleton while the request is checked', async () => {
+    await render({ request_uri: 'urn:request', confirmation: 'protected' }, new Subject());
+
+    expect(element('logout-confirm-loading')).not.toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('hlm-spinner')).toBeNull();
   });
 
   it('offers no confirmation when the request is no longer valid', async () => {

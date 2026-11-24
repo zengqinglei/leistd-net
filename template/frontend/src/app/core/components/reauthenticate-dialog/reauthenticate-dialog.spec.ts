@@ -200,6 +200,27 @@ describe('ReauthenticateDialog', () => {
       expect(host.confirmed[0]).not.toHaveProperty('password');
     });
 
+    // 高度在打开时确定：切换方式不改变弹窗高度，标题与页脚按钮不跳动
+    it('keeps the dialog height across every method', async () => {
+      await render({ hasPassword: true, twoFactorEnabled: true, hasPasskeys: true });
+      const content = document.querySelector<HTMLElement>('[data-slot="dialog-content"]')!;
+      const height = content.offsetHeight;
+      const heights: number[] = [];
+
+      for (const method of ['password', 'code']) {
+        document
+          .querySelector<HTMLButtonElement>(
+            `[data-testid="reauthenticate-switch"][data-method="${method}"]`,
+          )!
+          .click();
+        await settle();
+        expect(reauthenticateMethod()).toBe(method);
+        heights.push(content.offsetHeight);
+      }
+
+      expect(heights).toEqual([height, height]);
+    });
+
     it('hands over the password alone', async () => {
       await render({ hasPassword: true, twoFactorEnabled: true });
 

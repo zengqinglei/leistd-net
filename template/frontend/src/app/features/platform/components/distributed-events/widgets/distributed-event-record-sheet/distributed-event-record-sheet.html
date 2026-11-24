@@ -125,11 +125,23 @@
         <p hlmSheetDescription class="sr-only">{{ t('distributedEvents.detailHelp') }}</p>
       </div>
       <div class="relative flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
+        <!-- 详情首次加载用表单形骨架占住正文；失败在同一位置给原因和重试 -->
         @if (detailLoading()) {
-          <hlm-spinner />
-        }
-        @if (detailError(); as error) {
-          <p role="alert" class="text-sm">{{ error }}</p>
+          <app-dialog-loading />
+        } @else if (detailError(); as error) {
+          <div role="alert" class="flex flex-col items-start gap-3 text-sm">
+            <p>{{ error }}</p>
+            <button
+              hlmBtn
+              variant="outline"
+              size="sm"
+              type="button"
+              data-testid="event-detail-retry"
+              (click)="retryDetail()"
+            >
+              {{ t('common.retry') }}
+            </button>
+          </div>
         }
         @if (catalogDetail(); as item) {
           <section class="flex flex-col gap-3">

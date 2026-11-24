@@ -73,31 +73,40 @@
             </button>
           </div>
         }
-        @if (notifications().length === 0) {
-          <div hlmEmpty class="py-10" [attr.aria-busy]="notificationService.loading() || null">
+        @if (notifications().length === 0 && notificationService.loading()) {
+          <!-- 首次加载：通知行骨架占住列表的位置（图标、标题、正文、时间） -->
+          <div class="flex flex-col gap-0.5 p-1" data-testid="notifications-loading">
+            <span class="sr-only" role="status">{{ t('layout.notifications.loading') }}</span>
+            @for (row of [1, 2, 3]; track row) {
+              <div class="flex items-start gap-4 px-3 py-3" aria-hidden="true">
+                <div hlmSkeleton class="size-8 shrink-0 rounded-full"></div>
+                <div class="flex min-w-0 flex-1 flex-col gap-2">
+                  <div hlmSkeleton class="h-4 w-3/5"></div>
+                  <div hlmSkeleton class="h-4 w-full"></div>
+                  <div hlmSkeleton class="h-3 w-16"></div>
+                </div>
+              </div>
+            }
+          </div>
+        } @else if (notifications().length === 0) {
+          <div hlmEmpty class="py-10">
             <div hlmEmptyHeader>
               <div hlmEmptyMedia variant="icon">
-                @if (notificationService.loading()) {
-                  <hlm-spinner />
-                } @else {
-                  <ng-icon
-                    [name]="notificationService.loadFailed() ? 'lucideCircleAlert' : 'lucideInbox'"
-                  />
-                }
+                <ng-icon
+                  [name]="notificationService.loadFailed() ? 'lucideCircleAlert' : 'lucideInbox'"
+                />
               </div>
               <p hlmEmptyTitle [attr.role]="notificationService.loadFailed() ? 'alert' : null">
                 {{
                   t(
-                    notificationService.loading()
-                      ? 'layout.notifications.loading'
-                      : notificationService.loadFailed()
-                        ? 'layout.notifications.loadFailed'
-                        : 'layout.notifications.empty'
+                    notificationService.loadFailed()
+                      ? 'layout.notifications.loadFailed'
+                      : 'layout.notifications.empty'
                   )
                 }}
               </p>
             </div>
-            @if (!notificationService.loading() && notificationService.loadFailed()) {
+            @if (notificationService.loadFailed()) {
               <div hlmEmptyContent>
                 <button
                   hlmBtn

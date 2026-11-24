@@ -32,6 +32,7 @@ import { OpenApplicationEditDialog } from './open-application-edit-dialog';
       [saveAction]="saveAction"
       [editing]="editing()"
       [loadError]="loadError()"
+      [scopesLoading]="scopesLoading()"
       [scopesError]="scopesError()"
       [scopes]="scopes()"
     />
@@ -41,6 +42,7 @@ class HostComponent {
   readonly visible = signal(true);
   readonly editing = signal(false);
   readonly loadError = signal<string | null>(null);
+  readonly scopesLoading = signal(false);
   readonly scopesError = signal<string | null>(null);
   readonly scopes = signal<OpenApplicationScopeOutputDto[]>([
     {
@@ -335,9 +337,18 @@ describe('OpenApplicationEditDialog', () => {
     expect(retry).toHaveBeenCalledOnce();
   });
   it('review R1 shows failed authorization options with retry and blocks saving', async () => {
+    // 首次加载：骨架占住授权选择框的位置，不在正文末尾放裸 spinner；失败也在这个字段里
+    fixture.componentInstance.scopesLoading.set(true);
+    await fixture.whenStable();
+    const field = document
+      .querySelector('label[for="application-permissions"]')!
+      .closest('[hlmField]')!;
+    expect(field.querySelector('[data-testid="application-permissions-loading"]')).not.toBeNull();
+    expect(document.querySelector('[data-dialog-body] hlm-spinner')).toBeNull();
+    fixture.componentInstance.scopesLoading.set(false);
     fixture.componentInstance.scopesError.set('Options unavailable');
     await fixture.whenStable();
-    expect(document.body.textContent).toContain('Options unavailable');
+    expect(field.querySelector('[role="alert"]')?.textContent).toContain('Options unavailable');
     expect(
       document.querySelector<HTMLButtonElement>('hlm-dialog-footer button[type="submit"]')!
         .disabled,
