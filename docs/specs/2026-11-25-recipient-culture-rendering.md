@@ -95,4 +95,24 @@
 
 ### 修复前的行为红例
 
-以框架候选包生成 `identity-all-features`，Release 构建通过。对现有通知发布器加一条回归用例，使用真实的 JSON 词条。收件人没有语言偏好，测试调用方的 UI 区域性为 `zh-CN`。`dotnet test -c Release --no-build --filter FullyQualifiedName~A_recipient_without_a_language_gets_the_default_even_under_another_culture` 一条失败，期望标题 `Your password was changed`，实际发布 `密码已修改`。
+以框架候选包生成 `identity-all-features`，Release 构建通过。对原通知发布器加一条使用真实 JSON 词条的回归用例。没有当前用户，收件人没有语言偏好，调用方的 UI 区域性为 `zh-CN`。`dotnet test -c Release --no-build --filter FullyQualifiedName~A_recipient_without_a_language_gets_the_default_even_under_another_culture` 一条失败，期望标题 `Your password was changed`，实际发布 `密码已修改`。
+
+本人请求语言回落另做行为对照。只在生成目录临时把本人缺值的分支改回模板首选语言，Release 构建通过。运行 `dotnet test -c Release --no-build --filter FullyQualifiedName~Security_alerts_use_request_language_only_for_the_current_user_with_no_language`，五组真实词条断言里仅本人缺值组失败，期望 `密码已修改`，实际 `Your password was changed`。恢复实现后运行单测全量，`identity-all-features` 371/371，单语言 `identity-notifications` 352/352。两种形态均以 `-p:TreatWarningsAsErrors=true` 完成 Release 构建。
+
+### 生成形态的快速验证
+
+实际生成后运行 `pwsh scripts/verify.ps1 -Fast`，`identity-workspace` 371/371 后端单测通过，Playwright 发现闸门通过（16/20）。远程认证的 `resource-workspace` 206/206 后端单测通过，该形态未生成 E2E 闸门。较小的 `identity-capabilities-05` 形态完成 Release 构建，未运行该形态的测试。
+
+### 生成形态的完整验证
+
+- 本地化 `identity-workspace` 运行默认 `pwsh scripts/verify.ps1`，371 条后端单测、872 条后端集成、2,249 条前端单测通过，默认 4 worker 的 16 条 E2E 全部首次通过。`verify.ps1` 墙钟 351.42 秒。
+- 单语言 `identity-notifications` 同时生成邮件和通知。`dotnet build -c Release --no-restore -p:TreatWarningsAsErrors=true` 通过，分别对单测和集成测试项目运行 `dotnet test -c Release --no-build`，352/352 和 742/742 通过。
+- 远程认证 `resource-workspace` 用同样的 Release 命令验证，206/206 单测和 278/278 集成通过，覆盖远程账户偏好登记形态。
+
+### 框架随包文档
+
+`pwsh framework/build/pack-local-feed.ps1` 打出 82 个 `1.2.3-local.20261125090424` 候选包。`pwsh framework/build/test-package-consumption.ps1` 通过独立解包及消费检查，编译 28 个项目中的 165 段文档示例，拒绝 6 个预期反例。通知框架本轮只补充文本快照的消费契约说明。
+
+### 仓库闸门
+
+`pwsh scripts/check-all.ps1` 通过全部 52 道静态闸门，含模板规范读取成本和文档引用。`pwsh template-package/test-template-package.ps1` 对 `bec77530` 打包 `0.0.1-local.20261125092925`，包内 1,727 个文件与源码一致。隔离安装后，`identity-all-features` 和 `resource-capabilities-03` 核对来源标记并重建，两种形态归一化后均为零差异。

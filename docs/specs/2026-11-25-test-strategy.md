@@ -505,3 +505,9 @@ WARNING:   358.5 ms  Matrix.ResourceCapabilities03.UnitTests.VerificationReportP
 ### 列表详情规范
 
 前端列表和 API 规范以字段是否有上界选择随行渲染或单资源读取。两篇分别减少 34、21 字符，读取成本闸门通过。Webhook 投递列表已有摘要和单资源详情区分，载荷与尝试历史通过 `/deliveries/{id}` 读取。操作记录的 `FailureDetail` 已有长度上限，列表却仍直接返回无上界的 `FailureData` JSON，占位参数也用于现有前端回落渲染。本轮只修改规范，后续另审操作记录列表契约与消费者兼容。
+
+### 合入追加范围后的复验
+
+在 `bec77530` 上，`pwsh scripts/check-all.ps1` 通过全部 52 道静态闸门。`pwsh template-package/test-template-package.ps1` 验证 `0.0.1-local.20261125092925` 的 1,727 个文件、隔离安装和两种形态零差异重建。`pwsh scripts/verify.ps1 -Fast` 复测 Identity Workspace 371 条后端单测和 E2E 发现 16/20，Resource Workspace 206 条后端单测均通过。收件人行为对照和条件形态见[收件人渲染规格 §4](./2026-11-25-recipient-culture-rendering.md#4-验证)。
+
+同机对最终候选重新运行 Identity Workspace 默认 `pwsh scripts/verify.ps1`，371 条后端单测、872 条集成、2,249 条前端单测均通过。默认 4 worker 的 16 条 E2E 全部首次通过，浏览器执行 34.7 秒，E2E 步骤墙钟 35.33 秒，完整入口墙钟 351.42 秒。后端构建 9.83 秒，后端单测 4.51 秒，集成 156.31 秒，前端单测 63.58 秒，前端构建 12.83 秒。逐层解析实际 JUnit，后端两层、`unit-frontend.xml` 和 `e2e.xml` 的条数与输出一致，零失败零跳过。保留前文首轮超时及同机对照记录，合入仍以 PR 的 CI 为准。
