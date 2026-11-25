@@ -84,7 +84,7 @@
   - 本页成功授予或移除当前登录账号的工作区访问后，比如平台管理员在租户人员表单里给自己授权。复用现有写入成功的路径，调用显式刷新；
   - 现有的显式入口：`recoverUnavailable`、`workspace-denied` 的重试、登录收尾（`login-completion`）；
   - 主体变化。模拟进出和真实退出都会整页跳转，内存里的目录自然清空，不需要额外监听。
-  
+
   显式刷新的语义保持「重新取」，可以用参数表达，也可以拆成两个方法，命名按规范定。
 - **其他会话里的授权变化**（另一个浏览器或另一位管理员改的）：下次显式刷新、重新登录或整页刷新后可见。这一点写进规范，不新增推送或轮询。
 - `/platform` 的 `workspaceGuard` 保留（负责把租户用户导到自己的工作区），不再触发重复取数。
@@ -144,4 +144,66 @@
 
 ## 4. 验证
 
-（实施后填写。）
+### 冷启动请求链（R6）
+
+从 `identity-workspace` 生成项目，使用仓库登录夹具和真实 PostgreSQL。用 `npm exec -- playwright test startup-waterfall.e2e.ts --workers=1 --headed` 记录宿主在有头 Chromium 冷启动 `/w/default-e2e/platform` 的请求。关闭浏览器缓存，注入 90 ms 网络延迟。时间以 `/me` 发出为零点。
+
+改动前（`fcb4d1e3`）共 7 个请求，逐个串行，全部返回 200。
+
+| API | `X-Workspace` | 开始 → 完成（ms） |
+| --- | --- | ---: |
+| `/api/v1/auth/me` | 无 | 0 → 92 |
+| `/api/v1/permissions/current` | `default-e2e` | 100 → 337 |
+| `/api/v1/settings` | `default-e2e` | 338 → 489 |
+| `/api/v1/auth/me/workspaces` | 无 | 598 → 694 |
+| `/api/v1/permissions/current` | 无 | 695 → 790 |
+| `/api/v1/permissions/current` | `default-e2e` | 790 → 889 |
+| `/api/v1/settings` | `default-e2e` | 891 → 986 |
+
+改动后（`8d5fc4e5`）共 5 个请求，全部返回 200。`/me` 完成后，另外 4 个请求的发起时间为 155–156 ms（取整），在宿主权限最先完成前都已挂起。守卫进入工作区时复用已加载的权限与设置。
+
+| API | `X-Workspace` | 开始 → 完成（ms） |
+| --- | --- | ---: |
+| `/api/v1/auth/me` | 无 | 0 → 155 |
+| `/api/v1/permissions/current` | `default-e2e` | 155 → 360 |
+| `/api/v1/settings` | `default-e2e` | 156 → 365 |
+| `/api/v1/auth/me/workspaces` | 无 | 156 → 282 |
+| `/api/v1/permissions/current` | 无 | 156 → 267 |
+
+### 修复前反证
+
+- R1 使用生成的 `identity-workspace` 和真实 Chromium 运行 `startup-service.spec.ts`、`session-context-service.spec.ts`。41 条通过，3 条按预期失败。两个启动用例在权限仍在途时找不到 `/settings` 请求，旧设置失败的用例读到空快照，未满足保留新范围设置的断言。
+- R2、R3 使用同一形态运行 `startup-service.spec.ts`、`workspace-context-service.spec.ts`。23 条通过，5 条按预期证伪。三种入口的首批都缺少目录，目录错误用例也找不到首批目录请求，两次并发刷新发出了两个目录请求。另一个拒绝页用例受测试初始化影响，未计入行为反证。
+- 在隔离的生成目录中分别反转设置 401 的静默标记、取消设置失败的代次检查、复用时保留入口的原大小写、取消目录共享。每次运行相关前端 spec，四次各命中一条预期失败。
+- 禁用冷启动拒绝结果的交接后，拒绝页用例超时，HTTP 检查报告守卫重发了权限和设置。禁用本人授权后的目录刷新后，浏览器用例在等待该目录响应时失败。两项变异均在隔离生成目录内完成。
+
+### 租户入口（R4）
+
+复用现有 `WorkspaceAuthenticationHandler`。裸入口先加载本人范围，守卫跳到本人工作区时仍以 `X-Workspace` 读取权限和设置。后端校验工作区名称、归属和启用状态后返回本人主体。客户端保留原请求路径，无需通过响应内容推断范围等价。
+
+### Resource 冷启动
+
+通过 `pwsh scripts/test-template-oidc-e2e.ps1 -SkipPack -Workspace -CandidateSha 8d5fc4e5` 的临时副本运行真实 Identity、Resource 和 PostgreSQL。在生成的 Resource 应用上构建生产前端，通过有头 Chromium 打开 `/w/shared-e2e/platform`。临时计时点放在生成目录的工作区令牌提供器，仅记录交换耗时。
+
+`/me` 在 231 ms 完成，随后四个请求在 239–245 ms 发出，最后一个在 488 ms 完成。带头的权限与设置都在工作区缓存仍为空时触发交换，共两次，分别耗时 64.7 ms 和 78.6 ms。该轮未添加网络延迟。脚本的 `workspace` 场景通过。
+
+### 生成项目回归
+
+各场景由 `pwsh scripts/template-dev-workspace.ps1 -Scenario <场景> -Sync` 生成并验证。
+
+| 场景 | 命令 | 结果 |
+| --- | --- | --- |
+| `identity-workspace` | `pwsh scripts/verify.ps1` | 后端单测 372/372、集成 872/872、前端单测 2248/2248、E2E 14/14，通过 |
+| `resource` | `pwsh scripts/verify.ps1` | `TenantWorkspace` 为假，后端单测 201/201、集成 239/239、前端单测 1004/1004，通过 |
+| `resource-workspace` | `npm test -- --watch=false --reporters=default --reporters=junit`、`npm run lint`、`npm run build`、`dotnet build -c Release --no-restore` | 前端单测 1444/1444，前后端构建与前端 lint 通过 |
+| `resource-capabilities-03` | `pwsh scripts/verify.ps1` | 纯 API 形态的完整验证通过，后端单测 201/201、集成 192/192 |
+
+三种前端形态的新增或改写行为用例单条不超过 14 ms。R4 的用例确认租户账号从 `/platform` 进入本人工作区时，重读的设置和权限都携带规范工作区头。Identity 的 E2E 验证本人授予新工作区后，可从侧栏进入，全程只加载一个文档。Resource 形态按模板条件裁剪本地身份 E2E，跨进程工作区链路由上面的 OIDC 场景验证。
+
+### 静态与打包验证
+
+| 命令 | 结果 |
+| --- | --- |
+| `python3 scripts/measure-template-read-cost.py --check` | 六类读取集合均在原上限内。前端路由规范从 2108 字符减到 2057 字符 |
+| `pwsh scripts/check-all.ps1` | 52 道闸门全部通过 |
+| `pwsh template-package/test-template-package.ps1` | 核对包内容、隔离安装及两个场景的来源标记与重建一致性，通过 |
