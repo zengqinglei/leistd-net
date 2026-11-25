@@ -60,7 +60,14 @@ public sealed class DistributedEventRedecodeHandoffTests
         Assert.Equal(1, final.RedecodeCount);
         Assert.Equal(failDecode ? 0 : 1, await worker.ReadAsync(db => db.Set<DistributedEventInbox>().IgnoreQueryFilters().CountAsync(), dedicated: true));
         if (failDecode) { Assert.Equal("Safe decoder reason.", final.Error); Assert.Null(final.ResolvedAt); }
-        else Assert.NotNull(final.ResolvedAt);
+        else
+        {
+            Assert.NotNull(final.ResolvedAt);
+            // Worker 的待办重新解码入立即队列，新收件箱行保留一分钟宽限。
+            Assert.Equal(1, worker.Queue.Count);
+            Assert.Equal(worker.Clock.GetUtcNow().UtcDateTime.AddMinutes(1),
+                (await worker.ReadAsync(db => db.Set<DistributedEventInbox>().IgnoreQueryFilters().SingleAsync(), dedicated: true)).NextAttemptAt);
+        }
         Assert.Empty(worker.ManagedEvents);
     }
 

@@ -9,7 +9,7 @@
 | 单进程内解耦业务副作用（领域事件、应用内通知），发布方与处理器同进程 | `Leistd.EventBus.Local` |
 | 仅编写业务代码（发布事件 / 实现处理器），不关心实现 | 只引用 `Leistd.EventBus.Core` 中的接口 |
 | 跨进程传递已经发生的事实，允许异步到达 | `Leistd.EventBus.Distributed` + EF 存储 + 一个传输 |
-| 提交后交给本服务 Worker 异步处理、事件不离开本服务 | 契约实现 `IInternalDistributedEvent`，见[本服务内事件](#本服务内事件) |
+| 提交后必须由本服务 Worker 可靠完成（需要重试、死信与重放），事件不离开本服务；能在请求内直接调用、或按业务状态由周期任务补做的不必用事件（见[后台作业](background-jobs.md)） | 契约实现 `IInternalDistributedEvent`，见[本服务内事件](#本服务内事件) |
 | 需要立即返回结果的跨服务查询或命令 | 服务客户端 |
 
 默认情况下，发布方会等待所有处理器完成。活动工作单元中的本地事件则推迟到指定提交阶段。
@@ -276,7 +276,7 @@ public sealed class OrderFulfillmentHandler : IEventHandler<OrderFulfillmentRequ
 builder.Services.AddDistributedEventHandler<OrderFulfillmentHandler>("orders.fulfillment");
 ```
 
-发布照常使用 `IDistributedEventBus`。路由在发布时写入发件箱记录的消息头 `leistd-delivery: internal` 并随记录冻结，发件箱详情可见。`IDistributedEventSubscriptions.GetAll()` 只返回对外订阅，RabbitMQ、Kafka 与自定义传输不为本服务内事件建立绑定或主题；传输收到的同名消息不会进入内部消费者的收件箱。收件箱处理、重放与事件目录包含内部消费者。开启发送仍须注册一个传输，只有本服务内事件的服务可使用回环。
+发布照常使用 `IDistributedEventBus`。路由在发布时写入发件箱记录的消息头 `leistd-delivery: internal` 并随记录冻结，发件箱详情可见。默认的 `IDistributedEventSubscriptions.GetAll()` 只返回对外订阅，RabbitMQ、Kafka 与自定义传输不为本服务内事件建立绑定或主题；传输收到的同名消息不会进入内部消费者的收件箱。宿主替换该接口时，本服务内事件的消费者仍取自 `AddDistributedEventHandler` 的登记。收件箱处理、重放与事件目录同时包含对外订阅与内部消费者。开启发送仍须注册一个传输，只有本服务内事件的服务可使用回环。
 
 本地投递按派发实例本机登记的内部消费者写收件箱，框架不做集群订阅发现。共库中所有开启 `Outbox:DispatchEnabled` 或 `Inbox:ProcessingEnabled` 的实例都必须登记相同、完整的内部消费者；`Inbox:ReceiveEnabled` 只控制传输入口，不影响本地投递。Api 只写、Worker 全开且使用同一镜像的分工天然满足这一前提。派发实例找不到任何内部消费者时进死信；只漏登部分消费者时，已登记的消费者照常收到、记录标为已发送，遗漏的消费者收不到，框架无法发现。
 

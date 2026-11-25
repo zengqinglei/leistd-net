@@ -22,7 +22,8 @@ using Microsoft.Extensions.Options;
 namespace Leistd.EventBus.EntityFrameworkCore.Receiving;
 
 internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
-    DistributedEventSubscriptions subscriptions,
+    IDistributedEventSubscriptions subscriptions,
+    DistributedEventSubscriptions registrations,
     ICurrentTenant tenant,
     IUnitOfWorkManager units,
     IDbContextProvider<TDbContext> contexts,
@@ -82,7 +83,7 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
 
     // 本服务内事件的本地入口：只匹配内部订阅，不写拒收表；由发件箱处理器把结果映射为发送成功或永久失败。
     internal Task<(DistributedEventAcceptance Result, string? Error)> DeliverInternalAsync(IncomingDistributedEvent message, DateTime receivedAt, CancellationToken ct)
-        => StoreAsync(message, receivedAt, subscriptions.GetInternal(), enqueue: true, ct);
+        => StoreAsync(message, receivedAt, registrations.GetInternal(), enqueue: true, ct);
 
     private async Task<(DistributedEventAcceptance Result, string? Error)> StoreAsync(IncomingDistributedEvent message, DateTime receivedAt,
         IReadOnlyList<DistributedEventSubscription> subscribed, bool enqueue, CancellationToken ct)

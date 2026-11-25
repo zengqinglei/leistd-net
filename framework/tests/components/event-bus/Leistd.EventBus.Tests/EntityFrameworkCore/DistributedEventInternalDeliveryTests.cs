@@ -124,7 +124,8 @@ public sealed class DistributedEventInternalDeliveryTests
         var row = await host.ReadAsync(db => db.Set<DistributedEventOutbox>().IgnoreQueryFilters().SingleAsync());
         Assert.Equal(code, row.LastErrorCode);
         Assert.Equal(kind == "directory" ? DistributedEventOutboxStatus.Pending : DistributedEventOutboxStatus.DeadLettered, row.Status);
-        Assert.Equal(kind == "directory", row.NextAttemptAt is not null);
+        if (kind == "directory") Assert.True(row.NextAttemptAt > host.Clock.GetUtcNow().UtcDateTime, "A transient local delivery failure must back off.");
+        else Assert.Null(row.NextAttemptAt);
         Assert.Equal(0, await host.ReadAsync(db => db.Set<DistributedEventRejection>().CountAsync()));
         Assert.Equal(0, await host.ReadAsync(db => db.Set<DistributedEventInbox>().IgnoreQueryFilters().CountAsync()));
         Assert.Empty(host.Transport.Sent);
@@ -157,6 +158,35 @@ public sealed class DistributedEventInternalDeliveryTests
         Assert.Equal(0, host.Queue.Count);
         Assert.Equal(2, recorder.Handled.Count);
         Assert.Equal(DistributedEventOutboxStatus.Sent, (await host.ReadAsync(db => db.Set<DistributedEventOutbox>().SingleAsync())).Status);
+    }
+
+    /// <summary>同键内部事件都进入收件箱后，前序处理失败保持 Pending 时后序不执行，前序成功后才轮到后序。</summary>
+    [Fact]
+    public async Task Inbox_rows_of_internal_events_with_one_ordering_key_wait_for_the_failed_predecessor()
+    {
+        var recorder = new ReviewRecorder();
+        await using var host = await DistributedEventTestHost.CreateAsync(configureServices: Consumers(recorder));
+        var first = new ReviewEvent { OrderId = 7 };
+        var second = new ReviewEvent { OrderId = 7 };
+        recorder.FailFor = first.EventId;
+        foreach (var message in new[] { first, second })
+            await host.InTenantAsync(null, (sp, _) => sp.GetRequiredService<IDistributedEventBus>().PublishAsync(message));
+        await host.Queue.RunAllAsync(host.Services);
+
+        var rows = await host.ReadAsync(db => db.Set<DistributedEventInbox>().Where(x => x.Consumer == "orders.review").OrderBy(x => x.Id).ToListAsync());
+        Assert.Equal(new[] { first.EventId, second.EventId }, rows.Select(x => x.EventId));
+        Assert.All(rows, row => Assert.Equal(DistributedEventInboxStatus.Pending, row.Status));
+        Assert.Equal(new[] { 1, 0 }, rows.Select(x => x.AttemptCount));
+        Assert.Empty(recorder.Handled);
+
+        recorder.FailFor = null;
+        await using var scope = host.Services.CreateAsyncScope();
+        var processor = scope.ServiceProvider.GetRequiredService<DistributedEventInboxProcessor<EventTestDbContext>>();
+        await processor.ProcessAsync(null, rows[1].Id, null, default);
+        Assert.Empty(recorder.Handled);
+        await processor.ProcessAsync(null, rows[0].Id, null, default);
+        await processor.ProcessAsync(null, rows[1].Id, null, default);
+        Assert.Equal(new[] { first.EventId, second.EventId }, recorder.Handled.Select(x => x.EventId));
     }
 
     /// <summary>详情可见内部标记与坐标，重放进入同一处理器，事件目录列出已登记的内部消费者。</summary>
@@ -232,6 +262,8 @@ public sealed class DistributedEventInternalDeliveryTests
     {
         /// <summary>按处理顺序记录。</summary>
         public ConcurrentQueue<(string Consumer, Guid EventId, Guid? TenantId)> Handled { get; } = new();
+        /// <summary>处理该事件时让两个消费者都失败。</summary>
+        public Guid? FailFor { get; set; }
     }
 
     /// <summary>第一个内部消费者。</summary>
@@ -239,7 +271,11 @@ public sealed class DistributedEventInternalDeliveryTests
     {
         /// <inheritdoc />
         public Task HandleAsync(ReviewEvent @event, CancellationToken cancellationToken = default)
-        { recorder.Handled.Enqueue(("orders.review", @event.EventId, tenant.Id)); return Task.CompletedTask; }
+        {
+            if (@event.EventId == recorder.FailFor) throw new InvalidOperationException("The review could not be processed.");
+            recorder.Handled.Enqueue(("orders.review", @event.EventId, tenant.Id));
+            return Task.CompletedTask;
+        }
     }
 
     /// <summary>第二个内部消费者。</summary>
@@ -247,7 +283,11 @@ public sealed class DistributedEventInternalDeliveryTests
     {
         /// <inheritdoc />
         public Task HandleAsync(ReviewEvent @event, CancellationToken cancellationToken = default)
-        { recorder.Handled.Enqueue(("orders.review-audit", @event.EventId, tenant.Id)); return Task.CompletedTask; }
+        {
+            if (@event.EventId == recorder.FailFor) throw new InvalidOperationException("The review could not be processed.");
+            recorder.Handled.Enqueue(("orders.review-audit", @event.EventId, tenant.Id));
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FailingTenantStore : ITenantStore
