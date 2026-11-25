@@ -14,14 +14,14 @@
 | 其他服务需要知道已发生的事实 | `IDistributedEventBus`，契约放共享包 | 发件箱与收件箱提供至少一次投递及失败恢复 |
 <!--#endif-->
 | 请求外且允许丢失 | `IBackgroundTaskQueue` | 随进程退出丢失，失败不重试 |
-| 提交后必须完成的服务内工作，或定期维护 | 业务状态 + `Cluster` 周期任务 | 按状态补做，业务状态记录重试耗尽 |
+| 提交后必须完成的服务内工作 | 业务状态 + 提交后领域事件入队 | 低频 `Cluster` 扫描到期记录，业务状态记录重试耗尽 |
 
-待办状态随业务事务提交，由周期任务按状态扫描。用条件更新推进状态，外部调用带稳定的业务操作标识防止重试重复生效。业务表记录尝试次数和下次处理时间。需要尽快处理时可设秒级扫描排期，例如 5 秒，实际开始受锁和上一轮影响。当前进程能执行时，可在提交后入队立即尝试一次，由周期任务兜底。
+聚合将待办与宽限期写入业务事务，用 `AddLocalEvent` 触发提交后入队。两条入口共用应用服务，用并发令牌认领、设租约并校验写回，失败后退避。外部调用带稳定业务操作标识，超时短于租约。兜底按状态与到期时间走索引分批处理（如每 5 分钟）。提交进程无法执行时省去处理器，周期任务按可接受的延迟取 30 秒到 1 分钟。
 
-周期任务由启用调度器的宿主执行。默认是 API 宿主，拆分独立 Worker 后将集中扫描任务移到 Worker。用 `AddRecurringJob` 显式选 `Cluster` 或 `EveryInstance`，任务开关通过 `isEnabled` 登记，执行失败直接抛出。跨实例互斥使用 `IDistributedLock`，不另起线程或自造跨实例锁，只保护进程内状态时可用 `lock`。
+定期维护用周期任务。默认由 API 宿主调度，拆分后将集中扫描任务移到 Worker。用 `AddRecurringJob` 显式选 `Cluster` 或 `EveryInstance`，用 `isEnabled` 登记任务开关，执行失败直接抛出。跨实例互斥使用 `IDistributedLock`，不另起线程或自造跨实例锁，只保护进程内状态时可用 `lock`。
 
 - 周期任务的执行记录使用 `IRecurringJobRunObserver`，由宿主实现存储，不包装任务类型。实现放 Infrastructure 的 `BackgroundJobs/` 目录，按记录的内容命名 `*Recorder`（如 `JobRunRecorder`），在 Infrastructure 的 `DependencyInjection.cs` 登记。
-- 观察者的登记、作用域、超时与幂等写入见 `background-jobs` 组件随包文档（定位见[后端说明](../../backend/README.md#leistd-框架-api)）。
+- 提交后工作的完整写法与观察者契约见 `background-jobs` 组件随包文档（定位见[后端说明](../../backend/README.md#leistd-框架-api)）。
 - 周期任务（`IRecurringJob`，`*Job`）放 Application 所属模块的 `BackgroundJobs/`；常驻消费者 `*Worker` 放所属模块的 `Workers/`。不建跨模块的顶层 `Jobs/`。
 
 ## 2. 测试
