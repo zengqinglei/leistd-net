@@ -13,6 +13,7 @@ using System.Security.Claims;
 #if (OpenIddictServer)
 using System.Net.Http.Json;
 using CompanyName.ProjectName.Application.Auth.Options;
+using CompanyName.ProjectName.Application.Initialization;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
@@ -30,6 +31,20 @@ public sealed class AuthenticationModeTests(ProjectWebApplicationFactory factory
             .CurrentValue;
 
         Assert.Equal(TimeSpan.FromMinutes(10), options.AccessTokenLifetime);
+    }
+
+    [Fact]
+    public async Task Initialization_removes_a_stored_scope_outside_the_catalog()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var scopeManager = scope.ServiceProvider.GetRequiredService<IOpenIddictScopeManager>();
+        var staleName = $"retired-{Guid.NewGuid():N}";
+        await scopeManager.CreateAsync(new OpenIddictScopeDescriptor { Name = staleName });
+        Assert.NotNull(await scopeManager.FindByNameAsync(staleName));
+
+        await scope.ServiceProvider.GetRequiredService<ISystemInitializer>().InitializeAsync();
+
+        Assert.Null(await scopeManager.FindByNameAsync(staleName));
     }
 
     [Fact]

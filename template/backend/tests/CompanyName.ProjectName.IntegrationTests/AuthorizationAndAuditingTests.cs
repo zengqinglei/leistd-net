@@ -77,6 +77,26 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
 
 
     [Fact]
+    public async Task A_role_reader_can_list_roles_but_cannot_create_them()
+    {
+        using var admin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var readerRole = await CreateRoleAsync(admin.Client);
+        await GrantAsync(PermissionGrantProviderNames.Role, readerRole.Id, PermissionConstant.Roles.Default);
+        var reader = await CreateUserAsync(admin.Client, [readerRole.Id]);
+        using var session = await Factory.LoginAsync(reader.Username, TestPassword);
+
+        using var list = await session.Client.GetAsync("/api/v1/roles?offset=0&limit=10");
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+
+        var name = $"roles_probe_{Guid.NewGuid():N}"[..24];
+        var input = new CreateRoleInputDto { Name = name, DisplayName = "Role creation probe" };
+        using var rejected = await session.Client.PostAsJsonAsync("/api/v1/roles", input);
+        Assert.Equal(HttpStatusCode.Forbidden, rejected.StatusCode);
+        using var created = await admin.Client.PostAsJsonAsync("/api/v1/roles", input);
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+    }
+
+    [Fact]
     public async Task Update_permission_alone_cannot_change_roles()
     {
         using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
