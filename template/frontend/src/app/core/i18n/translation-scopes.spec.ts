@@ -200,7 +200,7 @@ describe('translation scope routing', () => {
         ...provideTranslocoTesting(['en', 'zh-CN'], loader),
         { provide: ErrorHandler, useValue: errorHandler },
         provideRouter([
-          { path: '', component: HomePage },
+          { path: 'home', component: HomePage },
           {
             path: 'users',
             providers: [provideTranslocoScope('users')],
@@ -212,7 +212,7 @@ describe('translation scope routing', () => {
     });
     const language = TestBed.inject(LanguageService);
     await language.initialized;
-    const home = '/?tab=recent#top';
+    const home = '/home?tab=recent#top';
     const harness = await RouterTestingHarness.create(home);
     const entered = TestBed.inject(Router).navigateByUrl('/users');
     await vi.waitFor(() => expect(loader.requests).toContain('users/en'));
