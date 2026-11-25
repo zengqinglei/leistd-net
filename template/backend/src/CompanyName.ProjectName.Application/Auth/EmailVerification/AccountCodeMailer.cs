@@ -1,9 +1,4 @@
-#if (IncludeLocalization)
-using System.Globalization;
-#endif
-#if (IncludeLocalization)
 using CompanyName.ProjectName.Application.Settings.Preferences;
-#endif
 using Leistd.Email.Abstractions;
 using Leistd.Timing;
 using Microsoft.Extensions.Logging;
@@ -56,8 +51,8 @@ internal sealed record AccountCodeDelivery(
 /// </remarks>
 internal sealed class AccountCodeMailer(
     IEmailSender emailSender,
+    RecipientTextRenderer renderer,
 #if (IncludeLocalization)
-    IAccountPreferenceStore preferenceStore,
     IStringLocalizer localizer,
 #endif
     IClock clock,
@@ -78,7 +73,7 @@ internal sealed class AccountCodeMailer(
 
         try
         {
-            var text = await RenderAsync(delivery, cancellationToken);
+            var text = await renderer.RenderAsync(delivery.UserId, _ => Render(delivery), cancellationToken: cancellationToken);
             await emailSender.SendAsync(
                 new EmailMessage
                 {
@@ -103,38 +98,21 @@ internal sealed class AccountCodeMailer(
     }
 
 #if (IncludeLocalization)
-    private async Task<VerificationCodeMailText> RenderAsync(AccountCodeDelivery delivery, CancellationToken cancellationToken)
-    {
-        var language = (await preferenceStore.GetForUserAsync(delivery.UserId, cancellationToken))?.Preferences.Language;
-
-        var previous = CultureInfo.CurrentUICulture;
-        try
+    private VerificationCodeMailText Render(AccountCodeDelivery delivery)
+        => delivery.Kind switch
         {
-            if (language is not null)
-            {
-                CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(language);
-            }
-
-            return delivery.Kind switch
-            {
-                AccountCodeMail.PasswordReset => new VerificationCodeMailText(
-                    localizer["PasswordReset:Email:Subject"].Value,
-                    localizer["PasswordReset:Email:Intro"].Value,
-                    localizer["PasswordReset:Email:Expiry", delivery.ExpiryMinutes].Value,
-                    localizer["PasswordReset:Email:Ignore"].Value),
-                AccountCodeMail.RecoveryNeedsAdministrator => new VerificationCodeMailText(
-                    localizer["PasswordReset:Email:NeedsAdministratorSubject"].Value,
-                    localizer["PasswordReset:Email:NeedsAdministrator"].Value,
-                    string.Empty,
-                    localizer["PasswordReset:Email:Ignore"].Value),
-                _ => TwoFactorText(delivery.Kind == AccountCodeMail.TwoFactorSignIn ? "SignIn" : "Setup", delivery.ExpiryMinutes)
-            };
-        }
-        finally
-        {
-            CultureInfo.CurrentUICulture = previous;
-        }
-    }
+            AccountCodeMail.PasswordReset => new VerificationCodeMailText(
+                localizer["PasswordReset:Email:Subject"].Value,
+                localizer["PasswordReset:Email:Intro"].Value,
+                localizer["PasswordReset:Email:Expiry", delivery.ExpiryMinutes].Value,
+                localizer["PasswordReset:Email:Ignore"].Value),
+            AccountCodeMail.RecoveryNeedsAdministrator => new VerificationCodeMailText(
+                localizer["PasswordReset:Email:NeedsAdministratorSubject"].Value,
+                localizer["PasswordReset:Email:NeedsAdministrator"].Value,
+                string.Empty,
+                localizer["PasswordReset:Email:Ignore"].Value),
+            _ => TwoFactorText(delivery.Kind == AccountCodeMail.TwoFactorSignIn ? "SignIn" : "Setup", delivery.ExpiryMinutes)
+        };
 
     private VerificationCodeMailText TwoFactorText(string kind, int expiryMinutes) => new(
         localizer[$"TwoFactor:Email:{kind}Subject"].Value,
@@ -142,10 +120,10 @@ internal sealed class AccountCodeMailer(
         localizer["TwoFactor:Email:Expiry", expiryMinutes].Value,
         localizer[$"TwoFactor:Email:{kind}Ignore"].Value);
 #else
-    private static Task<VerificationCodeMailText> RenderAsync(AccountCodeDelivery delivery, CancellationToken cancellationToken)
+    private static VerificationCodeMailText Render(AccountCodeDelivery delivery)
     {
         var expiry = $"This code will expire in {delivery.ExpiryMinutes} minutes. Please do not share it with anyone.";
-        return Task.FromResult(delivery.Kind switch
+        return delivery.Kind switch
         {
             AccountCodeMail.PasswordReset => new VerificationCodeMailText(
                 "Password Reset Verification Code",
@@ -167,7 +145,7 @@ internal sealed class AccountCodeMailer(
                 "You are turning on email verification codes for signing in. Your confirmation code is:",
                 expiry,
                 "If you did not request this, you can ignore this email. Nothing changes.")
-        });
+        };
     }
 #endif
 }

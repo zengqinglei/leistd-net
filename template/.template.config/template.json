@@ -597,6 +597,7 @@
             "frontend/src/app/core/validation/password-rule.ts",
             "frontend/playwright.config.ts",
             "frontend/e2e/**",
+            "frontend/scripts/check-e2e-admission.mjs",
             "frontend/e2e/two-factor-required.e2e.ts",
             "frontend/e2e/support/totp.ts",
             "frontend/e2e/two-factor-login.e2e.ts",

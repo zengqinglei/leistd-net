@@ -1,16 +1,11 @@
 #if (LocalIdentity)
-#if (Email && IncludeLocalization)
-using System.Globalization;
-#endif
 #if (Email)
 using System.Net;
 #endif
 using CompanyName.ProjectName.Application.Auth.Events;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
-#if (Email && IncludeLocalization)
-using CompanyName.ProjectName.Application.Settings.Preferences;
-#endif
 #if (Email)
+using CompanyName.ProjectName.Application.Settings.Preferences;
 using Leistd.Email.Abstractions;
 #endif
 using Leistd.EventBus.EventHandlers;
@@ -35,8 +30,8 @@ namespace CompanyName.ProjectName.Application.Auth.EventHandlers;
 /// </remarks>
 internal sealed class EmailChangedEventHandler(
     IEmailSender emailSender,
+    RecipientTextRenderer renderer,
 #if (IncludeLocalization)
-    IAccountPreferenceStore preferenceStore,
     IStringLocalizer localizer,
 #endif
     ISecurityAlertPublisher securityAlerts,
@@ -65,7 +60,7 @@ internal sealed class EmailChangedEventHandler(ISecurityAlertPublisher securityA
     {
         try
         {
-            var (subject, content) = await RenderAsync(@event.UserId, cancellationToken);
+            var (subject, content) = await renderer.RenderAsync(@event.UserId, _ => Render(), cancellationToken: cancellationToken);
             await emailSender.SendAsync(
                 new EmailMessage
                 {
@@ -88,33 +83,13 @@ internal sealed class EmailChangedEventHandler(ISecurityAlertPublisher securityA
     }
 
 #if (IncludeLocalization)
-    // 文案按收件人的界面语言渲染：本人设过语言就用它，否则用组织默认或部署基线，都没有才用本次请求的语言
-    private async Task<(string Subject, string Content)> RenderAsync(Guid userId, CancellationToken cancellationToken)
-    {
-        var language = (await preferenceStore.GetForUserAsync(userId, cancellationToken))?.Preferences.Language;
-
-        var previous = CultureInfo.CurrentUICulture;
-        try
-        {
-            if (language is not null)
-            {
-                CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(language);
-            }
-
-            return (
-                localizer["SecurityAlert:EmailChanged:OldAddressTitle"].Value,
-                localizer["SecurityAlert:EmailChanged:OldAddressContent"].Value);
-        }
-        finally
-        {
-            CultureInfo.CurrentUICulture = previous;
-        }
-    }
+    private (string Subject, string Content) Render() => (
+        localizer["SecurityAlert:EmailChanged:OldAddressTitle"].Value,
+        localizer["SecurityAlert:EmailChanged:OldAddressContent"].Value);
 #else
-    private static Task<(string Subject, string Content)> RenderAsync(Guid userId, CancellationToken cancellationToken) =>
-        Task.FromResult((
-            "This address is no longer your account's email",
-            "The email address of your account was changed to another address. If you didn't do this, contact your administrator right away."));
+    private static (string Subject, string Content) Render() => (
+        "This address is no longer your account's email",
+        "The email address of your account was changed to another address. If you didn't do this, contact your administrator right away.");
 #endif
 
     private static string BuildBody(string heading, string content) => $@"

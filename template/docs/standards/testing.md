@@ -16,33 +16,32 @@
 
 注释和文档里承诺的行为（如"刷新即重新判定"），尤其是跨导航、刷新或重试才会显现的，要有覆盖它的单测或 E2E；写下承诺时补测试，行为变了一起改。
 
-| 时机 | 目标耗时 | 运行 |
+| 层 | 默认预算 | 何时跑、证明什么 |
 | --- | --- | --- |
-| 编辑中 | ≤ 1 分钟 | 受影响的单个测试（收窄命令见各端小节） |
-| 阶段完成 / 提交前 | 以实际范围计时，通常目标几分钟 | 按 §1.1 选择测试范围；相关静态检查和构建 |
-| 已配置的 CI | 由流水线定 | 当前项目配置的完整测试、静态检查、构建和关键流程 |
+| 编辑中 | ≤ 1 分钟 | 受影响用例证明当前改动 |
+| 推送前 | ≤ 3 分钟 | 相关静态检查、构建和目标回归确认可交付 |
+| 合并关卡 | 墙钟 ≤ 10 分钟 | CI 覆盖本次改动与适用的 E2E，含还原、构建和浏览器安装 |
+
+单元与集成测试只设耗时预算。超预算先收窄范围，避免靠重跑过关。E2E 可先按分组跑，完整档另设必过阶段，其预算写进 `docs/project/testing.md`。分片前确认节点已缓存依赖。
 
 ### 1.1 完整验证由谁承担
 
-完整回归入口 `pwsh scripts/verify.ps1`（需 Docker），本地与 CI 共用；增删步骤只改它。
-`pwsh scripts/verify.ps1 -Fast` 是本地快速检查：只跑随包静态检查、后端还原、构建与风格检查和单元测试，不跑集成测试，不需要 Docker；`-List` 列出两种模式的步骤。
-<!--#if (SpaFrontend)-->
-`-Fast` 的前端只跑 lint，不做依赖安装、单测、构建与端到端，须已安装依赖（缺失时先在 `frontend/` 执行 `npm ci`）。
-CI 在锁文件变化、定时和手动运行时单独审计前端生产依赖。改前端依赖后在 `frontend/` 运行 `node scripts/audit-dependencies.mjs`。有修复版本的 high/critical 公告会阻断，暂无修复版本的公告会输出警告。
-<!--#endif-->
-后端 NuGet 公告在构建里只告警，审计不在 `verify` 内：CI 在包版本或项目文件变化、定时、手动时运行 `pwsh scripts/audit-backend-dependencies.ps1`，门槛是 high/critical 为 0；改后端依赖后本地同样运行它。
+`pwsh scripts/verify.ps1` 默认全量，需 Docker。MR/PR 按改动选步，纯文档只跑静态闸门。`-List` 查看步骤。JUnit 写入 `test-reports/`，各步耗时和慢用例见运行汇总，警告阈值见脚本的 `$slowTestThresholds`。单元测试目标 ≤ 100 ms。
 
-阶段完成时默认运行受影响测试项目全量，**包含集成测试**，并执行相关 lint、构建及关键运行验证；可用已有隔离环境，不能假定 CI 已接替。
+`-Fast` 跑静态检查、后端还原、构建、风格和单元测试，无需 Docker。
+<!--#if (SpaFrontend)-->
+`-Fast` 同时跑前端 lint，依赖缺失时先在 `frontend/` 跑 `npm ci`。
+CI 在锁文件变化、定时和手动运行时审计前端生产依赖。改依赖后在 `frontend/` 跑 `node scripts/audit-dependencies.mjs`。有修复版本的 high/critical 公告阻断，其余告警。
+<!--#endif-->
+后端包版本或项目文件变更、定时和手动时，CI 跑 `pwsh scripts/audit-backend-dependencies.ps1`，high/critical 须为 0；改后端依赖后本地同样运行。
+
+阶段完成默认跑受影响项目的单元与集成测试全集、相关 lint 和构建。数据库、事务、租户、HTTP 授权、协议或网络取消有变更时，尽早验证对应真实路径。项目在 `docs/project/testing.md` 登记必过 CI 的入口、范围和保护设置后，本地可用 `-Fast` 加目标集成测试。
 
 <!--#if (Ci == "github")-->
-`.github/workflows/ci.yml` 调用 `verify`；分支保护或规则集把 `verify` 设为必需检查后才算必过。推荐同时要求分支保持最新或用 merge queue（工作流已含 `merge_group` 触发器）：待合并的结果已验证。默认分支推送仍完整验证，通过后才发布镜像。
+`.github/workflows/ci.yml` 推荐要求分支保持最新或用 merge queue。默认分支完整验证通过后发布镜像。若所有变更经 merge queue，且 `merge_group` 的完整 `verify` 必过并验证发布树，默认分支可只构建和发布镜像。
 <!--#elseif (Ci == "gitlab")-->
-`.gitlab-ci.yml` 调用 `verify`（Runner 前提见文件头）；开启 Pipelines must succeed 后才算必过。推荐快进合并：被测提交即合入提交。默认分支流水线仍完整验证，通过后才发布镜像；缓存默认不在受保护与非受保护分支间共享，命中取决于项目缓存设置。
+`.gitlab-ci.yml` 默认分支完整验证通过后发布镜像。所有变更均须快进合并、关闭服务端自动 rebase、启用 Pipelines must succeed，且发布树通过关卡（适用时含完整 E2E），才可省略合入后验证。缓存默认不在受保护与非受保护分支间共享。
 <!--#endif-->
-
-项目把 CI 设为**必过检查**后（流水线文件存在不算；在本规范记录入口、范围与阻止合并的设置），本地以 `pwsh scripts/verify.ps1 -Fast` 加目标集成测试为准，完整回归由 CI 承担。
-
-数据库、事务、租户、HTTP 授权、协议或网络取消变化尽早验证对应真实路径。
 
 ### 1.2 按开发场景选择范围
 
@@ -106,7 +105,7 @@ backend/tests/
 - 实体配置、唯一索引与全局查询过滤器在集成测试里验证，不用 EF InMemory 或 SQLite 代替（前者放过违反的约束与不可翻译的查询，后者锁死独立事务）。
 - 批量 `ExecuteUpdate` / `ExecuteDelete` 不经过变更跟踪器：断言结果时换一个作用域读，否则读到仍被跟踪的旧实体。
 - 外部服务用 fake、mock 或明确的测试环境；日志用 `FakeLogger`，不手写替身。
-- 时间边界（锁定、验证码与令牌有效期、限频窗口）用 `FakeTimeProvider` 或显式时刻验证，不靠真实时间流逝。集成测试在 `ConfigureTestServices` 里 `RemoveAll<TimeProvider>()` 后登记假时钟（起点取当前时刻），`IClock`、Cookie 认证与 OpenIddict 随之跟随。缓存过期不跟随该时钟：测 TTL 保留真实 MemoryCache/HybridCache，经 `MemoryCacheOptions.Clock` 接入同一假时钟，不用主动删除冒充到期；Redis、Data Protection 限时保护器与 OIDC 处理器的寿命校验用各自机制，不手写判定快进。PostgreSQL 时间只存到微秒：固定时钟起点按微秒对齐，持久化时刻换新作用域读回再比较，不放大容差。
+- 集成测试在 `ConfigureTestServices` 中 `RemoveAll<TimeProvider>()` 后登记假时钟，起点取当前时刻。`IClock`、Cookie 认证、OpenIddict 及三类进程内缓存跟随宿主时钟。单测直接构造真实缓存时显式接入假时钟。Redis、Data Protection 与 OIDC 处理器各用自身的寿命校验机制。PostgreSQL 时间精确到微秒，固定时钟起点按微秒对齐，换新作用域读回后比较，不放大容差。
 - 端到端只验接线与生效值，不等安全窗口过期；确需观察到期时用配置缩短窗口（如 `OAuth:AccessTokenLifetime`，见[配置参考](../deploy/configuration.md#生产边界)）并断言已生效；有上限的等待（网络、取消、超时）不在此列。
 - 领域规则、状态变化、权限和错误语义应通过可观察行为断言。
 - 各层注册入口覆盖注册结果、生命周期与相同登记重复调用不重复生效，有意覆盖组件默认实现的登记验证两种调用顺序；有注册或配置决策（选择实现、派生 Options）的宿主扩展测行为，单纯转调由启动集成测试覆盖（见[后端开发规范 §4](./coding-backend.md#4-依赖注入)）；注册面是契约，编译期看不出错。
@@ -150,20 +149,21 @@ Linux 关闭触屏仿真不恢复 fine/hover，须分实例；见 `frontend/src/
 
 <!--#endif-->
 
-## 4. E2E 的范围
+## 4. 测试范围与精简
 
 E2E 只放真实部署才能证明的东西：真实界面的登录与会话、跨进程或跨服务的接线（含启用时的实时推送）和一条主流程冒烟。
 权限矩阵、越权、审计字段与软删除由集成测试负责（真实 PostgreSQL + `WebApplicationFactory`）。
 
-判定原则：
+用例按行为命名，避免用轮次命名。各层只精简五类用例：重复覆盖（共享实现验一次，同主题变体保留主路径）、已由下层覆盖、实现细节、已删功能遗留、仅验证框架或第三方。PR/MR 前三类写替代覆盖，后两类写删除理由。认证授权、租户隔离和合规判定等关键路径只下沉，先补下层。
 
-- 共享实现只验一次。
-- 同一主题的变体只留主路径。
+各层的时间规则：
+
+- 同一实体的多个时间字段取同一次时钟读数。推进类测试按条数或可控时钟断言，避免按墙钟期限内的完成量断言。
 - 时间边界交给假时钟或假计时器，截止前、恰好截止、截止后三点各验一次，不等真实时间。
 - 等待有上限并观察目标完成，不用固定睡眠；断言"没发生"前先建立因果屏障（同链路回执、目标初始化完成），建不了的下沉到组件或单元测试。
-- 用例按行为命名，不按轮次命名。
-
-下沉或删除测试时，指出已覆盖同一行为的测试。
+<!--#if (LocalIdentity)-->
+E2E 默认按文件并发。串行或独占 worker 旁写明改动的全局状态，以及为何无法用自建租户隔离。
+<!--#endif-->
 
 ## 5. 静态闸门
 
@@ -182,6 +182,9 @@ python3 scripts/check-operation-action-i18n.py            # 每个动作码都�
 python3 scripts/check-setting-group-icons.py              # 每个系统设置分组都有能画出来的导航图标
 <!--#endif-->
 ```
+<!--#if (LocalIdentity)-->
+选中 E2E 时用 `node frontend/scripts/check-e2e-admission.mjs` 核对每例唯一的合法 `@proves:` 标签及总数上限。`-Fast` 用已有依赖检查，纯文档跳过。PR/MR 审查标签是否符合实际接线。
+<!--#endif-->
 <!--#if (SpaFrontend && IncludeOperationRecords)-->
 每个动作码都须有 `operationRecords.actions.<码>` 词条（单向，多余词条不报）；漏配时界面只把那一行显示成裸码（`role.deleted`）。新增动作码时同一提交补中英句子。
 <!--#endif-->

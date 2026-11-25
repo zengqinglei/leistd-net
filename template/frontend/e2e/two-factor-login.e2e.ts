@@ -10,7 +10,7 @@ import { freshTotp } from './support/totp';
 // 刷新页面照样接着做，完成后回到原目标。设置时刚用过的验证码同一步内不能再用，这里用恢复码完成
 test(
   'resumes the second step after a page reload and returns to the original target',
-  { tag: '@auth' },
+  { tag: ['@auth', '@proves:auth-session'] },
   async ({ page, baseURL }) => {
     const username = `tfa_${randomBytes(4).toString('hex')}`;
     const password = `Tfa!${randomBytes(12).toString('hex')}Aa1`;

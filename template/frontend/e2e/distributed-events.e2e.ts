@@ -7,7 +7,7 @@ test.use({ storageState: authStatePath(admin()) });
 /** 真实传输的最小回环：原始事件 ID 从 Sent 发件箱走到 Processed 收件箱。 */
 test(
   'sends a distributed test event and processes it with the same event ID',
-  { tag: '@crud' },
+  { tag: ['@crud', '@proves:service-call'] },
   async ({ page }) => {
     await page.goto('/platform/distributed-events');
     const response = page.waitForResponse(

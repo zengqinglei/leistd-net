@@ -143,6 +143,7 @@
     <PackageVersion Include="System.Formats.Cbor" Version="10.0.15" />
     <!--#endif-->
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.4" />
+    <PackageVersion Include="JunitXml.TestLogger" Version="8.1.0" />
     <PackageVersion Include="Refit" Version="17.0.0" />
     <PackageVersion Include="OpenIddict.Abstractions" Version="7.9.0" />
     <PackageVersion Include="OpenIddict.AspNetCore" Version="7.9.0" />

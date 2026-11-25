@@ -1,11 +1,11 @@
 # 前端列表、表格与详情规范
 
-列表页、数据表格与详情页的规范，同时遵循 [前端界面规范](./frontend-ui.md)。
+列表、表格和详情亦遵循[前端界面规范](./frontend-ui.md)。
 
 ## 1. 状态与数据
 
 - 列表的分页、排序、筛选以 URL query params 为唯一来源（`queryParamMap` 派生 + `router.navigate({ queryParams })` 回写），非法参数回退默认，不存 localStorage。
-- 详情页：实体 id 以路由参数为唯一来源，分段或标签页的选中项放 query params（可分享、可回退）；切换 id 时重新加载并丢弃迟到响应；页面状态放组件。
+- 详情页的实体 id 只取路由参数，分段或标签选中项放 query params（可分享、可回退）。切换 id 重载并丢弃迟到响应，页面状态放组件。
 - 加载、失败与空状态按[设计原则](./frontend-ui.md#1-设计原则)区分；服务端分页参数与排序表达式见 [API 规范 §5](./api.md#5-分页规范)。
 
 ## 2. 数据表格
@@ -13,9 +13,9 @@
 - 页面滚动列（`flex-1 overflow-y-auto`）加 `*:shrink-0`，免得 `overflow-hidden` 子项被压扁。
 - 表格用 TanStack Table（`@tanstack/angular-table`，服务端 `manualPagination`/`manualSorting`/`rowCount`）；分页与筛选复用 `frontend/src/app/shared/components/table-paginator`、`faceted-filter`。
 - 列按优先级（`primary`/`secondary`/`tertiary`）裁剪：视口档位（`tableViewportSignal()`）给上限，带吸附操作列的表格外框挂 `[appTableFit]="tableViewport()" [appTableFitContent]="rows()"`，放不下再降一档（更新数据须换新数组）。被裁的列由 TanStack 行展开补偿（按 `getRowId` 的实体 id 记），不另建展开状态。主列用 `TITLE_COLUMN_META` 与 `TITLE_CONTENT_CLASS`：最窄档截断长名称。
-- 展开详情按列定义生成：数据列登记 `detail: true`，被折叠的列按定义顺序、用表头同一份标签列出（标签键集中在 `columnLabelKeys`，列值只写一个 `ng-template[appColumnValue]`、按 `mode` 区分 `cell`/`detail`，详情列取 `hiddenDetailColumns(table)`），值给全文与完整时刻；不对应列的补偿接在后面，不重复主行。
-- 详情取自行数据，展开即渲染，不设详情接口；一对多、要分页的子数据才按需请求，按行记状态、丢弃迟到响应。值带按钮时 `dl` 用 `items-baseline`，`dd` 为不折行的 `flex items-center gap-1`，值（`min-w-0 break-all`）在前、按钮（`shrink-0`）在后，空值写「-」。
-- 详情内容长、需要纵向铺排时改用右侧抽屉（Spartan Sheet，打开的 id 写进 query）：抽屉顶部列全表格各列，代替行展开补偿被裁列。
+- 数据列登记 `detail: true`。展开按定义顺序列出 `hiddenDetailColumns(table)`，复用表头的 `columnLabelKeys` 和同一份 `ng-template[appColumnValue]`（`mode` 为 `cell`/`detail`），展示全文与完整时刻。非列补偿放末尾，避免重复主行。
+- 有上界的标量、枚举、短文本随行返回，展开即渲染。无上界的快照、正文、JSON、日志或嵌套集合，列表仅返摘要，展开或开抽屉时按 id 读取单资源。分页子数据按需取，按行记状态并丢弃迟到响应。值带按钮时 `dl` 用 `items-baseline`，`dd` 用不折行的 `flex items-center gap-1`，值（`min-w-0 break-all`）在前、按钮（`shrink-0`）在后，空值写「-」。
+- 长详情用右侧 Spartan Sheet，打开的 id 写入 query。顶部列全表格各列，补偿被裁列。
 <!--#if (IncludeWebhooks)-->
 - 抽屉示例：Webhook 投递日志的投递详情。
 <!--#endif-->

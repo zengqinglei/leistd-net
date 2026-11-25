@@ -7,10 +7,8 @@ using Leistd.Email.Abstractions;
 using Leistd.Security.OneTimeCodes;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Time.Testing;
 
 namespace CompanyName.ProjectName.IntegrationTests;
@@ -483,7 +481,6 @@ public sealed class TwoFactorMethodsTests(ProjectWebApplicationFactory factory)
         {
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(clock);
-            services.Configure<MemoryDistributedCacheOptions>(options => options.Clock = new CacheClock(clock));
             services.RemoveAll<IEmailSender>();
             services.AddSingleton<CodeMailbox>();
             services.AddSingleton<IEmailSender>(provider => provider.GetRequiredService<CodeMailbox>());
@@ -648,10 +645,5 @@ public sealed class TwoFactorMethodsTests(ProjectWebApplicationFactory factory)
     }
 
     private sealed record Prompt(string Token, string[] Methods, string DefaultMethod, string? MaskedEmail);
-
-    private sealed class CacheClock(TimeProvider time) : ISystemClock
-    {
-        public DateTimeOffset UtcNow => time.GetUtcNow();
-    }
 }
 #endif

@@ -1,6 +1,6 @@
 using Leistd.ServiceClient.OAuth.Handlers;
 using Leistd.ServiceClient.Exceptions;
-using Microsoft.Extensions.Internal;
+using Leistd.TestBase.Doubles;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -231,11 +231,6 @@ public sealed class TokenCacheTests
             BudgetStarted.TrySetResult();
             return timer;
         }
-    }
-
-    private sealed class CacheClock(TimeProvider clock) : ISystemClock
-    {
-        public DateTimeOffset UtcNow => clock.GetUtcNow();
     }
 
     private sealed class PausingMemory(IMemoryCache inner) : IMemoryCache

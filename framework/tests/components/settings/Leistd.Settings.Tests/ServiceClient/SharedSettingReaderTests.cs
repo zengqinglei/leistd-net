@@ -9,8 +9,9 @@ using Leistd.Settings.ServiceClient.Reading;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Internal;
+using Leistd.TestBase.Doubles;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -160,7 +161,7 @@ public sealed class SharedSettingReaderTests : IAsyncDisposable
         _remote.Fail(() => new HttpRequestException(HttpRequestError.ConnectionError, "connection refused"));
         _remote.Respond(Status(HttpStatusCode.ServiceUnavailable));
         _remote.Respond(Status(HttpStatusCode.TooManyRequests));
-        var reader = Reader(options => options.MaxStaleness = TimeSpan.FromMinutes(2));
+        var reader = Reader(options => options.MaxStaleness = TimeSpan.FromMinutes(2), captureLogs: true);
         await reader.GetAsync(Provider, "Security.StepUp.WindowMinutes");
 
         _clock.Advance(TimeSpan.FromMinutes(1));
@@ -186,7 +187,7 @@ public sealed class SharedSettingReaderTests : IAsyncDisposable
     {
         _remote.Respond(Status(HttpStatusCode.BadGateway));
         _remote.Respond(Ok(new() { ["Security.StepUp.Enabled"] = "false", ["Security.StepUp.WindowMinutes"] = "15" }));
-        var reader = Reader();
+        var reader = Reader(captureLogs: true);
 
         Assert.Equal(new SharedSettingValue("true", SharedSettingSource.Fallback), await reader.GetAsync(Provider, "Security.StepUp.Enabled"));
         Assert.Equal(new SharedSettingValue("false", SharedSettingSource.Current), await reader.GetAsync(Provider, "Security.StepUp.Enabled"));
@@ -219,7 +220,7 @@ public sealed class SharedSettingReaderTests : IAsyncDisposable
         }
 
         _remote.Respond(Status(HttpStatusCode.ServiceUnavailable));
-        var reader = Reader();
+        var reader = Reader(captureLogs: true);
         await reader.GetAsync(Provider, "Security.StepUp.Enabled");
 
         _clock.Advance(TimeSpan.FromMinutes(1));
@@ -233,7 +234,7 @@ public sealed class SharedSettingReaderTests : IAsyncDisposable
     public async Task An_unknown_tenant_yields_the_fallbacks()
     {
         _remote.Respond(Status(HttpStatusCode.NotFound));
-        var reader = Reader();
+        var reader = Reader(captureLogs: true);
 
         Assert.Equal(new SharedSettingValue("true", SharedSettingSource.Fallback), await reader.GetAsync(Provider, "Security.StepUp.Enabled"));
         Assert.Empty(Logs(LogLevel.Error));
@@ -245,7 +246,7 @@ public sealed class SharedSettingReaderTests : IAsyncDisposable
     public async Task A_declared_setting_the_provider_does_not_share_yields_its_fallback()
     {
         _remote.Respond(Ok(new() { ["Security.StepUp.Enabled"] = null }));
-        var reader = Reader();
+        var reader = Reader(captureLogs: true);
 
         Assert.Equal(new SharedSettingValue(null, SharedSettingSource.Current), await reader.GetAsync(Provider, "Security.StepUp.Enabled"));
         Assert.Equal(new SharedSettingValue("15", SharedSettingSource.Fallback), await reader.GetAsync(Provider, "Security.StepUp.WindowMinutes"));
@@ -328,9 +329,9 @@ public sealed class SharedSettingReaderTests : IAsyncDisposable
     }
 
     // 开启作用域验证，读取器从作用域里取，与请求里的用法一致
-    private ISharedSettingReader Reader(Action<IdentityOptions>? configure = null)
+    private ISharedSettingReader Reader(Action<IdentityOptions>? configure = null, bool captureLogs = false)
     {
-        var services = Services(new Dictionary<string, string?>(), configure);
+        var services = Services(new Dictionary<string, string?>(), configure, captureLogs);
         services.AddSingleton<ICurrentTenant>(Tenant);
         _services = Build(services);
         return _services.CreateScope().ServiceProvider.GetRequiredService<ISharedSettingReader>();
@@ -339,12 +340,18 @@ public sealed class SharedSettingReaderTests : IAsyncDisposable
     private static ServiceProvider Build(IServiceCollection services)
         => services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
 
-    private IServiceCollection Services(Dictionary<string, string?> configuration, Action<IdentityOptions>? configure = null)
+    private IServiceCollection Services(
+        Dictionary<string, string?> configuration,
+        Action<IdentityOptions>? configure = null,
+        bool captureLogs = false)
     {
         configuration["Leistd:ServiceClients:Identity:BaseAddress"] = "https://identity.test/";
         var services = new ServiceCollection();
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(configuration).Build());
-        services.AddFakeLogging();
+        if (captureLogs)
+            services.AddFakeLogging();
+        else
+            services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
         services.AddSingleton<TimeProvider>(_clock);
         services.Configure<MemoryCacheOptions>(options => options.Clock = new CacheClock(_clock));
         services.AddSharedSettingsClient(
@@ -420,11 +427,6 @@ public sealed class SharedSettingReaderTests : IAsyncDisposable
             BudgetStarted.TrySetResult();
             return timer;
         }
-    }
-
-    private sealed class CacheClock(TimeProvider clock) : ISystemClock
-    {
-        public DateTimeOffset UtcNow => clock.GetUtcNow();
     }
 
     private sealed class ScopedTenantAccessor : ICurrentTenantAccessor

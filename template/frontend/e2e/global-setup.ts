@@ -75,7 +75,8 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     // Testcontainers 只认 DOCKER_HOST 与默认套接字；未设置时沿用 docker CLI 当前上下文的端点（与后端集成测试一致）
     process.env['DOCKER_HOST'] ??= dockerContextHost();
     database = await applyRunnerContainerOwnership(
-      new PostgreSqlContainer('postgres:18-alpine'),
+      // PostgreSQL 18 的 PGDATA 位于镜像声明的卷目录下。
+      new PostgreSqlContainer('postgres:18-alpine').withTmpFs({ '/var/lib/postgresql': 'rw' }),
     ).start();
     //#if (IncludeDistributedEvents)
     const brokerPassword = randomBytes(32).toString('hex');

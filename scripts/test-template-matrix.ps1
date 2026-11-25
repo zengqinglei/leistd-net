@@ -381,7 +381,9 @@ function Assert-VerifySteps([string]$ProjectRoot) {
         Sort-Object @{ Expression = { $_.BaseName -notlike '*.UnitTests' } }, BaseName |
         ForEach-Object { $expected.Add("backend-test:$($_.BaseName)") }
     if (Test-Path -LiteralPath (Join-Path $ProjectRoot 'frontend')) {
-        foreach ($stage in @('frontend-install', 'frontend-lint', 'frontend-test', 'frontend-build')) { $expected.Add($stage) }
+        $expected.Add('frontend-install')
+        if (Test-Path -LiteralPath (Join-Path $ProjectRoot 'frontend/playwright.config.ts')) { $expected.Add('check-e2e-admission') }
+        foreach ($stage in @('frontend-browser-install', 'frontend-lint', 'frontend-test', 'frontend-build')) { $expected.Add($stage) }
     }
     # 浏览器端到端只随本地身份形态（有登录界面与可预置的账号）下发；纯 API 与 Resource 前端都没有
     $hasE2e = Test-Path -LiteralPath (Join-Path $ProjectRoot 'frontend/playwright.config.ts')
@@ -389,14 +391,23 @@ function Assert-VerifySteps([string]$ProjectRoot) {
     if ($hasE2e -ne $localIdentity) {
         throw "frontend/playwright.config.ts must ship exactly with local identity (local identity: $localIdentity)."
     }
+    if ((Test-Path -LiteralPath (Join-Path $ProjectRoot 'frontend/scripts/check-e2e-admission.mjs')) -ne $hasE2e) {
+        throw 'The E2E admission check must ship exactly with the Playwright project.'
+    }
     if ($hasE2e) { $expected.Add('frontend-e2e') }
     if (($actual -join '|') -cne ($expected -join '|')) {
         throw "scripts/verify.ps1 steps differ from the matrix stages.`n  verify: $($actual -join ', ')`n  matrix: $($expected -join ', ')"
     }
-    $fullOnly = @('frontend-install', 'frontend-test', 'frontend-build', 'frontend-e2e')
+    $fullOnly = @('frontend-install', 'frontend-browser-install', 'frontend-test', 'frontend-build', 'frontend-e2e')
     $expectedFast = @($expected | Where-Object { $_ -notin $fullOnly -and ($_ -notlike 'backend-test:*' -or $_ -like 'backend-test:*.UnitTests') })
     if (($actualFast -join '|') -cne ($expectedFast -join '|')) {
         throw "scripts/verify.ps1 -Fast steps differ from the expected subset.`n  verify: $($actualFast -join ', ')`n  expected: $($expectedFast -join ', ')"
+    }
+    $docsOnly = @(& (Join-Path $ProjectRoot 'scripts/verify.ps1') -List -ChangedPaths 'docs/README.md' |
+        Where-Object { $_ -clike "full`t*" } | ForEach-Object { ($_ -split "`t")[1] })
+    $expectedDocsOnly = @($expected | Where-Object { $_ -clike 'check-*' -and $_ -cne 'check-e2e-admission' })
+    if (($docsOnly -join '|') -cne ($expectedDocsOnly -join '|')) {
+        throw "A documentation-only change must select only static checks: $($docsOnly -join ', ')"
     }
 }
 

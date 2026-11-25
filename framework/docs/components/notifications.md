@@ -114,6 +114,8 @@ builder.Services.TryAddTransient<INotificationRecipientResolver, UserEmailRecipi
 
 **发布通知**——注入 `INotificationPublisher`，发布给指定用户：
 
+`Title` 和 `Content` 保存为发布时的文本快照，由调用方按收件人语言渲染后传入。
+
 ```csharp
 public class OrderNotifier(INotificationPublisher notificationPublisher)
 {

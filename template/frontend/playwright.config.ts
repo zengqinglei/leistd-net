@@ -15,7 +15,11 @@ export default defineConfig({
   timeout: 30_000,
   // 整轮上限，早于 CI 作业超时结束，报告仍能上传
   globalTimeout: ci ? 10 * 60_000 : 0,
-  reporter: [['list'], ['html', { open: 'never' }]],
+  reporter: [
+    ['list'],
+    ['html', { open: 'never' }],
+    ['junit', { outputFile: '../test-reports/e2e.xml' }],
+  ],
   use: {
     baseURL: process.env['E2E_BASE_URL'],
     // 文案按英文断言；本地化项目也按浏览器语言选英文

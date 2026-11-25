@@ -3,7 +3,7 @@ using Leistd.MultiTenancy.Exceptions;
 using Leistd.ServiceClient.Exceptions;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Internal;
+using Leistd.TestBase.Doubles;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
@@ -359,11 +359,6 @@ public sealed class RemoteCachingAndSingleFlightTests : IDisposable
             BudgetStarted.TrySetResult();
             return timer;
         }
-    }
-
-    private sealed class CacheClock(TimeProvider clock) : ISystemClock
-    {
-        public DateTimeOffset UtcNow => clock.GetUtcNow();
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition)

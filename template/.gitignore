@@ -29,6 +29,7 @@ desktop.ini
 **/bin/
 **/obj/
 TestResults/
+/test-reports/
 *.trx
 *.coverage
 *.coveragexml

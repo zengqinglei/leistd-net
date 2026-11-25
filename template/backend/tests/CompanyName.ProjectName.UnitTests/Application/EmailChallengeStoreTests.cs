@@ -10,16 +10,15 @@ using Leistd.Email.Abstractions;
 using Leistd.ExceptionHandling;
 using Leistd.Lock.Abstractions;
 using Leistd.MultiTenancy.Context;
-#if (IncludeLocalization)
 using CompanyName.ProjectName.Application.Settings.Dtos;
 using CompanyName.ProjectName.Application.Settings.Preferences;
-#endif
 using Leistd.Timing;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Internal;
 #if (IncludeLocalization)
+using Leistd.Security;
 using Microsoft.Extensions.Localization;
 #endif
 using Microsoft.Extensions.Logging.Abstractions;
@@ -660,8 +659,7 @@ public sealed partial class EmailChallengeStoreTests
 
     private sealed record SentCode(string Code);
 
-#if (IncludeLocalization)
-    /// <summary>收件人没设过语言：按当前文化渲染。</summary>
+    /// <summary>收件人没有可用的账户偏好。</summary>
     private sealed class NoPreferences : IAccountPreferenceStore
     {
         public Task<AccountPreferencesOutputDto?> GetForCurrentUserAsync(CancellationToken cancellationToken = default)
@@ -678,6 +676,7 @@ public sealed partial class EmailChallengeStoreTests
             => throw new NotSupportedException();
     }
 
+#if (IncludeLocalization)
     /// <summary>文案回落成键名：测试只关心信里的验证码。</summary>
     private sealed class KeyLocalizer : IStringLocalizer
     {
@@ -714,8 +713,10 @@ public sealed partial class EmailChallengeStoreTests
                 .AddLogging()
                 .AddSingleton(sender)
                 .AddSingleton<IClock>(new UtcClockProvider(time))
-#if (IncludeLocalization)
                 .AddSingleton<IAccountPreferenceStore, NoPreferences>()
+                .AddTransient<RecipientTextRenderer>()
+#if (IncludeLocalization)
+                .AddAmbientContext()
                 .AddSingleton<IStringLocalizer, KeyLocalizer>()
 #endif
                 .AddTransient<AccountCodeMailer>()

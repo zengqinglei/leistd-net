@@ -12,11 +12,9 @@ using Leistd.Security.OneTimeCodes;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Time.Testing;
 #if (ExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
@@ -424,7 +422,6 @@ public sealed class TwoFactorEmailFactorTests(ProjectWebApplicationFactory facto
         {
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(clock);
-            services.Configure<MemoryDistributedCacheOptions>(options => options.Clock = new CacheClock(clock));
             services.RemoveAll<ICaptchaVerifier>();
             services.AddSingleton<ICaptchaVerifier, AcceptingCaptcha>();
             services.RemoveAll<IEmailSender>();
@@ -606,11 +603,6 @@ public sealed class TwoFactorEmailFactorTests(ProjectWebApplicationFactory facto
     }
 
     private sealed record Prompt(string Token, string[] Methods, string DefaultMethod);
-
-    private sealed class CacheClock(TimeProvider time) : ISystemClock
-    {
-        public DateTimeOffset UtcNow => time.GetUtcNow();
-    }
 
     private sealed class AcceptingCaptcha : ICaptchaVerifier
     {

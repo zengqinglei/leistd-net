@@ -386,6 +386,9 @@ verify:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       variables:
         CACHE_POLICY: pull
+    - if: $CI_PIPELINE_SOURCE == "web"
+      variables:
+        CACHE_POLICY: pull
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       variables:
         CACHE_POLICY: pull-push
@@ -393,7 +396,16 @@ verify:
     - sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources
     - apt-get update
   script:
-    - pwsh -NoProfile -File scripts/verify.ps1
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ] && [ "$CI_MERGE_REQUEST_EVENT_TYPE" = "detached" ] && [ -n "$CI_MERGE_REQUEST_DIFF_BASE_SHA" ]; then
+        pwsh -NoProfile -File scripts/verify.ps1 -ChangedBase "$CI_MERGE_REQUEST_DIFF_BASE_SHA"
+      else
+        pwsh -NoProfile -File scripts/verify.ps1
+      fi
+  artifacts:
+    when: always
+    reports:
+      junit: test-reports/*.xml
 backend-audit:
   stage: verify
   image: mcr.microsoft.com/dotnet/sdk:10.0
@@ -559,7 +571,7 @@ public sealed class EndpointOptions { public string? Path { get; init; } }
 VERIFY_CHECKED = {}
 SHAPE_SHARDS = model.SHAPE_SHARDS
 VERIFY_LOCK = threading.Lock()
-SHIM_COMMANDS = ('dotnet', 'npm', 'python3', 'py')
+SHIM_COMMANDS = ('dotnet', 'npm', 'node', 'python3', 'py')
 
 
 def expected_verify_steps(values):
@@ -569,14 +581,19 @@ def expected_verify_steps(values):
     steps += ['check-test-diagnostics']
     steps += ['check-setting-group-icons'] if values['SpaFrontend'] else []
     steps += ['backend-restore', 'backend-build', 'backend-format', 'backend-test:Generation.Probe.UnitTests', 'backend-test:Generation.Probe.IntegrationTests']
-    steps += ['frontend-install', 'frontend-lint', 'frontend-test', 'frontend-build'] if values['SpaFrontend'] else []
+    if values['SpaFrontend']:
+        steps.append('frontend-install')
+        if values['LocalIdentity']:
+            steps.append('check-e2e-admission')
+        steps += ['frontend-browser-install', 'frontend-lint', 'frontend-test', 'frontend-build']
     steps += ['frontend-e2e'] if values['LocalIdentity'] else []
     return steps
 
 
 def expected_fast_steps(values):
     """-Fast：静态检查、还原与构建、单元测试、前端 lint；不含集成测试、安装、前端单测、构建与端到端。"""
-    excluded = {'backend-test:Generation.Probe.IntegrationTests', 'frontend-install', 'frontend-test', 'frontend-build', 'frontend-e2e'}
+    excluded = {'backend-test:Generation.Probe.IntegrationTests', 'frontend-install', 'frontend-browser-install',
+                'frontend-test', 'frontend-build', 'frontend-e2e'}
     return [step for step in expected_verify_steps(values) if step not in excluded]
 
 
@@ -609,7 +626,12 @@ def check_gitlab_ci(text, spa_frontend):
     # apt 源先切到 HTTPS 再更新索引：部分 Runner 的 IPv6 出口到 Ubuntu 源的 80 端口不通
     assert job['before_script'][:2] == ["sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources", 'apt-get update'], \
         f'GitLab CI apt sources must switch to HTTPS before apt-get update: {job["before_script"][:2]}'
-    assert job['script'] == ['pwsh -NoProfile -File scripts/verify.ps1'], f'GitLab CI script: {job["script"]}'
+    script = '\n'.join(job['script'])
+    assert 'CI_MERGE_REQUEST_EVENT_TYPE" = "detached"' in script, 'GitLab only selects steps in detached MR pipelines'
+    assert 'verify.ps1 -ChangedBase "$CI_MERGE_REQUEST_DIFF_BASE_SHA"' in script, 'GitLab detached MR must supply its diff base'
+    assert 'else\n  pwsh -NoProfile -File scripts/verify.ps1\nfi' in script, 'GitLab other events run the default scope'
+    assert 'playwright' not in '\n'.join(job['before_script']).lower(), 'GitLab leaves browser installation to verify'
+    assert job['artifacts']['when'] == 'always' and job['artifacts']['reports']['junit'] == 'test-reports/*.xml', 'GitLab JUnit artifacts'
     # 缓存：NuGet 必有，npm 随前端；key 取依赖文件，只缓存下载内容；合并请求只读、默认分支读写
     caches = {entry['key']['prefix']: entry for entry in job['cache']}
     assert list(caches) == (['nuget', 'npm'] if spa_frontend else ['nuget']), f'GitLab CI caches: {list(caches)}'
@@ -621,7 +643,7 @@ def check_gitlab_ci(text, spa_frontend):
     assert all(entry['policy'] == '$CACHE_POLICY' for entry in caches.values()), 'GitLab CI cache policy'
     policies = {rule['if']: rule.get('variables', {}).get('CACHE_POLICY') for rule in job['rules']}
     assert policies == {'$CI_PIPELINE_SOURCE == "schedule"': None, '$CI_PIPELINE_SOURCE == "merge_request_event"': 'pull',
-                        '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH': 'pull-push'}, f'GitLab CI cache policy by pipeline: {policies}'
+                        '$CI_PIPELINE_SOURCE == "web"': 'pull', '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH': 'pull-push'}, f'GitLab CI cache policy by pipeline: {policies}'
     if spa_frontend:
         audit = document['frontend-audit']
         assert audit['stage'] == 'verify' and audit['script'] == ['cd frontend', 'node scripts/audit-dependencies.mjs'], 'GitLab CI audit job'
@@ -656,6 +678,68 @@ def verify_key(output, values):
     return {'Script': hashlib.sha256(script.read_bytes()).hexdigest(), 'Steps': expected_verify_steps(values)}
 
 
+def check_verify_scopes(output, pwsh, expected, expected_fast, local_identity):
+    """验证路径选择与 Git 删除、跨目录改名都保留对应的验证责任。"""
+    script = output / 'scripts/verify.ps1'
+    static = [step for step in expected if step.startswith('check-') and step != 'check-e2e-admission']
+    backend = [step for step in expected if step.startswith('backend-')]
+    frontend = [step for step in expected if step.startswith('frontend-') and step != 'frontend-e2e']
+    e2e = {'check-e2e-admission', 'frontend-e2e'}
+    backend_prerequisites = {'backend-restore', 'backend-build'}
+    frontend_prerequisites = {'frontend-install', 'frontend-browser-install', 'frontend-build'}
+    backend_full = set(static + backend)
+    frontend_full = set(static + frontend)
+    if local_identity:
+        backend_full |= e2e | frontend_prerequisites
+        frontend_full |= e2e | backend_prerequisites
+
+    def assert_listing(args, full, fast, env=None):
+        run = subprocess.run([pwsh, '-NoProfile', *args], cwd=output, env=env, capture_output=True, text=True, encoding='utf-8')
+        assert run.returncode == 0, f'verify listing for {args}: {run.stdout}{run.stderr}'
+        rows = [line.split('\t')[:2] for line in run.stdout.splitlines() if '\t' in line]
+        assert rows == [['full', step] for step in expected if step in full] + [
+            ['fast', step] for step in expected_fast if step in fast], f'verify scope for {args}: {rows}'
+
+    def with_paths(path):
+        return ['-File', str(script), '-List', '-ChangedPaths', path]
+
+    gate = {'check-e2e-admission'} if local_identity else set()
+    backend_fast = set(static + backend) | gate
+    frontend_fast = set(static + frontend) | gate
+    assert_listing(with_paths('backend/src/Feature.cs'), backend_full, backend_fast)
+    assert_listing(with_paths('frontend/src/feature.ts'), frontend_full, frontend_fast)
+    assert_listing(with_paths('docs/project/testing.md'), static, static)
+    assert_listing(with_paths('scripts/verify.ps1'), expected, expected_fast)
+
+    if local_identity:
+        with tempfile.TemporaryDirectory(dir=output.parent) as directory:
+            repo = Path(directory)
+
+            def git(*args):
+                return subprocess.check_output(
+                    ['git', '-C', directory, '-c', 'user.name=Generation Probe', '-c', 'user.email=probe@example.test',
+                     '-c', 'commit.gpgsign=false', *args], text=True).strip()
+
+            git('init', '-q')
+            for name in ('backend/delete.cs', 'frontend/move.ts'):
+                path = repo / name
+                path.parent.mkdir(exist_ok=True)
+                path.write_text(name, encoding='utf-8')
+            git('add', '.')
+            git('commit', '-qm', 'base')
+            base = git('rev-parse', 'HEAD')
+            git('rm', '-q', 'backend/delete.cs')
+            git('commit', '-qm', 'delete backend')
+            deleted = git('rev-parse', 'HEAD')
+            env = dict(os.environ, GIT_DIR=str(repo / '.git'), GIT_WORK_TREE=directory)
+            list_diff = ['-File', str(script), '-List', '-ChangedBase']
+            assert_listing([*list_diff, base], backend_full, backend_fast, env)
+            (repo / 'backend').mkdir(exist_ok=True)
+            git('mv', 'frontend/move.ts', 'backend/move.ts')
+            git('commit', '-qm', 'move from frontend to backend')
+            assert_listing([*list_diff, deleted], expected, expected_fast, env)
+
+
 def check_verify_script(output, values):
     """scripts/verify.ps1：两种模式的步骤清单符合启用的能力；注入失败时以该步退出码退出，后续步骤不执行；
     -Fast 恰好执行它列出的步骤，有前端而缺 node_modules 时不执行任何步骤即失败。
@@ -684,6 +768,7 @@ def check_verify_script(output, values):
         install = next(row for row in rows if row[0] == 'frontend-install')
         assert install[2].strip() == 'npm ci --no-audit', f'frontend-install must pass --no-audit (no implicit audit request): {install}'
     assert all(row in rows for row in fast_rows), 'verify -Fast rows must be the same steps as the full mode'
+    check_verify_scopes(output, pwsh, expected, expected_fast, values['LocalIdentity'])
     with tempfile.TemporaryDirectory(dir=output.parent) as shim_root:
         shims = Path(shim_root)
         for name in SHIM_COMMANDS:
@@ -697,8 +782,14 @@ def check_verify_script(output, values):
         failing = len(commands) // 2
         log = shims / 'calls.log'
         environment = dict(os.environ, PATH=str(shims) + os.pathsep + os.environ.get('PATH', ''), SHIM_LOG=str(log), SHIM_FAIL=commands[failing])
+        report_dir = output / 'test-reports'
+        report_dir.mkdir(exist_ok=True)
+        stale_report = report_dir / 'unit-stale.xml'
+        stale_report.write_text('<testsuites />', encoding='utf-8')
         run = subprocess.run([pwsh, '-NoProfile', '-File', str(script)], capture_output=True, text=True, encoding='utf-8', errors='replace', env=environment)
         calls = log.read_text(encoding='utf-8').splitlines() if log.exists() else []
+        assert not stale_report.exists(), 'verify must remove reports from previous runs'
+        assert 'Verification timings:' in run.stdout and 'Total wall time' in run.stdout, 'verify must report timings after a failed step'
         # -Fast：全部步骤成功时恰好调用列出的命令；有前端时先证明缺依赖会在任何步骤之前失败
         fast_environment = dict(environment, SHIM_FAIL='')
         node_modules = output / 'frontend/node_modules'
@@ -722,6 +813,7 @@ def check_verify_script(output, values):
     assert calls == commands[:failing + 1], f'verify must stop at the failing step: ran {calls}, expected {commands[:failing + 1]}'
     assert fast.returncode == 0, f'verify -Fast with all steps passing must succeed: {fast.stdout}{fast.stderr}'
     assert fast_calls == [row[2] for row in fast_rows], f'verify -Fast must run exactly its listed steps: ran {fast_calls}'
+    report_dir.rmdir()
     with VERIFY_LOCK:
         VERIFY_CHECKED[key] = {'Key': verify_key(output, values), 'Steps': expected, 'FailingStep': rows[failing][0],
                                'ExitCode': run.returncode, 'Calls': len(calls)}
@@ -821,7 +913,7 @@ def validate(output, values, config, verify=True, sdk=None):
             wrapper = (output / ci_file).read_text(encoding='utf-8')
             assert '\t' not in wrapper, f'CI wrapper YAML must not contain tabs: {ci_file}'
             assert 'scripts/verify.ps1' in wrapper, f'CI wrapper must call verify: {ci_file}'
-            assert ('playwright' in wrapper) == values['SpaFrontend'], f'CI wrapper browser setup applicability: {ci_file}'
+            assert 'playwright install' not in wrapper, f'CI wrapper leaves browser installation to verify: {ci_file}'
             assert ('frontend/playwright-report/' in wrapper) == values['LocalIdentity'], f'CI wrapper E2E report upload applicability: {ci_file}'
     if values['Ci'] == 'gitlab':
         check_gitlab_ci((output / ci_files['gitlab']).read_text(encoding='utf-8'), values['SpaFrontend'])
@@ -829,6 +921,9 @@ def validate(output, values, config, verify=True, sdk=None):
         github_ci = (output / ci_files['github']).read_text(encoding='utf-8')
         assert "hashFiles('backend/Directory.Packages.props', 'backend/**/*.csproj')" in github_ci and 'path: ~/.nuget/packages' in github_ci, 'GitHub CI NuGet cache'
         assert ('cache: npm' in github_ci) == values['SpaFrontend'], 'GitHub CI npm cache applicability'
+        assert "github.event_name == 'pull_request' && github.event.pull_request.base.sha" in github_ci, 'GitHub PR must supply its base'
+        assert './scripts/verify.ps1 -ChangedBase' in github_ci, 'GitHub must pass its PR base to verify'
+        assert 'if: ${{ always() }}' in github_ci and 'path: test-reports/*.xml' in github_ci, 'GitHub JUnit artifacts'
         check_github_publish(github_ci)
     # 前端生产依赖审计不在 verify 里：GitHub 为 verify 作业内的一步（锁文件变化、定时、手动才执行），GitLab 为独立作业
     if values['Ci'] == 'github':
@@ -845,6 +940,7 @@ def validate(output, values, config, verify=True, sdk=None):
     assert not any(p.startswith('.github/') and p != ci_files['github'] for p in digests), 'Unexpected files under .github'
     # 浏览器端到端随本地身份形态下发（有登录界面与可预置账号）；测试规范的命令说明同进退
     assert ('frontend/playwright.config.ts' in digests) == values['LocalIdentity'], 'E2E project applicability'
+    assert ('frontend/scripts/check-e2e-admission.mjs' in digests) == values['LocalIdentity'], 'E2E admission applicability'
     assert ('npm run e2e' in testing) == values['LocalIdentity'], 'E2E command instructions applicability'
     if verify:
         check_verify_script(output, values)

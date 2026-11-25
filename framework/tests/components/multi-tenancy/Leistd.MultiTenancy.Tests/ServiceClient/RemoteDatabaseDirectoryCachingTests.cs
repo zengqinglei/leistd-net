@@ -7,7 +7,7 @@ using Leistd.MultiTenancy.ServiceClient.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Internal;
+using Leistd.TestBase.Doubles;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
@@ -222,10 +222,9 @@ public sealed class RemoteDatabaseDirectoryCachingTests : IDisposable
 
         var services = new ServiceCollection()
             .AddSingleton<TimeProvider>(_clock)
-            .AddLogging()
             .AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
         services.AddRemoteTenantConnectionStore("Identity").ConfigurePrimaryHttpMessageHandler(() => _controlPlane);
-        services.Configure<MemoryCacheOptions>(options => options.Clock = new FakeSystemClock(_clock));
+        services.Configure<MemoryCacheOptions>(options => options.Clock = new CacheClock(_clock));
         return services.BuildServiceProvider();
     }
 
@@ -287,11 +286,6 @@ public sealed class RemoteDatabaseDirectoryCachingTests : IDisposable
             BudgetStarted.TrySetResult();
             return timer;
         }
-    }
-
-    private sealed class FakeSystemClock(TimeProvider clock) : ISystemClock
-    {
-        public DateTimeOffset UtcNow => clock.GetUtcNow();
     }
 
     // 控制面 /databases 端点的脚本：可设状态码、清单规模与闸门

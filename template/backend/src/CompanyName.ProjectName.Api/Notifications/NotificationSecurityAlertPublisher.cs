@@ -3,10 +3,9 @@
 using System.Globalization;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using CompanyName.ProjectName.Application.Notifications.Constants;
-using CompanyName.ProjectName.Application.Settings.Timing;
+using CompanyName.ProjectName.Application.Settings.Preferences;
 #if (IncludeLocalization)
 using CompanyName.ProjectName.Api.Localization;
-using CompanyName.ProjectName.Application.Settings.Preferences;
 using Microsoft.Extensions.Localization;
 #endif
 using Leistd.Notifications.Publishing;
@@ -16,15 +15,13 @@ namespace CompanyName.ProjectName.Api.Notifications;
 
 /// <summary>经通知组件发出安全提醒：站内通知总会送达（必达组合），邮件按本人偏好（通知偏好组件读收件人的设置）。</summary>
 /// <remarks>
-/// 文案按<b>收件人</b>的界面语言渲染：本人设过语言就用它，否则用组织默认或部署基线，都没有才用本次请求的语言——
-/// 触发提醒的请求往往就是本人发出的（改密码、启用两步验证）。
-/// 正文里的时刻（锁定截止）按收件人的展示时区写出并注明时区：锁定发生在登录前，当前用户为空，按目标用户解析。
+/// 文案按收件人的生效语言渲染。个人、组织和部署基线都没设语言时，本人操作沿用请求语言，其余用模板默认语言。
+/// 正文时刻按收件人的展示时区写出并注明时区。
 /// </remarks>
 public sealed class NotificationSecurityAlertPublisher(
     INotificationPublisher publisher,
-    IUserTimeZoneProvider userTimeZoneProvider,
+    RecipientTextRenderer renderer,
 #if (IncludeLocalization)
-    IAccountPreferenceStore preferenceStore,
     IStringLocalizerFactory localizerFactory,
 #endif
     ILogger<NotificationSecurityAlertPublisher> logger) : ISecurityAlertPublisher
@@ -34,10 +31,11 @@ public sealed class NotificationSecurityAlertPublisher(
     {
         try
         {
-            var until = alert.Until is { } utc
-                ? FormatUntil(utc, await userTimeZoneProvider.GetForUserAsync(userId, cancellationToken))
-                : "-";
-            var (title, content) = await RenderAsync(userId, alert, until, cancellationToken);
+            var (title, content) = await renderer.RenderAsync(
+                userId,
+                timeZone => Render(alert, alert.Until is { } utc ? FormatUntil(utc, timeZone) : "-"),
+                useTimeZone: alert.Until.HasValue,
+                cancellationToken: cancellationToken);
             await publisher.PublishToUserAsync(
                 userId.ToString(),
                 new NotificationInputDto
@@ -60,31 +58,16 @@ public sealed class NotificationSecurityAlertPublisher(
     }
 
 #if (IncludeLocalization)
-    private async Task<(string Title, string? Content)> RenderAsync(Guid userId, SecurityAlert alert, string until, CancellationToken cancellationToken)
+    private (string Title, string? Content) Render(SecurityAlert alert, string until)
     {
-        var language = (await preferenceStore.GetForUserAsync(userId, cancellationToken))?.Preferences.Language;
-
-        var previous = CultureInfo.CurrentUICulture;
-        try
-        {
-            if (language is not null)
-            {
-                CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(language);
-            }
-
-            // 必须用已登记到 JsonResourceTypes 的类型，未登记的类型会落到 RESX，取回的就是键本身
-            var localizer = localizerFactory.Create(typeof(ApiResource));
-            var title = localizer[$"SecurityAlert:{alert.Kind}:Title"].Value;
-            var content = Fill(localizer[$"SecurityAlert:{alert.Kind}:Content"].Value, alert, until);
-            return (title, content);
-        }
-        finally
-        {
-            CultureInfo.CurrentUICulture = previous;
-        }
+        // 必须用已登记到 JsonResourceTypes 的类型，未登记的类型会落到 RESX，取回的就是键本身
+        var localizer = localizerFactory.Create(typeof(ApiResource));
+        var title = localizer[$"SecurityAlert:{alert.Kind}:Title"].Value;
+        var content = Fill(localizer[$"SecurityAlert:{alert.Kind}:Content"].Value, alert, until);
+        return (title, content);
     }
 #else
-    private static Task<(string Title, string? Content)> RenderAsync(Guid userId, SecurityAlert alert, string until, CancellationToken cancellationToken)
+    private static (string Title, string? Content) Render(SecurityAlert alert, string until)
     {
         var (title, content) = alert.Kind switch
         {
@@ -106,7 +89,7 @@ public sealed class NotificationSecurityAlertPublisher(
 #endif
             _ => (alert.Kind.ToString(), null)
         };
-        return Task.FromResult((title, content is null ? null : Fill(content, alert, until)));
+        return (title, content is null ? null : Fill(content, alert, until));
     }
 #endif
 
