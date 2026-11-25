@@ -252,17 +252,7 @@ public sealed class ResourceBrowserSessionTests
                         registration.Configuration.TokenEndpointAuthMethodsSupported.Add("client_secret_post");
                     }
                 });
-#pragma warning disable CS0618 // 官方 MemoryCache 的测试时钟接缝与业务 TimeProvider 同步推进。
-                services.Configure<MemoryCacheOptions>(options => options.Clock = new WorkspaceCacheClock(clock));
-#pragma warning restore CS0618
             }));
-
-#pragma warning disable CS0618
-    private sealed class WorkspaceCacheClock(TimeProvider clock) : Microsoft.Extensions.Internal.ISystemClock
-    {
-        public DateTimeOffset UtcNow => clock.GetUtcNow();
-    }
-#pragma warning restore CS0618
 
     private sealed class WorkspaceTransport(HttpMessageHandler issuer) : IHttpMessageHandlerBuilderFilter
     {

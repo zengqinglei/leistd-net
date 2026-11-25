@@ -6,6 +6,7 @@ using CompanyName.ProjectName.Application.Auth.EmailVerification;
 using CompanyName.ProjectName.Application.Auth.Policies;
 using CompanyName.ProjectName.Domain.Auth.Errors;
 using Leistd.BackgroundJobs.Queues;
+using Leistd.Ddd.Infrastructure;
 using Leistd.Email.Abstractions;
 using Leistd.ExceptionHandling;
 using Leistd.Lock.Abstractions;
@@ -18,10 +19,10 @@ using Leistd.Timing;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Internal;
 #if (IncludeLocalization)
 using Microsoft.Extensions.Localization;
 #endif
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -32,10 +33,9 @@ namespace CompanyName.ProjectName.UnitTests.Application;
 /// <remarks>
 /// <para>配额键由所有发往同一邮箱的请求共享。锁租约失效后，旧请求的失败补偿可能晚于新请求的占位，
 /// 删共享键就等于删掉别人的配额、绕过限频；因此失败只按本次挑战 Id 写失败标记。</para>
-/// <para>缓存是真实 <see cref="MemoryDistributedCache"/>，经 <see cref="MemoryCacheOptions.Clock"/> 接同一假时钟，
-/// 配额到期靠推进时钟而不是删键冒充；租约失效与发送阻塞由测试显式编排。</para>
+/// <para>用真实内存分布式缓存和基座时钟接线验证配额到期；租约失效与发送阻塞由测试显式编排。</para>
 /// </remarks>
-public sealed partial class EmailChallengeStoreTests
+public sealed partial class EmailChallengeStoreTests : IClassFixture<EmailChallengeStoreTests.CacheClockRegistration>, IDisposable
 {
     // 这里只测码本身的签发与复用；待完成登录的期限限制由登录第二步的集成测试覆盖
     private static readonly DateTime NoSignInDeadline = DateTime.MaxValue;
@@ -44,16 +44,22 @@ public sealed partial class EmailChallengeStoreTests
     private static readonly TimeSpan SendInterval = TimeSpan.FromSeconds(60);
 
     private readonly FakeTimeProvider _time = new(DateTimeOffset.UtcNow);
+    private readonly ServiceProvider _services;
     private readonly LeaseLock _lock = new();
     private readonly GatedCache _cache;
     private readonly ScriptedEmailSender _sender = new();
     private readonly CapturingQueue _queue = new();
     private readonly EmailChallengeStore _store;
 
-    public EmailChallengeStoreTests()
+    public EmailChallengeStoreTests(CacheClockRegistration cacheClock)
     {
-        _cache = new GatedCache(new MemoryDistributedCache(
-            Options.Create(new MemoryDistributedCacheOptions { Clock = new CacheClock(_time) })));
+        var services = new ServiceCollection()
+            .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
+            .AddSingleton<TimeProvider>(_time)
+            .AddDistributedMemoryCache();
+        services.Add(cacheClock.Registration);
+        _services = services.BuildServiceProvider();
+        _cache = new GatedCache(_services.GetRequiredService<IDistributedCache>());
         var verificationCode = Options.Create(new VerificationCodeOptions
         {
             Key = Convert.ToBase64String(Enumerable.Range(0, 32).Select(i => (byte)i).ToArray())
@@ -508,9 +514,14 @@ public sealed partial class EmailChallengeStoreTests
         Assert.Equal(AuthErrorCodes.EmailCodeSendTooFrequent, exception.Code);
     }
 
-    private sealed class CacheClock(TimeProvider time) : ISystemClock
+    public void Dispose() => _services.Dispose();
+
+    /// <summary>每个测试类只取一次基座的缓存时钟登记。每条用例独立创建缓存和时间源。</summary>
+    public sealed class CacheClockRegistration
     {
-        public DateTimeOffset UtcNow => time.GetUtcNow();
+        internal ServiceDescriptor Registration { get; } = new ServiceCollection()
+            .AddDddInfrastructure()
+            .Single(descriptor => descriptor.ServiceType == typeof(IPostConfigureOptions<MemoryDistributedCacheOptions>));
     }
 
     /// <summary>按键互斥的锁；测试可让发送配额锁的当前租约失效：持有者收到 LockLost，锁随即可被他人获取。</summary>
@@ -584,7 +595,7 @@ public sealed partial class EmailChallengeStoreTests
         public IReadOnlyList<string> ChallengeKeys => [.. _challengeKeys];
 
         /// <summary>此后的删除与失败标记写入停住，直到 <see cref="ReleaseCleanup"/>；新请求的占位不受影响。</summary>
-        public void HoldCleanup() => _cleanupGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        public void HoldCleanup() => _cleanupGate = new TaskCompletionSource();
 
         public void ReleaseCleanup() => _cleanupGate?.TrySetResult();
 

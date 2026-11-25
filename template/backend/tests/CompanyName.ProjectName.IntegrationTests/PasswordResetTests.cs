@@ -14,11 +14,9 @@ using Leistd.MultiTenancy.AspNetCore.Options;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Time.Testing;
 
 namespace CompanyName.ProjectName.IntegrationTests;
@@ -360,7 +358,6 @@ public sealed partial class PasswordResetTests(ProjectWebApplicationFactory fact
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(clock);
             services.AddSingleton(clock);
-            services.Configure<MemoryDistributedCacheOptions>(options => options.Clock = new CacheClock(clock));
             services.RemoveAll<ICaptchaVerifier>();
             services.AddSingleton<ICaptchaVerifier, AcceptingCaptcha>();
             services.RemoveAll<IEmailSender>();
@@ -458,11 +455,6 @@ public sealed partial class PasswordResetTests(ProjectWebApplicationFactory fact
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }
 #endif
-
-    private sealed class CacheClock(TimeProvider time) : ISystemClock
-    {
-        public DateTimeOffset UtcNow => time.GetUtcNow();
-    }
 
     private sealed record TestUser(Guid Id, string Username, string Email);
 

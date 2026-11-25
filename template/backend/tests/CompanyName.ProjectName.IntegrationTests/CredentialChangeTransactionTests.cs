@@ -10,8 +10,6 @@ using CompanyName.ProjectName.Application.Auth.AppServices;
 using System.Text.RegularExpressions;
 using CompanyName.ProjectName.Application.Auth.Captcha;
 using Leistd.Email.Abstractions;
-using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Internal;
 #endif
 #if (Email && IncludeNotifications)
 using Leistd.Notifications.Dtos;
@@ -486,14 +484,12 @@ public sealed partial class CredentialChangeTransactionTests(CredentialChangeTra
             Server = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
 #if (Email)
-                // 找回口令的发送间隔与码的有效期都按这只假时钟走：缓存条目也用它判断过期
-                services.Configure<MemoryDistributedCacheOptions>(options => options.Clock = new CacheClock(Clock));
                 services.RemoveAll<ICaptchaVerifier>();
                 services.AddSingleton<ICaptchaVerifier, AcceptingCaptcha>();
                 services.RemoveAll<IEmailSender>();
                 services.AddSingleton<IEmailSender>(Mailbox);
 #endif
-                // 从此刻起步：缓存条目按真实时钟回收，假时钟落在过去会让刚写入的设置密钥被当成已过期
+                // 从当前时刻起步，与仍使用真实时间的签发和保护组件保持一致。
                 services.RemoveAll<TimeProvider>();
                 services.AddSingleton<TimeProvider>(Clock);
 
@@ -600,11 +596,6 @@ public sealed partial class CredentialChangeTransactionTests(CredentialChangeTra
     }
 
 #if (Email)
-    private sealed class CacheClock(TimeProvider time) : ISystemClock
-    {
-        public DateTimeOffset UtcNow => time.GetUtcNow();
-    }
-
 #if (IncludeNotifications)
     private sealed class CancelingNotificationPublisher(INotificationPublisher inner, InjectedFaults faults) : INotificationPublisher
     {
