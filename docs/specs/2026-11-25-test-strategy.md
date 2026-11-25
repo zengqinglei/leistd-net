@@ -89,7 +89,7 @@
   - 宿主显式设置的 `Clock`，无论在框架登记之前还是之后设置，都保留。
 - **生产环境：** 用 `TimeProvider.System`，行为不变。
 - **测试侧的边界：**
-  - DDD 基座的测试和生成项目的测试走默认接线，删除手写的缓存时钟适配器。生成项目里直接构造缓存的测试，改为从执行了 `AddDddInfrastructure` 与对应缓存登记的容器里取实例。
+  - DDD 基座和生成项目的集成测试验证宿主默认接线，删去这些宿主的重复适配器。生成项目里直接构造真实缓存的单元测试保留显式时钟，应用层用例独立验证自身行为。
   - ServiceClient、MultiTenancy、Settings 三个独立组件的测试项目不引用 DDD，以守住依赖方向闸门，也保持各自的覆盖边界。它们改用 `Leistd.TestBase` 里的一份共享测试时钟，显式配置真实缓存，并删除各项目重复的适配器。
 - **同步文档：**
   - 契约写进 DDD 组合的随包文档（`AddDddInfrastructure` 的登记面）；
@@ -277,7 +277,7 @@
 | 步骤 | 内容 | 验证 |
 | --- | --- | --- |
 | 1 | R1 框架：options 默认填充；DDD 测试中的三类到期测试（先失败）；`Leistd.TestBase` 共享测试时钟，替换三个组件测试项目里的适配器；随包文档 | 受影响框架测试项目全量；打包到 `.tmp/local-feed`；包消费检查 |
-| 2 | R1 模板：删集成测试和单测里的适配器，直接构造的测试改为从容器取实例，简化 §2.2 | 受影响生成场景的单元与集成测试全量 |
+| 2 | R1 模板：集成测试改走默认接线；直接构造缓存的单测保留显式时钟，同步 §2.2 | 受影响生成场景的单元与集成测试全量 |
 | 3 | R9：三档实测与取舍；E2E 挂 tmpfs | 同一节点、同一全集，各档记录步骤耗时；确认 E2E 数据目录在 tmpfs 上 |
 | 4 | R7、R8、R10：`verify.ps1`、两种 CI 文件、JUnit、汇总；同步仓库的矩阵与生成检查（`-List`、失败传播、CI 形态断言） | `-List` 覆盖 R8 的六类改动；可控失败一次，证明保留退出码、本轮 JUnit 已上传且不混入上轮；跨两次运行 |
 | 5 | R5：现有用例打标签，加闸门、上限和自检；同步生成检查 | `--self-test`；故意缺标签和超上限各失败一次；无 E2E 形态不生成闸门也不登记步骤 |
@@ -295,4 +295,213 @@
 
 ## 4. 验证
 
-（实施后填写：逐项对应 R1～R11 的命令、结果和实测数据；未覆盖项及原因。）
+### R1 框架时钟
+
+- 修复前，在同一份候选源码中只添加回归用例，运行 `dotnet test` 的 `CacheClockRegistrationTests`。普通内存缓存、HybridCache 一级和内存分布式缓存的到期断言均失败，两条宿主显式时钟优先用例通过。
+- 修复后，以 Release 跑受影响项目全量，DDD Infrastructure 92、MultiTenancy 458、ServiceClient 226、Settings 215，共 991 条通过。
+- `pwsh framework/build/pack-local-feed.ps1` 打包 82 个候选包。按仓库指定的独立 NuGet 解包目录运行 `pwsh framework/build/test-package-consumption.ps1` 通过，编译 28 个项目中的 165 段文档示例，6 个反例均被拒绝。
+- 框架提交为 `7cfa8ecf`，注册契约已同步到 DDD 随包文档。
+
+### R1 生成项目验证
+
+通过 `pwsh scripts/template-dev-workspace.ps1 -Scenario <场景> -Sync` 使用候选包同步模板。Release 后端测试中，`identity-workspace` 通过 361 条单测与 872 条集成测试，`resource-workspace` 通过 201 条单测与 278 条集成测试，覆盖两端缓存时钟。`identity-all-features` 的集成测试全集为 841 条，三档计时见下文。
+
+邮箱挑战单测保留显式连接假时钟的真实内存分布式缓存。它验证配额行为，宿主的 Options 默认接线由基座和生成项目的集成测试验证。
+
+### R1 单条耗时
+
+Release 构建独立计时，逐条耗时取自 `dotnet test -c Release --no-build --logger trx`。每个版本各重复三轮。ServiceClient 的 8 条用例和 MultiTenancy 的 24 条在本机对照，后者交错运行前后两份产物。Settings 的 20 条在 WSL 节点交错对照。生成项目 `identity-all-features` 的六轮均运行全部 361 条，表中列邮箱挑战类 24 条。该类经复审恢复至改动前源码，用同一份构建分别采样。
+
+最初本机整批测量中，多租户目录读取有一次 365.580 ms。改成交错测量后，该例中位数从 116.219 降到 81.953 ms，候选最大 168.315 ms。Settings 旧夹具交错对照中冷读取有两次超过 300 ms。恢复容器的原有校验，对无日志断言的用例只注入空日志工厂后，Settings 全集 215 条通过，20 条的所有候选样本均低于 300 ms。冷读取中位数为 114.317 → 129.869 ms，基线与候选均超过 100 ms 目标。
+
+邮箱挑战类的密码重置用例前后各有超过 300 ms 的样本。两组使用相同源码与同一二进制，结果包含本机负载下的调度波动。下表保留每条用例的中位数与最大值，单位为毫秒。
+
+| 用例 | 改动前中位数（ms） | 改动前最大值（ms） | 改动后中位数（ms） | 改动后最大值（ms） |
+| --- | ---: | ---: | ---: | ---: |
+| Core.RemoteCachingAndSingleFlightTests.A_pending_route_returns_stale_within_one_second_and_throttles_all_waiters | 32.120 | 71.604 | 31.825 | 87.411 |
+| Core.RemoteCachingAndSingleFlightTests.A_route_expires_from_memory_at_its_hard_deadline | 4.466 | 6.687 | 2.376 | 2.610 |
+| Core.RemoteCachingAndSingleFlightTests.Bounded_route_waiting_preserves_results_deadlines_and_cancellation(scenario: "cancellation") | 45.578 | 48.654 | 26.595 | 32.097 |
+| Core.RemoteCachingAndSingleFlightTests.Bounded_route_waiting_preserves_results_deadlines_and_cancellation(scenario: "cold") | 22.032 | 86.962 | 7.981 | 14.963 |
+| Core.RemoteCachingAndSingleFlightTests.Bounded_route_waiting_preserves_results_deadlines_and_cancellation(scenario: "deadline") | 42.290 | 66.874 | 9.022 | 26.106 |
+| Core.RemoteCachingAndSingleFlightTests.Bounded_route_waiting_preserves_results_deadlines_and_cancellation(scenario: "rejection") | 45.830 | 145.918 | 11.263 | 28.993 |
+| Core.RemoteCachingAndSingleFlightTests.Bounded_route_waiting_preserves_results_deadlines_and_cancellation(scenario: "success") | 97.563 | 116.531 | 43.430 | 115.355 |
+| Core.RemoteCachingAndSingleFlightTests.Stale_routes_are_shared_throttled_and_discarded_after_a_rejection | 24.689 | 25.170 | 9.566 | 12.840 |
+| ServiceClient.RemoteDatabaseDirectoryCachingTests.A_cancelled_caller_does_not_cancel_the_shared_listing | 29.976 | 140.757 | 15.293 | 15.351 |
+| ServiceClient.RemoteDatabaseDirectoryCachingTests.A_failed_listing_is_not_cached | 3.016 | 4.805 | 1.924 | 2.058 |
+| ServiceClient.RemoteDatabaseDirectoryCachingTests.A_hit_returns_the_cached_instance_even_for_a_large_listing | 45.452 | 478.151 | 52.258 | 53.175 |
+| ServiceClient.RemoteDatabaseDirectoryCachingTests.A_listing_is_served_from_cache_until_the_lifetime_ends | 3.280 | 4.750 | 2.084 | 3.285 |
+| ServiceClient.RemoteDatabaseDirectoryCachingTests.A_pending_directory_returns_the_cached_listing_after_one_second | 62.326 | 229.531 | 17.326 | 29.709 |
+| ServiceClient.RemoteDatabaseDirectoryCachingTests.An_out_of_range_lifetime_fails_with_the_configuration_key(lifetime: "-00:00:01") | 0.143 | 2.435 | 0.360 | 0.476 |
+| ServiceClient.RemoteDatabaseDirectoryCachingTests.An_out_of_range_lifetime_fails_with_the_configuration_key(lifetime: "00:00:00") | 0.334 | 2.122 | 0.861 | 0.907 |
+| ServiceClient.RemoteDatabaseDirectoryCachingTests.An_out_of_range_lifetime_fails_with_the_configuration_key(lifetime: "01:00:01") | 8.544 | 32.716 | 8.131 | 15.191 |
+| ServiceClient.RemoteDatabaseDirectoryCachingTests.An_unavailable_directory_uses_the_last_listing_until_the_hard_deadline | 6.833 | 22.101 | 11.970 | 12.250 |
+| ServiceClient.RemoteDatabaseDirectoryCachingTests.Concurrent_listings_share_a_single_remote_call | 132.716 | 171.513 | 39.596 | 146.889 |
+| ServiceClient.RemoteDatabaseDirectoryCachingTests.Connection_name_and_active_only_each_have_their_own_entry | 3.798 | 4.669 | 2.820 | 2.988 |
+| ServiceClient.RemoteDatabaseDirectoryCachingTests.Failed_tenants_are_kept_with_the_cached_listing | 116.219 | 158.215 | 81.953 | 168.315 |
+| ServiceClient.RemoteDatabaseDirectoryCachingTests.Names_differing_only_in_case_share_one_entry_and_reach_the_control_plane_lowercased | 2.321 | 15.351 | 4.631 | 4.871 |
+| ServiceClient.RemoteDatabaseDirectoryCachingTests.The_default_lifetime_is_thirty_seconds | 7.722 | 10.963 | 2.357 | 4.278 |
+| ServiceClient.RemoteDatabaseDirectoryCachingTests.The_maximum_lifetime_is_accepted | 4.479 | 6.006 | 3.264 | 3.628 |
+| ServiceClient.RemoteDatabaseDirectoryCachingTests.When_all_callers_cancel_the_next_caller_joins_the_same_listing | 80.566 | 174.656 | 35.743 | 71.805 |
+| OAuth.OfficialClientTests.Token_cache_never_writes_distributed_storage_and_respects_output_expiry | 42.566 | 44.580 | 25.168 | 28.263 |
+| OAuth.TokenCacheTests.A_background_machine_rejection_clears_the_timeout_fallback | 6.062 | 6.125 | 3.986 | 9.035 |
+| OAuth.TokenCacheTests.A_delayed_cache_miss_reuses_the_completed_fetch | 7.369 | 10.208 | 4.365 | 8.656 |
+| OAuth.TokenCacheTests.A_pending_machine_renewal_returns_stale_within_one_second | 20.854 | 26.002 | 19.152 | 41.702 |
+| OAuth.TokenCacheTests.A_timed_out_renewal_does_not_revive_an_invalidated_or_expired_token(expire: False) | 8.494 | 32.993 | 3.673 | 12.169 |
+| OAuth.TokenCacheTests.A_timed_out_renewal_does_not_revive_an_invalidated_or_expired_token(expire: True) | 44.044 | 88.760 | 48.628 | 49.424 |
+| OAuth.TokenCacheTests.Machine_renewal_reuses_only_a_current_usable_token(invalidate: False) | 3.514 | 24.735 | 3.506 | 3.506 |
+| OAuth.TokenCacheTests.Machine_renewal_reuses_only_a_current_usable_token(invalidate: True) | 6.115 | 8.607 | 3.672 | 6.402 |
+| ServiceClient.SharedSettingReaderTests.A_declared_setting_the_provider_does_not_share_yields_its_fallback | 2.063 | 2.213 | 1.778 | 1.953 |
+| ServiceClient.SharedSettingReaderTests.A_provider_is_registered_once_with_at_least_one_setting | 0.549 | 0.691 | 0.598 | 0.637 |
+| ServiceClient.SharedSettingReaderTests.A_rejection_drops_earlier_values_and_yields_the_fallbacks(failure: "401") | 10.745 | 22.175 | 13.689 | 15.966 |
+| ServiceClient.SharedSettingReaderTests.A_rejection_drops_earlier_values_and_yields_the_fallbacks(failure: "403") | 1.805 | 5.280 | 1.788 | 2.123 |
+| ServiceClient.SharedSettingReaderTests.A_rejection_drops_earlier_values_and_yields_the_fallbacks(failure: "invalid") | 15.725 | 47.402 | 35.169 | 35.207 |
+| ServiceClient.SharedSettingReaderTests.A_rejection_drops_earlier_values_and_yields_the_fallbacks(failure: "token") | 2.251 | 5.495 | 2.389 | 2.622 |
+| ServiceClient.SharedSettingReaderTests.A_slow_provider_is_waited_for_at_most_one_second_when_stale_values_exist | 20.012 | 38.407 | 17.347 | 20.369 |
+| ServiceClient.SharedSettingReaderTests.An_unavailable_provider_serves_stale_values_until_they_expire | 8.242 | 11.969 | 7.293 | 7.525 |
+| ServiceClient.SharedSettingReaderTests.An_unknown_tenant_yields_the_fallbacks | 1.942 | 6.673 | 1.909 | 1.947 |
+| ServiceClient.SharedSettingReaderTests.Cold_cache_with_a_cancelable_token_fetches_the_tenant_path | 114.317 | 238.402 | 129.869 | 181.178 |
+| ServiceClient.SharedSettingReaderTests.Concurrent_reads_share_one_remote_call | 10.253 | 34.705 | 11.965 | 80.218 |
+| ServiceClient.SharedSettingReaderTests.Each_scope_reads_its_own_tenant_with_a_scoped_tenant_accessor | 4.935 | 6.196 | 3.903 | 4.482 |
+| ServiceClient.SharedSettingReaderTests.Expired_values_are_revalidated_with_the_previous_etag | 2.556 | 3.397 | 2.353 | 2.556 |
+| ServiceClient.SharedSettingReaderTests.Fresh_values_are_served_from_cache | 3.644 | 8.661 | 3.655 | 3.666 |
+| ServiceClient.SharedSettingReaderTests.Invalid_options_are_reported_with_their_configuration_keys(key: "FreshFor", value: "00:00:00") | 0.137 | 0.277 | 0.224 | 0.261 |
+| ServiceClient.SharedSettingReaderTests.Invalid_options_are_reported_with_their_configuration_keys(key: "MaxStaleness", value: "-00:00:01") | 1.781 | 3.119 | 1.768 | 1.840 |
+| ServiceClient.SharedSettingReaderTests.Invalid_options_are_reported_with_their_configuration_keys(key: "Path", value: " ") | 0.407 | 0.854 | 0.405 | 0.414 |
+| ServiceClient.SharedSettingReaderTests.Reading_an_undeclared_setting_or_provider_fails | 2.801 | 7.760 | 2.962 | 3.427 |
+| ServiceClient.SharedSettingReaderTests.The_current_tenant_selects_the_cache_entry_and_the_path | 9.727 | 19.533 | 9.460 | 9.983 |
+| ServiceClient.SharedSettingReaderTests.Without_earlier_values_an_unavailable_provider_yields_the_fallbacks | 2.235 | 3.188 | 2.526 | 2.817 |
+| Application.EmailChallengeStoreTests.A_cleanup_failure_does_not_replace_the_send_exception | 1.179 | 4.024 | 0.422 | 0.424 |
+| Application.EmailChallengeStoreTests.A_delayed_cleanup_cannot_release_the_next_holders_reservation | 60.303 | 2319.189 | 19.024 | 21.512 |
+| Application.EmailChallengeStoreTests.A_failed_password_reset_delivery_keeps_the_quota | 1.622 | 7.304 | 1.048 | 1.383 |
+| Application.EmailChallengeStoreTests.A_failed_send_voids_its_own_challenge_and_reservation | 1.407 | 2.316 | 1.651 | 14.942 |
+| Application.EmailChallengeStoreTests.A_late_failure_cannot_release_the_next_holders_reservation | 198.951 | 210.276 | 64.261 | 122.430 |
+| Application.EmailChallengeStoreTests.A_password_reset_code_is_sent_in_the_background_and_proves_the_user_and_stamp | 366.329 | 670.491 | 435.163 | 639.417 |
+| Application.EmailChallengeStoreTests.A_password_reset_code_that_expired_in_the_queue_is_not_sent | 2.162 | 3.279 | 0.422 | 0.494 |
+| Application.EmailChallengeStoreTests.A_password_reset_without_a_target_sends_nothing_and_never_validates | 2.355 | 11.753 | 6.144 | 40.558 |
+| Application.EmailChallengeStoreTests.A_request_canceled_after_a_successful_send_keeps_the_challenge_and_quota | 95.763 | 242.285 | 57.647 | 90.633 |
+| Application.EmailChallengeStoreTests.A_sign_in_code_is_sent_in_the_background_and_proves_the_user_and_stamp | 0.656 | 2.700 | 1.141 | 24.108 |
+| Application.EmailChallengeStoreTests.A_sign_in_send_within_the_interval_reuses_the_previous_code | 9.281 | 46.999 | 14.234 | 53.584 |
+| Application.EmailChallengeStoreTests.A_used_sign_in_code_frees_the_send_interval | 1.995 | 9.522 | 5.106 | 7.052 |
+| Application.EmailChallengeStoreTests.An_account_that_needs_an_administrator_gets_a_notice_instead_of_a_code | 1.744 | 13.274 | 0.830 | 0.853 |
+| Application.EmailChallengeStoreTests.An_exhausted_sign_in_code_keeps_the_send_interval | 8.232 | 8.754 | 2.105 | 5.151 |
+| Application.EmailChallengeStoreTests.Canceling_the_request_during_the_send_aborts_it_and_voids_the_reservation | 138.358 | 183.457 | 64.446 | 223.770 |
+| Application.EmailChallengeStoreTests.Losing_the_lock_before_sending_skips_the_send | 7.097 | 65.417 | 47.294 | 140.315 |
+| Application.EmailChallengeStoreTests.Losing_the_lock_during_the_send_neither_aborts_nor_rolls_it_back | 1.554 | 3.841 | 0.964 | 1.901 |
+| Application.EmailChallengeStoreTests.Only_a_stopping_consumer_lets_a_canceled_delivery_escape | 21.016 | 29.698 | 6.724 | 9.675 |
+| Application.EmailChallengeStoreTests.Password_reset_codes_are_capped_per_fixed_window | 4.225 | 5.230 | 2.428 | 4.144 |
+| Application.EmailChallengeStoreTests.Reuse_near_the_sign_in_deadline_succeeds_but_a_new_code_is_refused | 3.528 | 5.012 | 0.727 | 0.768 |
+| Application.EmailChallengeStoreTests.Sign_in_codes_have_their_own_send_interval | 2.075 | 8.905 | 1.120 | 16.957 |
+| Application.EmailChallengeStoreTests.The_password_reset_cap_does_not_count_registration_codes | 3.661 | 62.982 | 0.346 | 0.441 |
+| Application.EmailChallengeStoreTests.The_send_interval_ends_exactly_at_its_boundary | 1.448 | 7.617 | 24.137 | 59.150 |
+| Application.EmailChallengeStoreTests.Validation_tells_an_expired_challenge_from_a_wrong_code | 7.032 | 31.277 | 4.094 | 91.952 |
+
+### R5 准入反例
+
+对生成的 `identity-workspace` 执行 `node frontend/scripts/check-e2e-admission.mjs --self-test` 及正常检查。自检通过，实际发现 16 条用例。删除登录用例标签，以及临时追加 20 条参数化用例，分别得到退出码 1。反例只在隔离生成目录构造。
+
+```text
+E2E admission passed: 16/20 tests.
+login.e2e.ts:6 signs in through the login page: expected one @proves: tag, got 0.
+Full E2E suite has 36 tests, above the cap of 20.
+```
+
+### R9 测试库对照
+
+在同一台本机节点上先构建 Release，再对同一个生成场景 `identity-all-features` 的集成测试项目执行 `dotnet test -c Release --no-build`，每档两轮。墙钟包括测试进程、数据库启动与清理，构建独立计时。
+
+| 配置 | 第一轮（s） | 第二轮（s） | 均值（s） |
+| --- | ---: | ---: | ---: |
+| 基线（磁盘与 WAL_LOG） | 169.386 | 193.679 | 181.533 |
+| tmpfs 与 WAL_LOG | 149.294 | 177.171 | 163.233 |
+| tmpfs 与 FILE_COPY | 161.811 | 199.990 | 180.901 |
+
+六轮均为 841 条通过。tmpfs 的实测均值较基线低约 10.1%。加入 `FILE_COPY` 后的均值较单用 tmpfs 高约 10.8%，所以保留 tmpfs 和默认克隆策略 `WAL_LOG`。
+
+在浏览器 E2E 的 PostgreSQL 容器内执行 `stat -f -c "%T %n" "$PGDATA"`，确认实际目录为 `tmpfs /var/lib/postgresql/18/docker`。
+
+### 模板包隔离安装
+
+`pwsh template-package/test-template-package.ps1` 在复审后的 `6d20dfec` 通过。临时模板包 `0.0.1-local.20261125073129` 的 1,725 个文件、隔离安装和来源标记均通过。按标记分别重建 `identity-all-features` 与 `resource-capabilities-03`，恢复原有 UserSecretsId 后均为零差异。
+
+### 仓库静态检查
+
+在本机以 Python 3.14 和 PyYAML 运行 `pwsh scripts/check-all.ps1`，52 道闸门全部通过，30 个场景覆盖 255,147 个可达条件行。复审修订后重新运行 `python3 scripts/measure-template-read-cost.py --check`，所有阅读路径仍在原上限内。
+
+在本机运行 `python3 scripts/test-template-generation.py --shard control --workers 2`，6,144 个输入映射、18 个实际生成等价对照、4 个 CI 变体和 10 个 `verify.ps1` 签名全部通过。步骤清单覆盖仅后端、仅前端、仅文档、根脚本、删除和跨目录改名。命令替身注入的步骤失败保留原退出码并停止后续步骤，报告目录清除了前一轮 XML。
+
+### 生成项目验证与报告
+
+在本机为 GitHub 形态 `identity-workspace` 实际运行 `pwsh scripts/verify.ps1`。`ng test` 通过 194 个文件中的 2,249 条浏览器单测，写出 `test-reports/unit-frontend.xml`。解析 XML 得到 2,249 个用例，零失败、零跳过。同一轮的后端单测和集成 JUnit 分别包含 361 与 872 个用例，均为零失败、零跳过。
+
+默认 4 worker 的 E2E 首轮通过 10 条，另有 3 条重试后通过、3 条超时。`verify` 保留 Playwright 的退出码 1，仍输出逐步墙钟和三层慢用例，并保留含 16 条记录的 `e2e.xml`。超时 trace 中，通行密钥登记约 6.14 秒、一次登录约 6.61 秒、最慢的 Webhook 查询约 12.64 秒，超过相关断言的 5 秒等待。
+
+同机以 `develop` 基线 `28654461` 重新打包并生成 `identity-workspace`，完成 Release 与前端构建后执行 `npm run e2e`。默认 4 worker 运行同一批 16 条，全部首次通过，Playwright 报告约 72 秒。候选首次 E2E 紧接完整 `verify` 的前置步骤；另用和基线相同的准备步骤与直接入口对照。
+
+同一份候选构建以默认 4 worker 依次跑三轮 `npm run e2e`。数据库挂载只在隔离生成目录临时切换，其余测试与产物保持一致。
+
+| 数据目录 | 首次通过 | 重试通过 | 失败 | Playwright 墙钟 |
+| --- | ---: | ---: | ---: | ---: |
+| tmpfs | 7 | 1 | 8 | 约 318 s |
+| 容器磁盘 | 12 | 3 | 1 | 约 120 s |
+| 恢复 tmpfs | 15 | 1 | 0 | 约 78 s |
+
+磁盘轮仍复现超时，恢复 tmpfs 后通过。超时未随挂载方式稳定复现。四 worker 的完整 `verify` 与首次直接 E2E 均保留失败记录，候选的独立 Chromium 全集有一次通过，默认并发及超时配置保持原设定。
+
+`resource-capabilities-03` 为纯 API 形态，未生成 E2E 准入脚本，`verify.ps1 -List` 中也没有准入或 E2E 步骤。另一次全量探测通过 197 条单测，192 条集成测试中有一条操作日志测试在解析结构化 `OperationTime` 时失败。Resource 的缓存覆盖见前述通过的 `resource-workspace` 全量测试。
+
+同机以 `28654461` 重新生成 `resource-capabilities-03`，两次独立执行 `dotnet test -c Release --no-build --filter FullyQualifiedName~OperationRecordLoggingTests`。每轮均为 2 条通过、1 条失败，退出码均为 1。失败均为 `Security_log_is_emitted_only_after_the_real_business_transaction_commits(commit: True)`，位置均为 `OperationRecordLoggingTests.cs:84`，TRX 原文如下。
+
+```text
+Assert.True() Failure
+Expected: True
+Actual:   False
+```
+
+```csharp
+Assert.True(DateTimeOffset.TryParse(OperationRecordLogCapture.Field(record, "OperationTime"), out _));
+```
+
+**待跟进。** 对齐该日志测试的结构化时间值与解析契约。相同失败在基线两轮均复现，本轮保留原测试和实现。
+
+在 WSL 节点先对纯 API Resource 执行成功的 `pwsh scripts/verify.ps1 -Fast`，再在隔离目录注入一个延迟 350 ms 后失败的单测并添加旧报告。第二轮仍用 `-Fast`，收到失败步骤的退出码 1，旧报告已清除，新 JUnit 有 198 条记录且恰有该条失败。逐步、总耗时和慢用例汇总仍输出。
+
+```text
+Verification failed at step 'backend-test:Matrix.ResourceCapabilities03.UnitTests' (exit code 1); remaining steps were not run.
+Total wall time                             19.52 s
+WARNING:   358.5 ms  Matrix.ResourceCapabilities03.UnitTests.VerificationReportProbeTests :: A_deliberate_failure_is_reported
+```
+
+### 逐步墙钟与单端产物
+
+在生成的 Identity Workspace 内提交单端路径变更，然后清掉后端 `bin/obj` 和前端 `dist`，分别用 `pwsh scripts/verify.ps1 -ChangedBase <基准>` 验证。两轮均为默认 4 worker，16 条 E2E 全部首次通过。
+
+- 仅后端改动运行后端验证、前端依赖安装和生产构建，跳过前端 lint 与单测。墙钟 524.43 秒。
+- 仅前端改动生成 Release API 和 DbMigrator，跳过后端格式与测试。前端单测 2,249 条通过，墙钟 208.33 秒。
+- 本地身份形态 `-Fast` 在既有前端依赖下只跑 E2E 用例发现，墙钟 55.03 秒。
+
+下表均为秒。Identity 默认全量列保留先前 E2E 超时的真实耗时，Resource 全量列保留操作日志断言失败的一轮，控制失败列为故障报告反例。GitHub 与 GitLab 的 JUnit 上传条件由实际生成的工作流结构检查验证，生成项目未另行触发托管流水线。
+
+| 步骤 | identity-full | identity-fast | backend-only | frontend-only | resource-full | resource-fast | controlled-failure |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| check-error-codes | 8.79 | 4.23 | 3.94 | 4.49 | 1.73 | 0.23 | 0.24 |
+| check-i18n | 1.24 | 1.68 | 1.05 | 0.88 | — | — | — |
+| check-operation-action-i18n | 0.16 | 0.10 | 0.21 | 0.09 | — | — | — |
+| check-test-diagnostics | 11.67 | 3.46 | 3.43 | 2.94 | 0.78 | 0.10 | 0.20 |
+| check-setting-group-icons | 0.34 | 0.20 | 0.17 | 0.14 | — | — | — |
+| backend-restore | 9.56 | 4.11 | 7.88 | 4.80 | 11.12 | 1.06 | 1.56 |
+| backend-build | 82.44 | 4.17 | 50.52 | 16.23 | 38.42 | 9.06 | 3.75 |
+| backend-format | 51.04 | 27.04 | 38.40 | — | 29.46 | 12.28 | 11.64 |
+| backend-test:UnitTests | 5.22 | 4.50 | 5.00 | — | 8.15 | 2.54 | 2.07 |
+| backend-test:IntegrationTests | 317.22 | — | 297.54 | — | 173.30 | — | — |
+| frontend-install | 28.56 | — | 25.43 | 24.03 | — | — | — |
+| check-e2e-admission | 0.46 | 0.44 | 0.50 | 0.61 | — | — | — |
+| frontend-browser-install | 0.90 | — | 1.18 | 0.92 | — | — | — |
+| frontend-lint | 23.18 | 5.02 | — | 22.49 | — | — | — |
+| frontend-test | 151.27 | — | — | 73.96 | — | — | — |
+| frontend-build | 39.90 | — | 29.23 | 12.08 | — | — | — |
+| frontend-e2e | 192.92 | — | 59.85 | 44.59 | — | — | — |
+| 总墙钟 | 925.34 | 55.03 | 524.43 | 208.33 | 263.18 | 25.30 | 19.52 |
+
+### 列表详情规范
+
+前端列表和 API 规范以字段是否有上界选择随行渲染或单资源读取。两篇分别减少 34、21 字符，读取成本闸门通过。Webhook 投递列表已有摘要和单资源详情区分，载荷与尝试历史通过 `/deliveries/{id}` 读取。操作记录的 `FailureDetail` 已有长度上限，列表却仍直接返回无上界的 `FailureData` JSON，占位参数也用于现有前端回落渲染。本轮只修改规范，后续另审操作记录列表契约与消费者兼容。
