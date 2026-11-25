@@ -1,4 +1,5 @@
 #if (!IncludeOperationRecords)
+using System.Globalization;
 using System.Net;
 using System.Security.Claims;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
@@ -11,9 +12,12 @@ using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Recording;
 using Leistd.OperationRecords.Stores;
 using Leistd.UnitOfWork;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Testing;
+using Microsoft.Extensions.Time.Testing;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -44,22 +48,29 @@ public sealed class OperationRecordLoggingTests(ProjectWebApplicationFactory fac
     [InlineData(true)]
     public async Task Security_log_is_emitted_only_after_the_real_business_transaction_commits(bool commit)
     {
+        var time = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+        var clock = new FakeTimeProvider(time);
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(clock);
+        }));
 #if (LocalIdentity)
-        using var session = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        using var session = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
         Guid subject;
-        using (var scope = factory.Services.CreateScope())
+        using (var scope = host.Services.CreateScope())
             subject = (await scope.ServiceProvider.GetRequiredService<MyProjectDbContext>().Users.SingleAsync(u => u.Username == "admin")).Id;
 #else
         var subject = Guid.NewGuid();
-        using var session = factory.CreateResourceSession(subject, null);
+        using var session = ProjectWebApplicationFactory.CreateResourceSession(host, subject, null);
         using var projected = await session.Client.GetAsync("/api/v1/auth/me");
         Assert.Equal(HttpStatusCode.OK, projected.StatusCode);
 #endif
         var correlation = Guid.NewGuid().ToString("N");
-        var capture = factory.Services.GetRequiredService<OperationRecordLogCapture>();
+        var capture = host.Services.GetRequiredService<OperationRecordLogCapture>();
         string? before;
         var changed = $"committed-log-{correlation}";
-        await using (var scope = factory.Services.CreateAsyncScope())
+        await using (var scope = host.Services.CreateAsyncScope())
         using (scope.ServiceProvider.GetRequiredService<IAmbientContext>().Begin(
             new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", subject.ToString()), new Claim("preferred_username", "snapshot-actor")], "test")),
             correlationId: correlation))
@@ -82,7 +93,7 @@ public sealed class OperationRecordLoggingTests(ProjectWebApplicationFactory fac
             if (commit) await uow.CompleteAsync();
             else await uow.RollbackAsync();
         }
-        using var verification = factory.Services.CreateScope();
+        using var verification = host.Services.CreateScope();
         var persisted = await verification.ServiceProvider.GetRequiredService<MyProjectDbContext>().Users.SingleAsync(u => u.Id == subject);
         Assert.Equal(commit ? changed : before, persisted.DisplayName);
         if (!commit) { Assert.Empty(Records()); return; }
@@ -93,7 +104,8 @@ public sealed class OperationRecordLoggingTests(ProjectWebApplicationFactory fac
         Assert.Equal(changed, OperationRecordLogCapture.Field(record, "OperationTargetName"));
         Assert.Equal(PermissionConstant.Users.Update, OperationRecordLogCapture.Field(record, "OperationAuthorizationBasis"));
         Assert.NotEqual(Guid.Empty, Guid.Parse(OperationRecordLogCapture.Field(record, "OperationRecordId")!));
-        Assert.True(DateTimeOffset.TryParse(OperationRecordLogCapture.Field(record, "OperationTime"), out _));
+        // FakeLogger 的结构化字段按固定区域性转换原始值。消息模板里的 O 只格式化消息正文。
+        Assert.Equal(time.UtcDateTime.ToString(CultureInfo.InvariantCulture), OperationRecordLogCapture.Field(record, "OperationTime"));
         foreach (var field in new[] { "OperationActorTenantId", "OperationTenantId", "OperationImpersonatorId", "OperationImpersonatorName", "OperationOutcome", "OperationFailureCode", "OperationFailureDataKeys", "OperationFailureDetail", "OperationVisibility" })
             Assert.True(LogRecordFields.HasState(record, field), field);
         FakeLogRecord[] Records() => capture.Snapshot().Where(e =>
