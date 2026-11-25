@@ -9,7 +9,7 @@ import { json } from './support/http';
 // 不等真实时间、也不改服务端时间：模拟登录签发的会话一律不算刚认证，用它走到同一个确认对话框。
 test(
   'confirms identity with the password before changing the email',
-  { tag: '@auth' },
+  { tag: ['@auth', '@proves:auth-session'] },
   async ({ page }) => {
     const tenant = `e2e-${randomBytes(4).toString('hex')}`;
     const tenantAdminPassword = `Tnt!${randomBytes(12).toString('hex')}Aa1`;

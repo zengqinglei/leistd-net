@@ -48,14 +48,6 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      # 前端单测跑在 Playwright 驱动的 Chromium 里，浏览器版本取锁文件里的 playwright
-      - name: Install Playwright Chromium
-        shell: pwsh
-        run: |
-          $version = (Get-Content frontend/package-lock.json -Raw | ConvertFrom-Json -AsHashTable).packages['node_modules/playwright'].version
-          if (-not $version) { throw 'playwright is missing from frontend/package-lock.json' }
-          npx --yes "playwright@$version" install --with-deps chromium
-          if ($LASTEXITCODE -ne 0) { throw 'Playwright Chromium installation failed' }
 #endif
 #if (SpaFrontend)
       # 前端生产依赖审计不在 scripts/verify.ps1 里：定时、手动，或前端锁文件在本次事件的基线与头之间变化时运行，
@@ -106,7 +98,22 @@ jobs:
         # 定时运行只做审计
         if: ${{ github.event_name != 'schedule' }}
         shell: pwsh
-        run: ./scripts/verify.ps1
+        env:
+          VERIFY_INSTALL_BROWSER_DEPS: '1'
+          VERIFY_CHANGED_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+        run: |
+          if ($env:VERIFY_CHANGED_BASE) {
+            ./scripts/verify.ps1 -ChangedBase $env:VERIFY_CHANGED_BASE
+          } else {
+            ./scripts/verify.ps1
+          }
+      - name: Upload JUnit reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-reports
+          path: test-reports/*.xml
+          if-no-files-found: ignore
 #if (LocalIdentity)
       # 保留 Playwright 报告、trace 与 API 日志：成功时也上传，重试后才通过的 flaky 用例据此诊断
       - name: Upload E2E report

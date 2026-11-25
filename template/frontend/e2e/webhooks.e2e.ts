@@ -36,7 +36,7 @@ async function startReceiver(): Promise<{
 
 test(
   'creates a subscription, sends a test event and shows the successful delivery',
-  { tag: '@crud' },
+  { tag: ['@crud', '@proves:service-call'] },
   async ({ page }) => {
     const receiver = await startReceiver();
     const name = `E2E webhook ${Date.now()}`;

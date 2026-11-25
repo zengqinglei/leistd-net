@@ -10,7 +10,7 @@ import { freshTotp } from './support/totp';
 // 要求放在本用例新建的租户上：只限制这个租户的会话，不影响并行用例用的宿主账号。
 test(
   'completes the required two-factor setup on the page and signs in',
-  { tag: '@auth' },
+  { tag: ['@auth', '@proves:auth-session'] },
   async ({ page, baseURL }) => {
     const tenant = `mfa-${randomBytes(4).toString('hex')}`;
     const tenantAdminPassword = `Tnt!${randomBytes(12).toString('hex')}Aa1`;

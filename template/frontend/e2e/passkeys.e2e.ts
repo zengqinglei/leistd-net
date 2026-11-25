@@ -9,7 +9,7 @@ import { json } from './support/http';
 // 服务端给的选项、浏览器交回的凭据与服务端校验在这里首尾相接，单元测试与接口测试都覆盖不到这一段。
 test(
   'adds a passkey, then signs in with it without a password and as the second step',
-  { tag: '@auth' },
+  { tag: ['@auth', '@proves:auth-session'] },
   async ({ page }) => {
     const username = `pk_${randomBytes(4).toString('hex')}`;
     const password = `Pk!${randomBytes(12).toString('hex')}Aa1`;
