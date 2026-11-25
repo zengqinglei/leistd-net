@@ -47,7 +47,6 @@ internal sealed class EfCoreDistributedEventBus<TDbContext>(
         if (Activity.Current?.Id is { } trace) headers[DistributedEventHeaders.TraceParent] = trace;
         if (Activity.Current?.TraceStateString is { } state) headers[DistributedEventHeaders.TraceState] = state;
         if (correlation?.Get() is { } id) headers[DistributedEventHeaders.CorrelationId] = id;
-        if (@event is IInternalDistributedEvent) headers[DistributedEventInternalDelivery.Header] = DistributedEventInternalDelivery.Value;
         var now = clock.GetUtcNow().UtcDateTime;
         var record = new DistributedEventOutbox
         {

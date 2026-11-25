@@ -78,7 +78,17 @@ $retiredSymbols = @(
     "\bIsUserFacingMessage\b",
     "\bFallbackToExceptionMessage\b",
     "\bBusinessMessageExposure\b",
-    "\.MessageExposure\b"
+    "\.MessageExposure\b",
+    # 分布式事件只承载跨服务事实，服务内的可靠异步工作由业务状态与周期任务承接。
+    "\bIInternalDistributedEvent\b",
+    "\bleistd-delivery\b",
+    "\binternal-no-consumer\b",
+    "\binternal-invalid-payload\b",
+    "\binternal-unknown-tenant\b",
+    "\bInternal(NoConsumer|InvalidPayload|UnknownTenant)\b",
+    "\bGetInternal\b",
+    "\bGetAllWithInternal\b",
+    "\bDistributedEventInternalDelivery(?:Tests)?\b"
 )
 
 # 词表独立存放，公开内容扫描只豁免该文件；历史规格也必须扫描。
@@ -197,6 +207,8 @@ if ($SelfTest) {
         @{ Rule = "symbol"; Text = ".AsUserFacing()";                                ShouldMatch = $true }
         @{ Rule = "symbol"; Text = "FallbackToExceptionMessage = true";              ShouldMatch = $true }
         @{ Rule = "symbol"; Text = "options.MessageExposure = All";                  ShouldMatch = $true }
+        @{ Rule = "symbol"; Text = "headers['leistd-delivery'] = 'internal'";         ShouldMatch = $true }
+        @{ Rule = "symbol"; Text = "DistributedEventInternalDeliveryTests";          ShouldMatch = $true }
         @{ Rule = "phrase"; Text = "任一来源三态组合后取并集";                        ShouldMatch = $true }
         @{ Rule = "phrase"; Text = "亮/暗/跟随系统三态";                              ShouldMatch = $false }
         @{ Rule = "roadmap"; Text = "以及后续引入分布式权限缓存时的失效信号";                ShouldMatch = $true }

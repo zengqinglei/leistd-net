@@ -1,10 +1,10 @@
 # 分布式事件
 
-能在请求内完成的直接调用应用服务；跨服务的异步事实经分布式事件发布；服务内解耦使用本地事件，立即查询或执行命令使用服务客户端。事件随业务事务写入发件箱，提交后立即发送，持久扫描兜底；接收方先写收件箱再确认传输，处理与标记同事务。
+能在请求内完成的直接调用应用服务。分布式事件发布跨服务的异步事实，其他异步工作见[后台任务规范](./background-jobs.md#1-选择与放置)。事件随业务事务写入发件箱，提交后立即发送，持久扫描兜底。接收方先写收件箱再确认传输，处理与标记同事务。
 
 ## 发布与消费
 
-契约放在共享包，只引用 `Leistd.EventBus.Core`；继承 `DistributedEvent`，用 `[EventName("order.paid")]` 声明稳定名称。需要同键顺序时实现 `IOrderedDistributedEvent`，键取聚合标识。只交给本服务 Worker 处理、不出服务的事件实现 `IInternalDistributedEvent`，契约留在本服务，不经传输；部署前提见随包文档。事件元数据必须能由 JSON 还原，不能在接收时另生成标识。
+契约放在共享包，只引用 `Leistd.EventBus.Core`；继承 `DistributedEvent`，用 `[EventName("order.paid")]` 声明稳定名称。需要同键顺序时实现 `IOrderedDistributedEvent`，键取聚合标识。事件元数据必须能由 JSON 还原，不能在接收时另生成标识。
 
 在业务工作单元里调用 `IDistributedEventBus.PublishAsync`；没有工作单元会抛异常。在本地领域事件处理器里转发时声明 `[UnitOfWorkEventHandler(UnitOfWorkPhase.BeforeCommit)]`，否则本地事件默认提交后执行，已经离开业务事务。
 
