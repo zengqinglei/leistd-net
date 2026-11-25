@@ -72,6 +72,8 @@ builder.Services.AddDddDbContext<ControlPlaneDbContext>();
 
 不继承 `BaseDbContext` 的上下文不挂载。控制面上下文若只需审计，在 `AddDbContext` 中单独添加 `AuditSaveChangesInterceptor`。拦截器按作用域解析，因此不支持 DbContext 池与默认（单例）生命周期的 `AddDbContextFactory`：其选项为单例，解析拦截器与 `BaseDbContext` 所用的都是根容器。
 
+执行 `AddDddInfrastructure()` 后，宿主注册的 `TimeProvider` 同时驱动 `IMemoryCache`、HybridCache 一级和内存版 `IDistributedCache` 的过期。测试替换容器里的 `TimeProvider` 即可推进到期。宿主显式设置的 `MemoryCacheOptions.Clock` 和 `MemoryDistributedCacheOptions.Clock` 优先，未注册时间源时使用系统时间。
+
 ## 使用
 
 ### 定义实体与本地事件

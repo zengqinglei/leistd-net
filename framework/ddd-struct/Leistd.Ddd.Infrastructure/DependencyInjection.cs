@@ -14,9 +14,12 @@ using Leistd.UnitOfWork;
 using Leistd.UnitOfWork.Options;
 using Leistd.UnitOfWork.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Internal;
+using Microsoft.Extensions.Options;
 using Leistd.Ddd.Infrastructure.Persistence.Repositories;
 using Leistd.Timing;
 using Leistd.DependencyInjection.Extensions;
@@ -28,7 +31,8 @@ public static class DependencyInjection
 {
     /// <summary>注册工作单元、本地事件总线、数据过滤和 DbContext 仓储等 DDD 基础设施。</summary>
     /// <remarks>
-    /// 可重复调用：服务只注册一次，<paramref name="configureUnitOfWork"/> 每次都叠加；工作单元配置节的规则同 <c>AddUnitOfWork</c>。
+    /// <para>可重复调用：服务只注册一次，<paramref name="configureUnitOfWork"/> 每次都叠加；工作单元配置节的规则同 <c>AddUnitOfWork</c>。</para>
+    /// <para>进程内缓存默认与宿主的 <see cref="TimeProvider"/> 共用时间源，宿主显式配置的缓存时钟优先。</para>
     /// </remarks>
     /// <example>
     /// <code>
@@ -53,6 +57,8 @@ public static class DependencyInjection
 
         // 保留宿主或测试预先注册的时钟实现。
         services.TryAddSingleton<IClock, UtcClockProvider>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IPostConfigureOptions<MemoryCacheOptions>, CacheClockDefaults<MemoryCacheOptions>>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IPostConfigureOptions<MemoryDistributedCacheOptions>, CacheClockDefaults<MemoryDistributedCacheOptions>>());
 
         services.AddAuditingEfCore();
 
@@ -76,6 +82,23 @@ public static class DependencyInjection
         services.AddRegistrationValidator(EnsureEveryDbContextIsDeclared);
 
         return services;
+    }
+
+    private sealed class CacheClockDefaults<TOptions>(TimeProvider? timeProvider = null)
+        : IPostConfigureOptions<TOptions> where TOptions : MemoryCacheOptions
+    {
+        public void PostConfigure(string? name, TOptions options)
+        {
+            if (timeProvider is not null && timeProvider != TimeProvider.System)
+            {
+                options.Clock ??= new TimeProviderCacheClock(timeProvider);
+            }
+        }
+    }
+
+    private sealed class TimeProviderCacheClock(TimeProvider timeProvider) : ISystemClock
+    {
+        public DateTimeOffset UtcNow => timeProvider.GetUtcNow();
     }
 
     /// <summary>把一个 DbContext 接入 DDD 基础设施：登记进租户过滤器闸门，挂载保存拦截器，并按选项注册仓储。</summary>

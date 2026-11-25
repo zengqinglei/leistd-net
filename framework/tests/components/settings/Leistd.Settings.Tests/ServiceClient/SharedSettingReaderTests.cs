@@ -9,7 +9,7 @@ using Leistd.Settings.ServiceClient.Reading;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Internal;
+using Leistd.TestBase.Doubles;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
@@ -337,7 +337,7 @@ public sealed class SharedSettingReaderTests : IAsyncDisposable
     }
 
     private static ServiceProvider Build(IServiceCollection services)
-        => services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        => services.BuildServiceProvider(validateScopes: true);
 
     private IServiceCollection Services(Dictionary<string, string?> configuration, Action<IdentityOptions>? configure = null)
     {
@@ -420,11 +420,6 @@ public sealed class SharedSettingReaderTests : IAsyncDisposable
             BudgetStarted.TrySetResult();
             return timer;
         }
-    }
-
-    private sealed class CacheClock(TimeProvider clock) : ISystemClock
-    {
-        public DateTimeOffset UtcNow => clock.GetUtcNow();
     }
 
     private sealed class ScopedTenantAccessor : ICurrentTenantAccessor

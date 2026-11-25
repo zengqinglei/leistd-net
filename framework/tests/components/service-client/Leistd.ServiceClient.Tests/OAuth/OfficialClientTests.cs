@@ -17,7 +17,7 @@ using OpenIddict.Client.SystemNetHttp;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Internal;
+using Leistd.TestBase.Doubles;
 using Microsoft.Extensions.Time.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -360,7 +360,7 @@ public sealed class OfficialClientTests : IAsyncLifetime
         var services = new ServiceCollection().AddLogging().AddSingleton<IDistributedCache>(distributed);
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddSingleton<TimeProvider>(time);
-        services.AddMemoryCache(options => options.Clock = new MemoryClock(time));
+        services.AddMemoryCache(options => options.Clock = new CacheClock(time));
         services.AddServiceAuthentication();
         await using var provider = services.BuildServiceProvider();
         var cache = provider.GetRequiredService<TokenCache>();
@@ -378,10 +378,5 @@ public sealed class OfficialClientTests : IAsyncLifetime
         Assert.Equal(2, count);
         Assert.Equal(0, distributed.Writes);
         Assert.Equal(0, distributed.Reads);
-    }
-    // 真实缓存与 TokenCache 的 TTL 计算共享同一假时钟。
-    private sealed class MemoryClock(TimeProvider time) : ISystemClock
-    {
-        public DateTimeOffset UtcNow => time.GetUtcNow();
     }
 }
