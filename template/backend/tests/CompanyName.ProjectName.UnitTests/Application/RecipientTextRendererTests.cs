@@ -132,7 +132,7 @@ public sealed class RecipientTextRendererTests
             return read(userId, cancellationToken);
         }
 
-        public Task<AccountPreferencesOutputDto?> SetForCurrentUserAsync(
+        public Task<AccountPreferencesOutputDto> SetForCurrentUserAsync(
             Guid userId, string field, string? value, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }
