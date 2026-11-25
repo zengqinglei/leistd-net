@@ -215,6 +215,24 @@ describe('SessionContextService', () => {
     expect(settingContext.valueOf('Probe.Value')).toBeUndefined();
   });
 
+  it('keeps the newer context snapshot when an earlier settings request fails late', async () => {
+    const earlier = service.establish();
+    http
+      .expectOne('/api/v1/permissions/current')
+      .flush({ permissions: [], isSuperAdmin: false, versionToken: 'v1' });
+    await Promise.resolve();
+    await Promise.resolve();
+    const oldSettings = http.expectOne('/api/v1/settings');
+
+    const later = service.establish();
+    await flushEstablish([probeSetting('new')]);
+    await later;
+    oldSettings.flush(null, { status: 503, statusText: 'Unavailable' });
+    await earlier;
+
+    expect(settingContext.valueOf('Probe.Value')).toBe('new');
+  });
+
   // 偏好取自建立会话前那次 /me：断言界面状态真的换了，而不只是偏好状态里有值
   // 设置页取刷新入口的返回值：较早的刷新晚到时交给它的调用方的是较新的快照，旧值不会落到设置页上
   it('returns the newer snapshot to a settings refresh that answers late', async () => {

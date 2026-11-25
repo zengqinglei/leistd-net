@@ -1,13 +1,31 @@
 import { Location } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient, withInterceptors } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+// prettier-ignore
+import {
+  //#if (IncludeNotifications || IncludeRealTime)
+  EMPTY,
+  //#endif
+  firstValueFrom,
+} from 'rxjs';
 
 import { ApplicationHttpError } from '../errors/application-http-error';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../i18n/transloco.testing';
+//#endif
+import { httpErrorInterceptor } from '../interceptors/http-error-interceptor';
+//#if (RemoteTokenAuth)
+import { MOCKED_URL } from '../mock/mocked-url';
+import { FullPageNavigationService } from '../routing/full-page-navigation-service';
+//#endif
 import { EntryRouteService } from '../routing/entry-route-service';
 import { AuthService } from './auth-service';
 import { SessionContextService } from './session-context-service';
+//#if (IncludeNotifications || IncludeRealTime)
+import { SignalRService } from './signalr-service';
+//#endif
 import { StartupService } from './startup-service';
 
 import type { MockedObject } from 'vitest';
@@ -244,4 +262,70 @@ describe('StartupService', () => {
     });
   });
   //#endif
+});
+
+describe('StartupService HTTP requests', () => {
+  let http: HttpTestingController;
+  let startup: StartupService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: 'auth/login', children: [] }]),
+        provideHttpClient(withInterceptors([httpErrorInterceptor])),
+        provideHttpClientTesting(),
+        //#if (IncludeLocalization)
+        ...provideTranslocoTesting(),
+        //#endif
+        //#if (RemoteTokenAuth)
+        { provide: MOCKED_URL, useValue: () => false },
+        { provide: FullPageNavigationService, useValue: { replace: vi.fn() } },
+        //#endif
+        //#if (IncludeNotifications || IncludeRealTime)
+        { provide: SignalRService, useValue: { sessionRejected$: EMPTY, reset: vi.fn() } },
+        //#endif
+      ],
+    });
+    TestBed.inject(Location).replaceState('/platform');
+    http = TestBed.inject(HttpTestingController);
+    startup = TestBed.inject(StartupService);
+  });
+
+  afterEach(() => http.verify());
+
+  async function start() {
+    const done = startup.load();
+    http.expectOne('/api/v1/auth/me').flush({ id: 'signed-in', username: 'admin' });
+    await Promise.resolve();
+    return { done };
+  }
+
+  it('keeps permissions and settings in flight together and waits for settings on permission failure', async () => {
+    const { done } = await start();
+    const permissions = http.expectOne('/api/v1/permissions/current');
+    const settings = http.expectOne('/api/v1/settings');
+
+    permissions.flush(null, { status: 503, statusText: 'Unavailable' });
+    await new Promise<void>((resolve) => setTimeout(resolve));
+    expect(startup.status()).toBe('loading');
+    settings.flush([]);
+
+    await done;
+    expect(startup.status()).toBe('failed');
+    expect(startup.error()).toMatchObject({ status: 503 });
+  });
+
+  it('shows the permission outage when settings return 401 first without signing out', async () => {
+    const { done } = await start();
+    http.expectOne('/api/v1/settings').flush(null, { status: 401, statusText: 'Unauthorized' });
+    http
+      .expectOne('/api/v1/permissions/current')
+      .flush(null, { status: 503, statusText: 'Unavailable' });
+
+    await done;
+    expect(startup.status()).toBe('failed');
+    expect(startup.error()).toMatchObject({ status: 503 });
+    expect(TestBed.inject(AuthService).isAuthenticated()).toBe(true);
+    expect(TestBed.inject(Location).path()).toBe('/platform');
+  });
 });
