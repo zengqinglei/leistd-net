@@ -26,7 +26,6 @@
 | `input-otp`（`hlm-input-otp.ts`） | 内部输入框按 `spartanInvalid` 写 `aria-invalid`，并经 `brnFieldControlDescribedBy` 关联 Field 描述 | 读屏焦点落在内部输入框上，上游 helm 不给它写无效态、也不关联 Field 描述，看得见的说明与报错读屏读不到。[spartan#1909](https://github.com/spartan-ng/spartan/issues/1909) 修复后撤除 |
 | `checkbox`（`hlm-checkbox.ts`）、`switch`（`hlm-switch.ts`） | 转发 Field 描述：内部控件的 `aria-describedby` 合并显式输入与 Field 登记的说明、错误 id | 上游只转发显式输入，Field 的说明与错误关联不到真正获得焦点的控件。[spartan#1910](https://github.com/spartan-ng/spartan/issues/1910) 修复后撤除 |
 | `combobox`（`hlm-combobox-trigger.ts`）、`select`（`hlm-select-trigger.ts`）、`date-picker`（`hlm-date-picker-trigger.ts`） | 宿主加 `class: 'contents'`；宿主上不写 display 类，会盖过它 | class 转交内部按钮，静态 `class` 却仍留在行内宿主上，底色、内边距画两遍；同上游 checkbox/switch。[spartan#1900](https://github.com/spartan-ng/spartan/issues/1900) 修复后撤除 |
-| `tooltip`（`hlm-tooltip.ts`） | 聚焦不匹配 `:focus-visible`（焦点在宿主内的元素上时按该元素判断）且没有鼠标或笔停在宿主上时（按 `pointerId` 记录鼠标与笔的进出，触摸不计，点按后的 `:hover` 不算），用 Brain 的 `delay(false, -1)` 撤销打开；不支持该选择器时按可见 | Brain 对任何聚焦都打开，对话框关闭后的焦点恢复会弹出提示、盖住相邻行；同 Floating UI `visibleOnly`。`delay` 在 1.10 仍为 private，由 `tooltip-focus-visible.spec.ts` 钉住；spec 用 `focusWithKeyboard` 打开提示，触摸用 `touchTap`（`tapAt` 在仿真下仍是鼠标事件）。[spartan#1899](https://github.com/spartan-ng/spartan/issues/1899) 支持后撤除（上游 PR [#1908](https://github.com/spartan-ng/spartan/pull/1908)） |
 
 登记有上游差异的组件及其全部改动；无差异不登记。升级、评审须逐项核对源码。
 

@@ -19,6 +19,14 @@ import { FormField, form, required, validate, ValidationError } from '@angular/f
 //#if (IncludeLocalization)
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { lucideChevronDown } from '@ng-icons/lucide';
+import {
+  BrnComboboxAnchor,
+  BrnComboboxPopoverTrigger,
+  BrnComboboxTrigger,
+} from '@spartan-ng/brain/combobox';
+import { BrnFieldControlDescribedBy } from '@spartan-ng/brain/field';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmAvatarImports } from '@spartan-ng/helm/avatar';
 import { HlmBadge } from '@spartan-ng/helm/badge';
@@ -73,7 +81,11 @@ interface CandidateQuery {
 @Component({
   selector: 'app-tenant-staff-edit-dialog',
   // prettier-ignore
-  imports: [ImeGuard, DialogClose, FormField, StatusDot, TruncatedTooltip,
+  imports: [ImeGuard, DialogClose, FormField, NgIcon, StatusDot, TruncatedTooltip,
+    BrnComboboxAnchor,
+    BrnComboboxPopoverTrigger,
+    BrnComboboxTrigger,
+    BrnFieldControlDescribedBy,
     HlmBadge,
     HlmButton,
     HlmSpinner,
@@ -87,6 +99,7 @@ interface CandidateQuery {
     TranslocoDirective,
     //#endif
   ],
+  providers: [provideIcons({ lucideChevronDown })],
   templateUrl: './tenant-staff-edit-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -202,12 +215,6 @@ export class TenantStaffEditDialog {
         if (!member) this.candidateQueries.next({ keyword: '', immediate: true });
       });
     });
-  }
-
-  /** 提示只监听宿主自身的 focus / blur，焦点却在宿主里的触发器按钮上：把进出转成宿主上的同名事件。 */
-  relayFocus(event: FocusEvent): void {
-    const host = event.currentTarget as HTMLElement;
-    host.dispatchEvent(new FocusEvent(event.type === 'focusin' ? 'focus' : 'blur'));
   }
 
   initial(text: string): string {

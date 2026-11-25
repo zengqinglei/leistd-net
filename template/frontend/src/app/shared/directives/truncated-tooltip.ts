@@ -3,10 +3,12 @@ import {
   computed,
   Directive,
   DOCUMENT,
+  ElementRef,
   inject,
   input,
   signal,
 } from '@angular/core';
+import { BrnFieldA11yService } from '@spartan-ng/brain/field';
 import { BrnTooltip } from '@spartan-ng/brain/tooltip';
 
 /**
@@ -35,6 +37,8 @@ export class TruncatedTooltip {
   readonly truncated = computed(() => !this.tooltip.mutableTooltipDisabled());
 
   constructor() {
+    const host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+    const fieldA11y = inject(BrnFieldA11yService, { optional: true });
     void inject(DOCUMENT).fonts?.ready.then(() => this.fontsLoaded.set(true));
     afterRenderEffect((onCleanup) => {
       this.fontsLoaded();
@@ -50,6 +54,21 @@ export class TruncatedTooltip {
         resize.disconnect();
         mutation.disconnect();
       });
+    });
+    afterRenderEffect((onCleanup) => {
+      const description = fieldA11y?.describedBy();
+      if (!description) return;
+
+      // 截断的全文已在控件文字里，保留 Field 的说明和错误关联，避免被 Brain 提示打开或关闭时覆盖。
+      const restoreDescription = () => {
+        if (host.getAttribute('aria-describedby') !== description) {
+          host.setAttribute('aria-describedby', description);
+        }
+      };
+      const observer = new MutationObserver(restoreDescription);
+      observer.observe(host, { attributeFilter: ['aria-describedby'] });
+      restoreDescription();
+      onCleanup(() => observer.disconnect());
     });
   }
 }

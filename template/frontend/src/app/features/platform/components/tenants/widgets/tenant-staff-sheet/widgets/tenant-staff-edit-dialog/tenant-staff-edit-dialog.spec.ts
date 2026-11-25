@@ -271,11 +271,16 @@ describe('TenantStaffEditDialog', () => {
     document.querySelector<HTMLElement>('[role="option"][data-value="home-1"]')!.click();
     await fixture.whenStable();
     fixture.detectChanges();
+    const preview = dialog().querySelector('[data-testid="staff-linked-preview"]')!;
+    expect(preview.id).toBeTruthy();
     await focusWithKeyboard(trigger());
     await expect
       .poll(() => document.querySelector('[role="tooltip"]')?.textContent?.trim() ?? '')
       .toBe('Alexandra Konstantinopoulou-Montgomery alexandra.konstantinopoulou.montgomery');
+    expect(trigger().getAttribute('aria-describedby')).toBe(preview.id);
     trigger().blur();
+    await expect.poll(() => document.querySelector('[role="tooltip"]')).toBeNull();
+    expect(trigger().getAttribute('aria-describedby')).toBe(preview.id);
   });
 
   it('hints at the 200 limit, previews the linked account and grants with a toast', async () => {
