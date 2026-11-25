@@ -135,20 +135,16 @@ export class SessionContextService {
 
   /** 权限失败阻止进入；设置失败清掉旧主体快照。偏好保留 `/me` 发起时的读取号。 */
   private async loadContext(): Promise<PreferenceRead> {
-    await this.authorizationService.initialize();
-    try {
-      await this.refreshSettings();
-    } catch {
-      // 不保留上一份快照：主体已经换人，旧快照属于上一个用户。
-      this.settingContext.clear();
-    }
-    // 用 /me 发起时取的号：初始化等待期间写入成功或主体离开，那份 /me 已过期，不能盖掉写入结果。
-    return (
-      this.authService.lastReadPreferences() ?? {
-        ticket: this.preferences.beginRead(),
-        read: { preferences: null, preferenceOverrides: null },
-      }
-    );
+    const preference = this.authService.lastReadPreferences() ?? {
+      ticket: this.preferences.beginRead(),
+      read: { preferences: null, preferenceOverrides: null },
+    };
+    const [permissions] = await Promise.allSettled([
+      this.authorizationService.initialize(),
+      this.settingContext.load('entry'),
+    ]);
+    if (permissions.status === 'rejected') throw permissions.reason;
+    return preference;
   }
 
   /**
