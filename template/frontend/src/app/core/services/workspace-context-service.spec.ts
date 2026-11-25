@@ -128,6 +128,34 @@ describe('WorkspaceContextService', () => {
     TestBed.inject(HttpTestingController).verify();
   });
 
+  it('shares an empty directory for the session and requests it again for the next subject', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: AuthService, useValue: { currentUser: () => ({ tenantId: 'tenant-a' }) } },
+      ],
+    });
+    const service = TestBed.inject(WorkspaceContextService);
+    const http = TestBed.inject(HttpTestingController);
+    const directory = '/api/v1/auth/me/workspaces';
+    const first = service.refresh();
+    const second = service.refresh();
+    const pending = http.match(directory);
+    for (const request of pending) request.flush([]);
+    await Promise.all([first, second]);
+    expect(pending).toHaveLength(1);
+
+    await service.refresh();
+    http.expectNone(directory);
+    service.clear();
+    const next = service.refresh();
+    http.expectOne(directory).flush([]);
+    await next;
+    http.verify();
+  });
+
   it('remembers the console as a committed landing without changing the current scope in another tab', () => {
     const events = new Subject<NavigationEnd>();
     const previous = localStorage.getItem('last-workspace');

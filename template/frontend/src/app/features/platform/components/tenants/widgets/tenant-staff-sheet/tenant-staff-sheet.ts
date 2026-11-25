@@ -42,6 +42,7 @@ import { firstValueFrom, tap } from 'rxjs';
 
 import { applicationErrorMessage } from '../../../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../../../core/feedback/confirm-service';
+import { WorkspaceContextService } from '../../../../../../core/services/workspace-context-service';
 import { ReadonlyListPopover } from '../../../../../../shared/components/readonly-list-popover/readonly-list-popover';
 import {
   TableLoading,
@@ -120,6 +121,7 @@ export class TenantStaffSheet {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly confirm = inject(ConfirmService);
+  private readonly workspace = inject(WorkspaceContextService);
   private readonly owner = inject(DestroyRef);
   private readonly query = toSignal(this.route.queryParamMap, {
     initialValue: this.route.snapshot.queryParamMap,
@@ -300,7 +302,10 @@ export class TenantStaffSheet {
           .delete(`/api/v1/tenants/${this.tenantId()}/staff/${row.homeUserId}`)
           .pipe(tap(() => void this.load())),
     });
-    if (removed) toast.success(this.text('tenants.staff.removed'));
+    if (removed) {
+      this.workspace.refreshAfterAccessChange(row.homeUserId);
+      toast.success(this.text('tenants.staff.removed'));
+    }
   }
 }
 //#if (!IncludeLocalization)

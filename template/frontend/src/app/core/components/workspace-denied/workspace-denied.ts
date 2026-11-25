@@ -43,7 +43,7 @@ export class WorkspaceDenied {
   //#endif
 
   async goToWorkspace(): Promise<void> {
-    await this.workspace.refresh();
+    await this.workspace.refresh('reload');
     await this.router.navigateByUrl(this.workspace.landingUrl());
   }
 }

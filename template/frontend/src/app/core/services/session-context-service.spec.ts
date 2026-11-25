@@ -163,16 +163,10 @@ describe('SessionContextService', () => {
     //#endif
   });
 
-  /**
-   * 依次完成 establish() 内部的权限与设置请求：两者顺序 await，中间用一次宏任务把链推完，
-   * 否则 expectOne 找不到设置请求。
-   */
-  async function flushEstablish(settings: SettingOutputDto[] | 'fail'): Promise<void> {
+  function flushEstablish(settings: SettingOutputDto[] | 'fail'): void {
     http
       .expectOne('/api/v1/permissions/current')
       .flush({ permissions: [], isSuperAdmin: false, versionToken: 'v1' });
-    await new Promise((resolve) => setTimeout(resolve));
-
     const settingsReq = http.expectOne('/api/v1/settings');
     if (settings === 'fail') {
       settingsReq.flush('boom', { status: 500, statusText: 'Server Error' });
@@ -189,13 +183,13 @@ describe('SessionContextService', () => {
   async function establishWith(read: AccountPreferencesOutputDto): Promise<void> {
     readMe(read);
     const establish = service.establish();
-    await flushEstablish([]);
+    flushEstablish([]);
     await establish;
   }
 
   it('loads permissions and settings when a subject is established', async () => {
     const establish = service.establish();
-    await flushEstablish([probeSetting('a')]);
+    flushEstablish([probeSetting('a')]);
     await establish;
 
     expect(TestBed.inject(AuthorizationService).loaded()).toBe(true);
@@ -205,14 +199,30 @@ describe('SessionContextService', () => {
   // 主体已经换人，上一份快照属于上一个用户——加载失败必须清空，不能沿用。
   it('does not carry the previous subject snapshot when the new load fails', async () => {
     const first = service.establish();
-    await flushEstablish([probeSetting('a')]);
+    flushEstablish([probeSetting('a')]);
     await first;
 
     const second = service.establish();
-    await flushEstablish('fail');
+    flushEstablish('fail');
     await second;
 
     expect(settingContext.valueOf('Probe.Value')).toBeUndefined();
+  });
+
+  it('keeps the newer context snapshot when an earlier settings request fails late', async () => {
+    const earlier = service.establish();
+    http
+      .expectOne('/api/v1/permissions/current')
+      .flush({ permissions: [], isSuperAdmin: false, versionToken: 'v1' });
+    const oldSettings = http.expectOne('/api/v1/settings');
+
+    const later = service.establish();
+    flushEstablish([probeSetting('new')]);
+    await later;
+    oldSettings.flush(null, { status: 503, statusText: 'Unavailable' });
+    await earlier;
+
+    expect(settingContext.valueOf('Probe.Value')).toBe('new');
   });
 
   // 偏好取自建立会话前那次 /me：断言界面状态真的换了，而不只是偏好状态里有值
@@ -245,7 +255,7 @@ describe('SessionContextService', () => {
   it('still applies the preferences when the settings fail to load', async () => {
     readMe(readOf({ timeZone: 'Asia/Tokyo' }));
     const establish = service.establish();
-    await flushEstablish('fail');
+    flushEstablish('fail');
     await establish;
 
     expect(preferences.timeZone()).toBe('Asia/Tokyo');
@@ -293,7 +303,7 @@ describe('SessionContextService', () => {
   it('clears permissions, settings and preferences when the subject leaves', async () => {
     readMe(readOf({ timeZone: 'Asia/Tokyo' }));
     const establish = service.establish();
-    await flushEstablish([probeSetting('a')]);
+    flushEstablish([probeSetting('a')]);
     await establish;
 
     service.clear();
@@ -315,7 +325,7 @@ describe('SessionContextService', () => {
     await new Promise((resolve) => setTimeout(resolve));
     http.expectOne('/api/v1/auth/me/preferences').flush(readOf({ timeZone: 'Asia/Tokyo' }));
     expect((await write).status).toBe('saved');
-    await flushEstablish([]);
+    flushEstablish([]);
     await establish;
 
     expect(preferences.timeZone()).toBe('Asia/Tokyo');
@@ -327,7 +337,7 @@ describe('SessionContextService', () => {
     const establish = service.establish();
 
     service.clear();
-    await flushEstablish([]);
+    flushEstablish([]);
     await establish;
 
     expect(preferences.known()).toBe(false);

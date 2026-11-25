@@ -161,13 +161,21 @@ test.describe('workspace requests and routes', () => {
   //#endif
 
   test(
-    'grants a home account access through the query-driven staff sheet',
+    'opens a newly granted workspace in the same session',
     { tag: '@proves:main-flow' },
     async ({ page }) => {
-      const tenants = await json<{ items: { id: string; name: string }[] }>(
-        await page.request.get('/api/v1/tenants'),
+      const name = `grant-${Date.now().toString(36)}`;
+      const tenant = await json<{ id: string }>(
+        await page.request.post('/api/v1/tenants', {
+          data: { name, adminEmail: 'admin@example.test', adminPassword: 'Tenant!Passw0rd' },
+        }),
       );
-      const tenant = tenants.items.find((item) => item.name === 'default-e2e')!;
+      const documents: string[] = [];
+      page.on('request', (request) => {
+        if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+          documents.push(new URL(request.url()).pathname);
+        }
+      });
       await page.goto(`/platform/tenants?staff=${tenant.id}`);
       // 没有平台人员时空态里还有一个同名按钮，取工具栏那个
       await page.getByRole('button', { name: 'Grant access', exact: true }).first().click();
@@ -181,16 +189,31 @@ test.describe('workspace requests and routes', () => {
       await expect(person).toBeFocused();
       await person.click();
       // 选择框的弹出层挂在对话框之外，搜索框与选项要从页面上找
-      await page.getByPlaceholder('Search by name or username').fill('e2e_viewer');
-      await page.getByRole('option', { name: /e2e_viewer/ }).click();
+      const username = admin().username;
+      await page.getByPlaceholder('Search by name or username').fill(username);
+      await page.getByRole('option', { name: new RegExp(username, 'i') }).click();
       await expect(
-        dialog.getByText(/A new linked account uses platform\.e2e_viewer/),
+        dialog.getByText(`A new linked account uses platform.${username}`),
       ).toBeVisible();
       await dialog.getByRole('checkbox', { name: /^Administrator\b/ }).click();
+      const directory = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === '/api/v1/auth/me/workspaces' && response.ok(),
+        { timeout: 5_000 },
+      );
       await dialog.getByRole('button', { name: 'Grant access', exact: true }).click();
       await expect(dialog).not.toBeVisible();
-      await expect(page.getByText(/Granted .* access to default-e2e/)).toBeVisible();
-      await expect(page.getByRole('cell', { name: /e2e_viewer/ }).first()).toBeVisible();
+      await expect(page.getByText(new RegExp(`Granted .* access to ${name}`))).toBeVisible();
+      const workspaces = await (await directory).json();
+      expect(workspaces).toContainEqual(expect.objectContaining({ name }));
+      await page.keyboard.press('Escape');
+      await expect(page).toHaveURL('/platform/tenants');
+      await page.getByTestId('return-workspace').click();
+      await expect(page).toHaveURL('/w/default-e2e/platform');
+      await page.getByTestId('tenant-selector').getByRole('combobox').fill(name);
+      await page.getByRole('option', { name, exact: true }).click();
+      await expect(page).toHaveURL(`/w/${name}/platform`);
+      expect(documents).toEqual(['/platform/tenants']);
     },
   );
 });

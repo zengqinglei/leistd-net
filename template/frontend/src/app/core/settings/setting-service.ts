@@ -1,15 +1,14 @@
-// prettier-ignore
-import { HttpClient,
-  //#if (TenantWorkspace)
-  HttpContext,
-  //#endif
-} from '@angular/common/http';
+import { HttpClient, HttpContext } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-//#if (TenantWorkspace)
-import { WORKSPACE_SCOPE } from '../interceptors/http-context-tokens';
-//#endif
+// prettier-ignore
+import {
+  SILENT_AUTH,
+  //#if (TenantWorkspace)
+  WORKSPACE_SCOPE,
+  //#endif
+} from '../interceptors/http-context-tokens';
 import { SettingScope } from './setting-groups';
 // prettier-ignore
 import {
@@ -26,8 +25,10 @@ export class SettingService {
   private readonly baseUrl = '/api/v1/settings';
 
   /** 读取当前生效的设置值。 */
-  getSettings(): Observable<SettingOutputDto[]> {
-    return this.http.get<SettingOutputDto[]>(this.baseUrl);
+  getSettings(silent = false): Observable<SettingOutputDto[]> {
+    return this.http.get<SettingOutputDto[]>(this.baseUrl, {
+      context: new HttpContext().set(SILENT_AUTH, silent),
+    });
   }
   //#if (TenantWorkspace)
 

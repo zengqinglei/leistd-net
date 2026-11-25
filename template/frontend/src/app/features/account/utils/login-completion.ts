@@ -39,7 +39,7 @@ export function injectLoginCompletion(): (returnUrl: string | null) => Promise<R
   // 按权限进入默认页：拥有任一平台入口权限才进管理区，而不是按角色名或超管标志判断
   const enterLandingPage = async () => {
     //#if (TenantWorkspace)
-    await workspace.refresh();
+    await workspace.refresh('reload');
     return router.navigateByUrl(workspace.landingUrl());
     //#else
     return router.navigate([authorizationService.canAccessPlatform() ? '/platform' : '/workspace']);

@@ -20,19 +20,19 @@ export class SettingContextService {
   readonly snapshot = this.settings.asReadonly();
 
   /**
-   * 载入设置并返回本次快照。失败时向上抛出并保留上一份有效快照，降级由调用点决定：启动阶段可吞掉，
-   * 保存后的刷新失败必须让用户看见。
+   * 建立范围时静默读取，失败则使用默认值。保存后的刷新保留有效快照，失败交给调用方。
    */
-  async load(): Promise<readonly SettingOutputDto[]> {
+  async load(mode: 'entry' | 'refresh' = 'refresh'): Promise<readonly SettingOutputDto[]> {
     const generation = ++this.generation;
-    const settings = await firstValueFrom(this.settingService.getSettings());
-    // 期间又有更新的载入或已清空（主体离开）：不覆盖，交出当前快照
-    if (generation !== this.generation) {
-      return this.settings();
+    const entering = mode === 'entry';
+    try {
+      const settings = await firstValueFrom(this.settingService.getSettings(entering));
+      if (generation === this.generation) this.settings.set(settings);
+    } catch (error) {
+      if (!entering) throw error;
+      if (generation === this.generation) this.settings.set([]);
     }
-
-    this.settings.set(settings);
-    return settings;
+    return this.settings();
   }
 
   clear(): void {
