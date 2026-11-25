@@ -109,7 +109,9 @@ export class WorkspaceContextService {
       return context;
     }
     //#endif
-    this.startupRefresh = this.readDirectoryAndConsole(this.target() === null ? context : undefined);
+    this.startupRefresh = this.readDirectoryAndConsole(
+      this.target() === null ? context : undefined,
+    );
     const [result] = await Promise.allSettled([context, this.startupRefresh]);
     if (result.status === 'fulfilled') return;
     if (this.target() && workspaceDenial(result.reason)) {

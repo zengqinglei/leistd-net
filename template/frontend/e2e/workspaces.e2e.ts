@@ -190,10 +190,13 @@ test.describe('workspace requests and routes', () => {
       const username = admin().username;
       await page.getByPlaceholder('Search by name or username').fill(username);
       await page.getByRole('option', { name: new RegExp(username, 'i') }).click();
-      await expect(dialog.getByText(`A new linked account uses platform.${username}`)).toBeVisible();
+      await expect(
+        dialog.getByText(`A new linked account uses platform.${username}`),
+      ).toBeVisible();
       await dialog.getByRole('checkbox', { name: /^Administrator\b/ }).click();
-      const directory = page.waitForResponse((response) =>
-        new URL(response.url()).pathname === '/api/v1/auth/me/workspaces' && response.ok(),
+      const directory = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === '/api/v1/auth/me/workspaces' && response.ok(),
       );
       await dialog.getByRole('button', { name: 'Grant access', exact: true }).click();
       await expect(dialog).not.toBeVisible();

@@ -390,9 +390,18 @@ describe('StartupService HTTP requests', () => {
     it(`reuses the first request batch when ${tenantId ? 'a tenant account' : 'a host account'} enters ${path}`, async () => {
       TestBed.inject(Location).replaceState(path);
       const { done } = await start(tenantId);
-      const batch = http.match((request) => [directory, permissions, settings].includes(request.url));
-      const requestKeys = batch.map(({ request }) => [request.url, request.headers.get('X-Workspace')]);
-      const expected = [[directory, null], [permissions, scope], [settings, scope]];
+      const batch = http.match((request) =>
+        [directory, permissions, settings].includes(request.url),
+      );
+      const requestKeys = batch.map(({ request }) => [
+        request.url,
+        request.headers.get('X-Workspace'),
+      ]);
+      const expected = [
+        [directory, null],
+        [permissions, scope],
+        [settings, scope],
+      ];
       if (scope && !tenantId) expected.push([permissions, null]);
       expect(requestKeys).toHaveLength(expected.length);
       expect(requestKeys).toEqual(expect.arrayContaining(expected));
@@ -475,14 +484,19 @@ describe('StartupService HTTP requests', () => {
 
     const harness = await RouterTestingHarness.create();
     const entered = harness.navigateByUrl('/platform', WorkspaceContent);
-    await vi.waitFor(() => {
-      const pending = http.match((request) => request.url === permissions || request.url === settings);
-      expect(pending).toHaveLength(2);
-      for (const request of pending) {
-        expect(request.request.headers.get('X-Workspace')).toBe('acme');
-        request.flush(request.request.url === permissions ? permissionSnapshot : []);
-      }
-    }, { interval: 1 });
+    await vi.waitFor(
+      () => {
+        const pending = http.match(
+          (request) => request.url === permissions || request.url === settings,
+        );
+        expect(pending).toHaveLength(2);
+        for (const request of pending) {
+          expect(request.request.headers.get('X-Workspace')).toBe('acme');
+          request.flush(request.request.url === permissions ? permissionSnapshot : []);
+        }
+      },
+      { interval: 1 },
+    );
     await entered;
     expect(TestBed.inject(Router).url).toBe('/w/acme/platform');
     http.expectNone(directory);
