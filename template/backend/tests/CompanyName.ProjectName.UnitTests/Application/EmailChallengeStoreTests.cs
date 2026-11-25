@@ -18,6 +18,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Internal;
 #if (IncludeLocalization)
+using Leistd.Security;
 using Microsoft.Extensions.Localization;
 #endif
 using Microsoft.Extensions.Logging.Abstractions;
@@ -715,6 +716,7 @@ public sealed partial class EmailChallengeStoreTests
                 .AddSingleton<IAccountPreferenceStore, NoPreferences>()
                 .AddTransient<RecipientTextRenderer>()
 #if (IncludeLocalization)
+                .AddAmbientContext()
                 .AddSingleton<IStringLocalizer, KeyLocalizer>()
 #endif
                 .AddTransient<AccountCodeMailer>()

@@ -2,6 +2,11 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using CompanyName.ProjectName.Application.Settings.Dtos;
 using CompanyName.ProjectName.Application.Settings.Preferences;
+#if (IncludeLocalization)
+using Leistd.Security.Claims;
+using Leistd.Security.Users;
+using Microsoft.Extensions.Options;
+#endif
 
 namespace CompanyName.ProjectName.UnitTests.Application;
 
@@ -17,7 +22,7 @@ public sealed class RecipientTextRendererTests
         using var caller = new CallerCultures();
         var recipient = Guid.NewGuid();
         var store = new PreferenceStore((_, _) => Task.FromResult<AccountPreferencesOutputDto?>(Preferences(language, "Asia/Tokyo")));
-        var result = await new RecipientTextRenderer(store).RenderAsync(recipient, ReadContext, useTimeZone: true);
+        var result = await CreateRenderer(store).RenderAsync(recipient, ReadContext, useTimeZone: true);
 
         Assert.Equal((expectedLanguage, expectedLanguage, "Asia/Tokyo"), result);
         Assert.Equal(recipient, Assert.Single(store.Reads));
@@ -37,7 +42,7 @@ public sealed class RecipientTextRendererTests
             await release.Task;
             return userId == first ? Preferences("en", "Europe/Paris") : Preferences("zh-CN", "Asia/Tokyo");
         });
-        var renderer = new RecipientTextRenderer(store);
+        var renderer = CreateRenderer(store);
         var firstText = renderer.RenderAsync(first, ReadContext, useTimeZone: true);
         var secondText = renderer.RenderAsync(second, ReadContext, useTimeZone: true);
         release.SetResult();
@@ -53,7 +58,7 @@ public sealed class RecipientTextRendererTests
     {
         using var caller = new CallerCultures();
         var store = new PreferenceStore((_, _) => throw new InvalidOperationException("This render must not read preferences."));
-        var result = await new RecipientTextRenderer(store).RenderAsync(Guid.NewGuid(), ReadContext);
+        var result = await CreateRenderer(store).RenderAsync(Guid.NewGuid(), ReadContext);
 
         Assert.Equal(("en", "en", "UTC"), result);
         Assert.Empty(store.Reads);
@@ -66,7 +71,7 @@ public sealed class RecipientTextRendererTests
     {
         using var caller = new CallerCultures();
         var store = new PreferenceStore((_, _) => Task.FromResult<AccountPreferencesOutputDto?>(Preferences("en", null)));
-        var renderer = new RecipientTextRenderer(store);
+        var renderer = CreateRenderer(store);
         var expected = new InvalidOperationException("Rendering failed.");
 
         var actual = await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -88,7 +93,7 @@ public sealed class RecipientTextRendererTests
             started.SetResult();
             return response.Task.WaitAsync(token);
         });
-        var task = new RecipientTextRenderer(store).RenderAsync<string>(
+        var task = CreateRenderer(store).RenderAsync<string>(
             Guid.NewGuid(), _ => throw new InvalidOperationException("Canceled rendering must not run."),
             useTimeZone: true, cancellationToken: cancellation.Token);
 
@@ -98,6 +103,12 @@ public sealed class RecipientTextRendererTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
         caller.AssertRestored();
     }
+
+    private static RecipientTextRenderer CreateRenderer(IAccountPreferenceStore store) => new(
+#if (IncludeLocalization)
+        new CurrentUser(new CurrentPrincipalAccessor(), Options.Create(new ClaimTypeOptions())),
+#endif
+        store);
 
     private static (string Culture, string UiCulture, string TimeZone) ReadContext(TimeZoneInfo timeZone)
         => (CultureInfo.CurrentCulture.Name, CultureInfo.CurrentUICulture.Name, timeZone.Id);

@@ -1,6 +1,7 @@
 using System.Globalization;
 #if (IncludeLocalization)
 using CompanyName.ProjectName.Application.Settings.Provider;
+using Leistd.Security.Users;
 #endif
 using CompanyName.ProjectName.Application.Settings.Timing;
 
@@ -8,8 +9,15 @@ namespace CompanyName.ProjectName.Application.Settings.Preferences;
 
 /// <summary>按收件人的生效语言和时区生成待投递或保存的文本。</summary>
 /// <remarks>调用方先建立收件人的租户上下文。区域性只在同步渲染期间有效。</remarks>
+#if (IncludeLocalization)
+/// <param name="currentUser">仅在生效语言缺失且收件人就是当前用户时沿用请求语言。</param>
+#endif
 /// <param name="preferenceStore">按收件人读取生效账户偏好。</param>
-public sealed class RecipientTextRenderer(IAccountPreferenceStore preferenceStore)
+public sealed class RecipientTextRenderer(
+#if (IncludeLocalization)
+    ICurrentUser currentUser,
+#endif
+    IAccountPreferenceStore preferenceStore)
 {
     /// <summary>读取一次所需偏好，在收件人区域性下渲染，随后恢复调用方的区域性。</summary>
     /// <param name="userId">收件人的用户 Id。</param>
@@ -25,10 +33,12 @@ public sealed class RecipientTextRenderer(IAccountPreferenceStore preferenceStor
 #if (IncludeLocalization)
         var preferences = (await preferenceStore.GetForUserAsync(userId, cancellationToken))?.Preferences;
         var supported = SettingConstant.Display.SupportedLanguages;
-        var language = preferences?.Language;
-        var culture = CultureInfo.GetCultureInfo(language is not null && supported.Contains(language, StringComparer.Ordinal)
-            ? language
-            : supported[0]);
+        var culture = preferences?.Language switch
+        {
+            null or "" when currentUser.Id == userId => CultureInfo.CurrentUICulture,
+            string language when supported.Contains(language, StringComparer.Ordinal) => CultureInfo.GetCultureInfo(language),
+            _ => CultureInfo.GetCultureInfo(supported[0])
+        };
 #else
         var preferences = useTimeZone ? (await preferenceStore.GetForUserAsync(userId, cancellationToken))?.Preferences : null;
         var culture = CultureInfo.GetCultureInfo("en");

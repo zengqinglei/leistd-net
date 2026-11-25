@@ -15,7 +15,8 @@ namespace CompanyName.ProjectName.Api.Notifications;
 
 /// <summary>经通知组件发出安全提醒：站内通知总会送达（必达组合），邮件按本人偏好（通知偏好组件读收件人的设置）。</summary>
 /// <remarks>
-/// 文案按收件人的生效语言渲染，缺值时用模板默认语言。正文时刻按收件人的展示时区写出并注明时区。
+/// 文案按收件人的生效语言渲染。个人、组织和部署基线都没设语言时，本人操作沿用请求语言，其余用模板默认语言。
+/// 正文时刻按收件人的展示时区写出并注明时区。
 /// </remarks>
 public sealed class NotificationSecurityAlertPublisher(
     INotificationPublisher publisher,

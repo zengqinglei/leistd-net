@@ -1,6 +1,7 @@
 #if (LocalIdentity && IncludeNotifications)
 #if (IncludeLocalization)
 using System.Globalization;
+using System.Security.Claims;
 using CompanyName.ProjectName.Api.Localization;
 #endif
 using CompanyName.ProjectName.Api.Notifications;
@@ -10,12 +11,15 @@ using CompanyName.ProjectName.Application.Settings.Preferences;
 #if (IncludeLocalization)
 using CompanyName.ProjectName.Application.Settings.Provider;
 using Leistd.Localization.AspNetCore;
+using Leistd.Security.Claims;
+using Leistd.Security.Users;
 using Microsoft.Extensions.DependencyInjection;
 #endif
 using Leistd.Notifications.Dtos;
 using Leistd.Notifications.Publishing;
 #if (IncludeLocalization)
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Options;
 #endif
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -31,8 +35,14 @@ public sealed class NotificationSecurityAlertPublisherTests
     private static readonly DateTime LockedUntilUtc = new(2026, 3, 1, 5, 30, 0, DateTimeKind.Utc);
 
 #if (IncludeLocalization)
-    [Fact]
-    public async Task A_recipient_without_a_language_gets_the_default_even_under_another_culture()
+    [Theory]
+    [InlineData(true, null, "密码已修改")]
+    [InlineData(false, null, "Your password was changed")]
+    [InlineData(null, null, "Your password was changed")]
+    [InlineData(true, "en", "Your password was changed")]
+    [InlineData(true, "fr-FR", "Your password was changed")]
+    public async Task Security_alerts_use_request_language_only_for_the_current_user_with_no_language(
+        bool? recipientIsCurrentUser, string? language, string expectedTitle)
     {
         using var services = new ServiceCollection()
             .AddLogging()
@@ -43,10 +53,17 @@ public sealed class NotificationSecurityAlertPublisherTests
                 options.JsonResourceTypes.Add(typeof(ApiResource));
             })
             .BuildServiceProvider();
+        var principal = new CurrentPrincipalAccessor();
+        var actorId = recipientIsCurrentUser == true ? Recipient : Guid.NewGuid();
+        using var actor = recipientIsCurrentUser.HasValue
+            ? principal.Change(new ClaimsPrincipal(new ClaimsIdentity([new Claim(CustomClaimTypes.Subject, actorId.ToString())], "Test")))
+            : null;
         var publisher = new CapturingPublisher();
         var alerts = new NotificationSecurityAlertPublisher(
             publisher,
-            new RecipientTextRenderer(new PerUserPreferences(new Dictionary<Guid, string>())),
+            new RecipientTextRenderer(
+                new CurrentUser(principal, Options.Create(new ClaimTypeOptions())),
+                new PerUserPreferences(new Dictionary<Guid, string>(), language)),
             services.GetRequiredService<IStringLocalizerFactory>(),
             NullLogger<NotificationSecurityAlertPublisher>.Instance);
 
@@ -61,7 +78,7 @@ public sealed class NotificationSecurityAlertPublisherTests
             CultureInfo.CurrentUICulture = previous;
         }
 
-        Assert.Equal("Your password was changed", Assert.Single(publisher.Published).Notification.Title);
+        Assert.Equal(expectedTitle, Assert.Single(publisher.Published).Notification.Title);
     }
 #endif
 
@@ -98,7 +115,7 @@ public sealed class NotificationSecurityAlertPublisherTests
 
     private static NotificationSecurityAlertPublisher CreatePublisher(INotificationPublisher publisher) => new(
         publisher,
-        new RecipientTextRenderer(new PerUserPreferences(new Dictionary<Guid, string>())),
+        CreateRenderer(new PerUserPreferences(new Dictionary<Guid, string>())),
 #if (IncludeLocalization)
         new TemplateLocalizerFactory(),
 #endif
@@ -115,7 +132,7 @@ public sealed class NotificationSecurityAlertPublisherTests
         var publisher = new CapturingPublisher();
         var alerts = new NotificationSecurityAlertPublisher(
             publisher,
-            new RecipientTextRenderer(new PerUserPreferences(timeZones)),
+            CreateRenderer(new PerUserPreferences(timeZones)),
 #if (IncludeLocalization)
             new TemplateLocalizerFactory(),
 #endif
@@ -127,6 +144,12 @@ public sealed class NotificationSecurityAlertPublisherTests
         Assert.Equal(Recipient.ToString(), userId);
         return notification.Content!;
     }
+
+    private static RecipientTextRenderer CreateRenderer(IAccountPreferenceStore store) => new(
+#if (IncludeLocalization)
+        new CurrentUser(new CurrentPrincipalAccessor(), Options.Create(new ClaimTypeOptions())),
+#endif
+        store);
 
     private sealed class CapturingPublisher : INotificationPublisher
     {
@@ -140,13 +163,13 @@ public sealed class NotificationSecurityAlertPublisherTests
     }
 
     // 当前用户是另一个时区：用错入口就会拿到纽约时间
-    private sealed class PerUserPreferences(IReadOnlyDictionary<Guid, string> timeZones) : IAccountPreferenceStore
+    private sealed class PerUserPreferences(IReadOnlyDictionary<Guid, string> timeZones, string? language = null) : IAccountPreferenceStore
     {
         public Task<AccountPreferencesOutputDto?> GetForCurrentUserAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult<AccountPreferencesOutputDto?>(WithTimeZone("America/New_York"));
+            => Task.FromResult<AccountPreferencesOutputDto?>(CreatePreferences("America/New_York"));
 
         public Task<AccountPreferencesOutputDto?> GetForUserAsync(Guid userId, CancellationToken cancellationToken = default)
-            => Task.FromResult<AccountPreferencesOutputDto?>(timeZones.TryGetValue(userId, out var id) ? WithTimeZone(id) : null);
+            => Task.FromResult<AccountPreferencesOutputDto?>(CreatePreferences(timeZones.GetValueOrDefault(userId), language));
 
         public Task<AccountPreferencesOutputDto> SetForCurrentUserAsync(
             Guid userId,
@@ -155,9 +178,9 @@ public sealed class NotificationSecurityAlertPublisherTests
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        private static AccountPreferencesOutputDto WithTimeZone(string id) => new()
+        private static AccountPreferencesOutputDto CreatePreferences(string? timeZone, string? language = null) => new()
         {
-            Preferences = new AccountPreferenceValuesDto { TimeZone = id },
+            Preferences = new AccountPreferenceValuesDto { TimeZone = timeZone, Language = language },
             PreferenceOverrides = new AccountPreferenceValuesDto()
         };
     }
