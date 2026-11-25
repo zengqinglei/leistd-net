@@ -274,8 +274,8 @@ describe('StartupService', () => {
   });
   //#endif
 });
-
 //#if (TenantWorkspace)
+
 @Component({ template: '<p>Workspace content</p>' })
 class WorkspaceContent {}
 //#endif
@@ -287,6 +287,7 @@ describe('StartupService HTTP requests', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
+        // prettier-ignore
         provideRouter([
           { path: 'auth/login', children: [] },
           //#if (TenantWorkspace)
@@ -304,6 +305,7 @@ describe('StartupService HTTP requests', () => {
           { path: 'account', component: WorkspaceContent },
           //#endif
         ]),
+        // prettier-ignore
         provideHttpClient(
           withInterceptors([
             //#if (TenantWorkspace)
