@@ -132,4 +132,101 @@
 
 ## 4. 验证
 
-（实施后填写：前后的用例数和耗时、每处删除或下沉的替代覆盖、反例证据、未覆盖项。）
+### 实施前基线
+
+从 `5e699f41` 在本机以 SDK 10.0.402 生成工作区并执行默认 `pwsh scripts/verify.ps1`。用例数来自本轮 JUnit，前端 spec 数同时与 Vitest 的发现结果核对。耗时为 `verify.ps1` 各步骤的墙钟秒数。
+
+| 场景 | 前端 spec / 用例 | 后端单元 | 后端集成 | E2E | 后端单元 / 集成（s） | 前端单元 / E2E（s） | 完整入口（s） |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `identity-workspace` | 192 / 2239 | 371 | 872 | 16 | 17.79 / 362.70 | 159.86 / 53.22 | 802.07 |
+| `resource-capabilities-03` | — | 201 | 192 | — | 4.85 / 231.40 | — | 287.33 |
+
+Identity 全部通过，Resource 仅 B1 的提交分支失败。实施后节点如有不同，两轮墙钟用于记录各自的验证成本。
+
+### B1 和 B2 的反例
+
+- 生成的 `resource-capabilities-03` 在修复前运行 `dotnet test -c Release --filter FullyQualifiedName~OperationRecordLoggingTests`，两条通过，提交分支失败。失败时结构化值为 `11/25/2026 10:56:57`，有效区域性和 UI 为 `zh-SG`，使用公历。FakeLogger 按固定区域性转换原始结构化值，旧断言把它交给当前区域性解析。修复后用宿主固定时钟核对结构化值，保留真实事务的提交和回滚两支。
+- 在生成的 Resource 项目用命令替身构造零用例、全部跳过、缺报告三种情况，修复前 `pwsh scripts/verify.ps1 -Fast` 三次均返回 0，修复后均返回 1，并指明出问题的测试步骤及原因。
+- 在生成的 Identity 和纯 API Resource 项目执行 `check_verify_script`，核对 `-List`、改动选步、原失败码传播、默认及快速模式，以及上述三个反例。
+- 修复后运行两种禁用操作历史形态的完整集成测试，`resource-capabilities-03` 192/192、`identity-capabilities-05` 648/648 通过。在两个形态的生成目录中将有效区域性固定并核对为 `zh-SG`，各自的 `OperationRecordLoggingTests` 均为 3/3 通过。
+- 对真实 VSTest 传入无匹配结果的 `--filter FullyQualifiedName=NoTestMatchesThisName`，默认退出 0，加 `-- RunConfiguration.TreatNoTestsAsError=true` 后退出 1。
+
+### 删除与下沉的替代覆盖
+
+| 项 | 删除或下沉 | 替代覆盖与保留边界 |
+| --- | --- | --- |
+| A2 | 用户编辑对话框的开关边缘点按 | `coarse-pointer.spec.ts` 的 `toggles each control when tapped outside its visual box` 覆盖共享触屏命中区。`shows the role field and submits the picked roles only when roles may be assigned` 点击对话框内的开关，断言 `aria-checked` 与保存载荷。三个表各保留其 `aria-sort` 绑定断言。 |
+| A3 | 缩减日期格式的重复语言样本 | 槽位保留中英文代表，往返保留 ISO、月在前、日在前及日语年月日格式，同一用例继续覆盖年初、年末和闰日。地区标签仍由中文 `zh-CN`、`zh-TW` 的既有断言覆盖。 |
+| C1 | 删除管理员单独打开角色列表的用例，下沉管理员和受限会话的创建按钮断言 | `A_role_reader_can_list_roles_but_cannot_create_them` 验证真实宿主允许受限角色读取、拒绝其创建且允许管理员创建。`offers role creation only to a user with the create permission` 固定组件接线。`signs in through the login page` 和 `opens the protected role list with a restricted session` 保留真实 Cookie 会话访问受保护列表。 |
+| C2 | 删除全事件选择后独立的选中状态断言 | `WebhookSubscriptionDialog` 的 `submits ["*"] for all events and drops the individual choices` 保证请求载荷。E2E 仍由浏览器点击全事件并提交，保留真实接收端、签名头、成功状态、密钥显示、筛选和投递详情接线。 |
+| C3 | 登录失败阈值与零阈值的重复 HTTP 用例 | `Reaching_the_threshold_locks_temporarily_and_resets_the_count` 和 `A_zero_threshold_never_locks` 固定领域规则。`Admin_unlock_allows_sign_in_after_the_configured_threshold_locks_the_user` 用租户设定阈值 2 验证普通登录接线，保留拒绝、管理员解除与恢复登录。会话维持和 `Rejects_a_zero_lockout_duration` 的 HTTP 400 映射继续覆盖。 |
+| C4 | 下沉五个退役名称的否定断言 | `The_default_catalog_excludes_retired_machine_scopes` 固定默认目录。`Initialization_removes_a_stored_scope_outside_the_catalog` 预置实际旧记录并验证清理。`Identity_registers_and_publishes_its_service_scope` 保留服务级 scope 的 API 与落库接线。 |
+| C5 | 审查后保留 | `Concurrent_first_writes_of_one_user_setting_both_succeed_and_leave_one_row` 覆盖 HTTP 并发写。`Interleaved_first_write_inside_an_outer_transaction_recovers_and_commits_host_entities` 覆盖 PostgreSQL 跨连接提交和保存点恢复。 |
+| C6 | 删除 390 px 跨源导航变体 | `SystemSwitcher` 的 `closes only the menu on Escape inside a real drawer` 覆盖真实抽屉内打开菜单、按 Escape 并保留抽屉。`navigates to another origin with the current workspace path` 保留浏览器跨源导航及目标工作区路径。两个冷入口继续检查。 |
+
+### C7 同机对照
+
+本机分别构建改动前后的 `resource-workspace` Release 集成测试项目，再按前、后交错次序运行 `dotnet test -c Release --no-build --no-restore --filter FullyQualifiedName~ResourceBrowserSessionTests`，每轮均为 39/39 通过。计时包括测试进程启动，不含构建。表里的宿主与数据库克隆数取自前后各一次带计数的全类运行。
+
+| 构建 | 第 1 轮（s） | 第 2 轮（s） | 第 3 轮（s） | 中位（s） | 组内极差（s） | 宿主 / 数据库克隆 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 改动前 | 35.403 | 33.903 | 32.088 | 33.903 | 3.316 | 39 / 39 |
+| 改动后 | 33.433 | 32.180 | 31.825 | 32.180 | 1.607 | 37 / 37 |
+
+中位少 1.723 秒，未超过两组中较大的极差 3.316 秒。宿主 39 到 37，耗时无可测收益，不保留。
+
+### 前端改单条用例耗时
+
+同一节点的 Identity Workspace Vitest JUnit 用例墙钟。前为 `5e699f41` 的完整入口，后为 A 的全量前端复测（含 C1 的组件覆盖）。表内改写用例均低于 100 ms。
+
+| 单条用例 | 改写前（ms） | 改写后（ms） |
+| --- | ---: | ---: |
+| `StartupService > treats 401 as signed-out and still reaches success` | 6.0 | 2.3 |
+| `StartupService > leaves Workspace:Forbidden on a deep link to the workspace guard instead of failing startup` | 2.4 | 1.7 |
+| `StartupService > leaves Workspace:Unavailable on a deep link to the workspace guard instead of failing startup` | 6.9 | 0.8 |
+| `StartupService > marks startup as failed when the auth service is unavailable (503)` | 3.0 | 0.6 |
+| `StartupService > marks startup as failed on network errors (status 0)` | 2.1 | 0.5 |
+| `StartupService > reaches success when the session probe resolves` | 1.9 | 0.4 |
+| `StartupService > settled > waits while loading and lets the guard decide after success` | 2.4 | 0.6 |
+| `StartupService > settled > holds the target url and rejects the navigation when startup failed` | 4.1 | 0.5 |
+| `StartupService > retry > lands on the held target once startup succeeds, without reading the address bar` | 6.9 | 2.1 |
+| `StartupService > retry > keeps the held target while startup still fails` | 4.7 | 0.7 |
+| `StartupService > entry route gate > establishes the subject on a protected route` | 1.9 | 0.3 |
+| `StartupService > entry route gate > does not probe the session on a public route` | 1.8 | 0.4 |
+| `StartupService > lets the external sign-in callback run without probing the session` | 2.4 | 0.3 |
+| `calendarLocale > maps the ISO Sunday to index zero in the calendar` | 52.3 | 0.8 |
+| `calendarLocale > keeps working for an unknown locale` | 0.9 | 0.5 |
+| `firstDayOfWeek > falls back to Monday when the runtime does not provide week information` | 65.9 | 0.4 |
+| `ExternalAuthCallback > establishes the session before navigating` | 21.0 | 7.0 |
+| `ExternalAuthCallback > goes to the second step page with the protected return address` | 11.6 | 3.6 |
+| `ExternalAuthCallback > offers a usable exit when loadUser fails` | 9.1 | 53.9 |
+| `ExternalAuthCallback > offers a usable exit when establish fails` | 4.6 | 56.4 |
+| `ExternalAuthCallback > offers a usable exit when navigate fails` | 9.5 | 53.9 |
+| `ExternalAuthCallback > uses the protected return address after establishing a session` | 9.2 | 2.8 |
+| `ExternalAuthCallback > takes a restricted session to the setup page together with the protected return address` | 9.9 | 2.0 |
+| `ExternalAuthCallback > continues an authorization request with a full page load` | 10.2 | 1.6 |
+| `ExternalAuthCallback > shows the server reason when the sign-in is rejected` | 15.1 | 52.1 |
+| `ExternalAuthCallback > shows a generic message when the server fails` | 10.0 | 55.1 |
+| `ExternalAuthCallback > shows the cancellation without completing and offers a way back to sign in` | 10.7 | 54.3 |
+| `ExternalAuthCallback > returns a cancelled link to the security settings without completing it` | 10.6 | 2.9 |
+| `ExternalAuthCallback > asks to confirm identity and retries the link with the code` | 45.8 | 58.2 |
+| `ExternalAuthCallback > signs in again back to the security settings, not to the callback` | 21.9 | 57.9 |
+| `ExternalAuthCallback > returns to the security settings when the password prompt is dismissed` | 23.1 | 55.8 |
+| `ExternalAuthCallback > enters the application when a replayed callback fails but the session is still valid` | 11.1 | 55.4 |
+| `TwoFactorRequired > restores the setup page when loadUser fails` | 21.3 | 9.2 |
+| `TwoFactorRequired > restores the setup page when establish fails` | 17.7 | 17.9 |
+| `TwoFactorRequired > restores the setup page when navigate fails` | 18.7 | 59.9 |
+| `TwoFactorSetup > drops a QR code that finishes after its setup expired` | 11.4 | 56.3 |
+| `UserEditDialog > toggles the active switch from the edge of its touch target on coarse pointers` | 150.3 | 已移除 |
+| `UserEditDialog > shows the role field and submits the picked roles only when roles may be assigned` | 34.1 | 32.2 |
+| `UserEditDialog > rejects a non-image avatar with a message and keeps the current avatar` | 27.9 | 14.9 |
+| `WebhookSubscriptionDialog > submits the custom headers as a map and ignores blank rows` | 30.2 | 16.2 |
+| `AppDate > slot decides the precision > monthDay shows only the month and day` | 2.7 | 0.3 |
+| `AppDate > slot decides the precision > precision depends only on the slot and is the same across locales` | 2.6 | 0.4 |
+| `parseAppCalendarDate > parses back representative date formats across calendar boundaries` | 355.0 | 68.7 |
+| `Roles page query round trip > offers role creation only to a user with the create permission` | 新增 | 25.5 |
+
+### 覆盖变异
+
+- 在生成项目执行 `npm test -- --watch=false --include …`，依次破坏受保护路由判断、重认证关闭、恢复码继续、过期 QR 丢弃、头像变更、请求头录入、开关保存、日历索引、周起始回退、日期精度与往返，以及角色按钮条件。各组预期用例均失败。禁用外部登录回调处理后，该 spec 的 16 条均失败。
+- 在生成的 Identity Workspace 执行 `dotnet test -c Release --filter …`，放宽角色创建策略、停用存量清理、把退役名称加入默认目录、把零阈值当成有效锁定阈值。角色创建、存量清理、默认目录和 `A_zero_threshold_never_locks` 均按预期失败。
