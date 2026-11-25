@@ -160,12 +160,16 @@ describe('TwoFactorRequired', () => {
       if (step === 'loadUser') auth.loadUser.mockReturnValue(throwError(() => error));
       if (step === 'establish') establish.mockRejectedValue(error);
       if (step === 'navigate') navigate.mockRejectedValue(error);
-      await (fixture.componentInstance as unknown as { continue(): Promise<void> }).continue();
-      fixture.detectChanges();
-      expect((fixture.nativeElement as HTMLElement).querySelector('[inert]')).toBeNull();
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector('[data-auth-transition]'),
-      ).toBeNull();
+      const host = fixture.nativeElement as HTMLElement;
+      host.querySelector<HTMLButtonElement>('#recovery-codes-acknowledged')!.click();
+      await fixture.whenStable();
+      const done = host.querySelector<HTMLButtonElement>('[data-testid="recovery-codes-done"]')!;
+      expect(done.disabled).toBe(false);
+      done.click();
+      await expect.poll(() => vi.mocked(toast.error).mock.calls.length).toBe(1);
+      await fixture.whenStable();
+      expect(host.querySelector('[inert]')).toBeNull();
+      expect(host.querySelector('[data-auth-transition]')).toBeNull();
       expect(toast.error).toHaveBeenCalled();
     },
   );

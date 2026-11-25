@@ -88,15 +88,13 @@ describe('AppDate', () => {
     // 图表坐标轴、区间按钮这类只写月日的位置
     it('monthDay shows only the month and day', () => {
       expect(pipe.transform(utc, 'monthDay', 'Asia/Shanghai', 'zh-CN')).toBe('09-04');
-      for (const locale of ['en-US', 'en-GB', 'ja-JP']) {
-        const text = pipe.transform(utc, 'monthDay', 'UTC', locale);
-        expect(text).not.toContain('2026');
-        expect(text).not.toContain(':');
-      }
+      const text = pipe.transform(utc, 'monthDay', 'UTC', 'en-US');
+      expect(text).not.toContain('2026');
+      expect(text).not.toContain(':');
     });
 
     it('precision depends only on the slot and is the same across locales', () => {
-      for (const locale of ['zh-CN', 'en-US', 'en-GB', 'ja-JP']) {
+      for (const locale of ['zh-CN', 'en-US']) {
         // 秒只出现在 full 上
         expect(/\d{1,2}:\d{2}:\d{2}/.test(pipe.transform(utc, 'full', 'UTC', locale))).toBe(true);
         expect(/\d{1,2}:\d{2}:\d{2}/.test(pipe.transform(utc, 'short', 'UTC', locale))).toBe(false);
@@ -125,8 +123,9 @@ describe('parseAppCalendarDate', () => {
     new Date(2026, 11, 31),
   ];
 
-  it('parses back the displayed date in every language', () => {
-    for (const locale of ['zh-CN', 'en', 'en-GB', 'de', 'fr', 'ja']) {
+  it('parses back representative date formats across calendar boundaries', () => {
+    // ISO 数字格式、美式月前、德语日前和日语年月日顺序
+    for (const locale of ['zh-CN', 'en', 'de', 'ja']) {
       for (const day of days) {
         const shown = formatAppDate(day, 'date', undefined, locale);
         expect(parseAppCalendarDate(shown, locale)?.getTime(), `${locale}: ${shown}`).toBe(

@@ -1,6 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { toDataURL } from 'qrcode';
 import { of, Subject, throwError } from 'rxjs';
 
 import {
@@ -24,6 +25,8 @@ import { AccountService } from '../../services/account-service';
 import { TwoFactorSetup } from './two-factor-setup';
 
 import type { MockedObject } from 'vitest';
+
+vi.mock('qrcode', { spy: true });
 
 /**
  * 开始设置会在服务端生成待启用的密钥（POST），属于写请求：
@@ -168,10 +171,9 @@ describe('TwoFactorSetup', () => {
   // 二维码异步生成：设置失效之后才算完的那一份，不能再写回组件，也不能盖住重新开始后的新二维码
   it('drops a QR code that finishes after its setup expired', async () => {
     let finishOld!: (value: string) => void;
-    // 第一次生成挂起，模拟二维码晚到；之后照常
-    const renderQrCode = vi
-      .spyOn(TwoFactorSetup.prototype as unknown as QrRenderer, 'renderQrCode')
-      .mockImplementationOnce(() => new Promise<string>((resolve) => (finishOld = resolve)));
+    vi.mocked(toDataURL)
+      .mockImplementationOnce(() => new Promise<string>((resolve) => (finishOld = resolve)))
+      .mockImplementationOnce(() => Promise.resolve('data:image/png;base64,fresh'));
     account.enableTwoFactor.mockReturnValue(
       throwError(() => failure('Auth:TwoFactorSetupExpired')),
     );
@@ -181,16 +183,17 @@ describe('TwoFactorSetup', () => {
     submitButton().click();
     await fixture.whenStable();
 
+    const image = () => host().querySelector<HTMLImageElement>('[data-testid="two-factor-qr"]');
+    expect(image()).toBeNull();
+    host().querySelector<HTMLButtonElement>('[data-testid="two-factor-setup-restart"]')!.click();
+    await expect.poll(() => image()?.getAttribute('src')).toBe('data:image/png;base64,fresh');
+
     finishOld('data:image/png;base64,stale');
+    await Promise.resolve();
     await Promise.resolve();
     fixture.detectChanges();
 
-    expect(fixture.componentInstance['qrDataUrl']()).toBeNull();
-    renderQrCode.mockResolvedValueOnce('data:image/png;base64,fresh');
-    host().querySelector<HTMLButtonElement>('[data-testid="two-factor-setup-restart"]')!.click();
-    await fixture.whenStable();
-    await Promise.resolve();
-    expect(fixture.componentInstance['qrDataUrl']()).toBe('data:image/png;base64,fresh');
+    expect(image()?.getAttribute('src')).toBe('data:image/png;base64,fresh');
   });
 
   // 会话不够新：弹出确认身份，带上口令重新开始；确认之前不显示任何密钥
@@ -348,8 +351,3 @@ describe('TwoFactorSetup', () => {
     );
   });
 });
-
-/** 组件里生成二维码的受保护方法，测试据它控制二维码何时生成完。 */
-interface QrRenderer {
-  renderQrCode(otpAuthUri: string): Promise<string>;
-}

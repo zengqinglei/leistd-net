@@ -32,15 +32,23 @@ describe('calendarLocale', () => {
     expect(zh.months!()).toHaveLength(12);
   });
 
-  it('starts the week on the locale convention, Monday for Chinese', () => {
-    // 日历组件用 0 = 周日、1 = 周一
-    expect(calendarLocale('zh-CN').firstDayOfWeek!()).toBe(1);
-    expect([0, 1]).toContain(calendarLocale('en-US').firstDayOfWeek!());
+  it('maps the ISO Sunday to index zero in the calendar', () => {
+    const Locale = Intl.Locale;
+    vi.spyOn(Intl, 'Locale').mockImplementation(
+      class extends Locale {
+        getWeekInfo() {
+          return { firstDay: 7 };
+        }
+      },
+    );
+
+    expect(calendarLocale('en-US').firstDayOfWeek!()).toBe(0);
   });
 
   it('keeps working for an unknown locale', () => {
     const unknown = calendarLocale('not a locale');
 
+    expect(unknown.firstDayOfWeek!()).toBe(1);
     expect(unknown.formatWeekdayName!(0)).toBeTruthy();
     expect(unknown.labelPreviousYears!()).toBe('Previous years');
     expect(unknown.formatHeader!(0, 2026)).toContain('2026');
