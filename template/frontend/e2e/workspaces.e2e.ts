@@ -166,7 +166,9 @@ test.describe('workspace requests and routes', () => {
     async ({ page }) => {
       const name = `grant-${Date.now().toString(36)}`;
       const tenant = await json<{ id: string }>(
-        await page.request.post('/api/v1/tenants', { data: { name } }),
+        await page.request.post('/api/v1/tenants', {
+          data: { name, adminEmail: 'admin@example.test', adminPassword: 'Tenant!Passw0rd' },
+        }),
       );
       const documents: string[] = [];
       page.on('request', (request) => {
@@ -197,6 +199,7 @@ test.describe('workspace requests and routes', () => {
       const directory = page.waitForResponse(
         (response) =>
           new URL(response.url()).pathname === '/api/v1/auth/me/workspaces' && response.ok(),
+        { timeout: 5_000 },
       );
       await dialog.getByRole('button', { name: 'Grant access', exact: true }).click();
       await expect(dialog).not.toBeVisible();
