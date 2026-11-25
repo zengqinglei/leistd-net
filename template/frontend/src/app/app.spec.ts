@@ -63,6 +63,9 @@ import { LayoutService } from './core/services/layout-service';
 import { SessionContextService } from './core/services/session-context-service';
 import { StartupService } from './core/services/startup-service';
 import { ThemeService } from './core/services/theme-service';
+//#if (TenantWorkspace)
+import { WorkspaceContextService } from './core/services/workspace-context-service';
+//#endif
 import { PERMISSIONS } from './shared/constants/permission.constants';
 import { User } from './shared/models/user.model';
 
@@ -287,6 +290,16 @@ describe('App startup failure routing', () => {
           },
         },
         { provide: SessionContextService, useValue: { establish, clear: vi.fn() } },
+        //#if (TenantWorkspace)
+        {
+          provide: WorkspaceContextService,
+          useValue: {
+            target: signal<string | null>(null),
+            nameFromUrl: () => null,
+            loadForStartup: (context: Promise<void>) => context,
+          },
+        },
+        //#endif
         //#if (Impersonation)
         { provide: ImpersonationService, useValue: { load: () => Promise.resolve() } },
         //#endif

@@ -30,9 +30,11 @@ import { workspaceInterceptor } from '../interceptors/workspace-interceptor';
 //#endif
 //#if (RemoteTokenAuth)
 import { MOCKED_URL } from '../mock/mocked-url';
-import { FullPageNavigationService } from '../routing/full-page-navigation-service';
 //#endif
 import { EntryRouteService } from '../routing/entry-route-service';
+//#if (RemoteTokenAuth)
+import { FullPageNavigationService } from '../routing/full-page-navigation-service';
+//#endif
 import { AuthService } from './auth-service';
 import { SessionContextService } from './session-context-service';
 //#if (IncludeNotifications || IncludeRealTime)
