@@ -9,6 +9,7 @@
 | 单进程内解耦业务副作用（领域事件、应用内通知），发布方与处理器同进程 | `Leistd.EventBus.Local` |
 | 仅编写业务代码（发布事件 / 实现处理器），不关心实现 | 只引用 `Leistd.EventBus.Core` 中的接口 |
 | 跨进程传递已经发生的事实，允许异步到达 | `Leistd.EventBus.Distributed` + EF 存储 + 一个传输 |
+| 提交后必须由本服务 Worker 可靠完成（需要重试、死信与重放），事件不离开本服务；能在请求内直接调用、或按业务状态由周期任务补做的不必用事件（见[后台作业](background-jobs.md)） | 契约实现 `IInternalDistributedEvent`，见[本服务内事件](#本服务内事件) |
 | 需要立即返回结果的跨服务查询或命令 | 服务客户端 |
 
 默认情况下，发布方会等待所有处理器完成。活动工作单元中的本地事件则推迟到指定提交阶段。
@@ -236,7 +237,7 @@ app.MapDistributedEvents();
 
 Worker 共用数据库，注册所选传输并开启上述三项；仅发布 Api 不注册传输或该传输的健康检查。
 
-默认发件箱每五秒兜底扫描；瞬态发送失败指数退避，从两秒起、最多五分钟并有抖动。首次失败满一天仍未恢复则进死信。收件箱每轮最多处理五次。立即队列满或进程退出不会丢失持久记录，新记录留一分钟宽限后由扫描接手。
+默认发件箱每五秒兜底扫描；瞬态发送失败指数退避，从两秒起、最多五分钟并有抖动。首次失败满一天仍未恢复则进死信。收件箱每轮最多处理五次。新记录只在本进程提交后会立即发送或处理时留一分钟宽限，由立即路径先处理，立即队列满或进程退出时由宽限后的扫描接手，持久记录不丢失。没有立即路径的新记录立即可扫描：关闭 `Outbox:DispatchEnabled` 的写入进程发布的事件、关闭 `Inbox:ProcessingEnabled` 的进程接收的事件，以及按条件批量重新解码写入的收件箱，正常情况下由下一轮扫描（`DispatchInterval`）取走；集群锁、积压与重试都可能延长。
 
 `TestEvent:Enabled` 默认 true，登记 `event-bus.test` 测试消费者；不允许本服务自发自收的传输可关闭，状态和界面随之隐藏测试入口。EF 保留期由 `AddDistributedEventRetention` 独立绑定 `Leistd:EventBus:Distributed:Retention`，默认 `Enabled=true`、`Days=14`，每天 UTC 02:00 清理最后变更已过期的终态；Pending 与拒收的 RedecodePending 永不删除。
 
@@ -252,6 +253,44 @@ EF 后台服务只执行带 `event-bus` 标签的检查，并将每个传输进�
 `Leistd:EventBus:Distributed:TransportStatus` 的 `ReportInterval` 默认十五秒、`StaleAfter` 默认一分钟且须大于上报间隔；`Instance` 默认 `{ApplicationName}@{MachineName}:{ProcessId}`，显式覆盖须保证各并发实例唯一。配置无需另设部署变量。实际上报周期为间隔加检查与持久化耗时；StaleAfter 应大于间隔加最长检查耗时，并为实例间时钟偏差留余量，各实例应保持时钟同步。保留期任务会删除上报时间早于保留期的实例行。
 
 快照只读宿主库新鲜报告，不在 GET 中执行健康检查；当前租户不改变来源。聚合取最差 `HealthStatus`：healthy 表示已连接，degraded 表示降级，unhealthy 表示断开且正在自动恢复，unknown 表示没有新鲜报告。`TransportStatusChangedAt` 为最差状态实例中最近的变化时刻，`TransportReportedAt` 为全部新鲜实例中最近的上报时刻；unknown 时二者为空。传输名优先当前进程，否则按最差状态、变化时刻降序、上报时刻降序、实例名升序选取。
+
+### 本服务内事件
+
+提交后交给本服务 Worker 异步处理、不应离开本服务的事件，例如替代按分钟轮询的后台处理，让契约实现 `IInternalDistributedEvent`。发件箱取到这类记录不调用传输，在同库直接为本服务登记的消费者写收件箱，入站坐标为 `transport=internal`；重试、死信、重投、收件箱去重与处理、管理端与普通分布式事件相同。契约通常放在本服务内，不进共享契约包，也可同时实现 `IOrderedDistributedEvent`。
+
+```csharp
+[EventName("order.fulfillment-requested")]
+public sealed class OrderFulfillmentRequestedEvent : DistributedEvent, IInternalDistributedEvent
+{
+    public string OrderId { get; init; } = "";
+}
+
+public sealed class OrderFulfillmentHandler : IEventHandler<OrderFulfillmentRequestedEvent>
+{
+    public Task HandleAsync(OrderFulfillmentRequestedEvent @event, CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+}
+```
+
+```csharp
+builder.Services.AddDistributedEventHandler<OrderFulfillmentHandler>("orders.fulfillment");
+```
+
+发布照常使用 `IDistributedEventBus`。路由在发布时写入发件箱记录的消息头 `leistd-delivery: internal` 并随记录冻结，发件箱详情可见。默认的 `IDistributedEventSubscriptions.GetAll()` 只返回对外订阅，RabbitMQ、Kafka 与自定义传输不为本服务内事件建立绑定或主题；传输收到的同名消息不会进入内部消费者的收件箱。宿主替换该接口时，本服务内事件的消费者仍取自 `AddDistributedEventHandler` 的登记。收件箱处理、重放与事件目录同时包含对外订阅与内部消费者。开启发送仍须注册一个传输，只有本服务内事件的服务可使用回环。
+
+本地投递按派发实例本机登记的内部消费者写收件箱，框架不做集群订阅发现。共库中所有开启 `Outbox:DispatchEnabled` 或 `Inbox:ProcessingEnabled` 的实例都必须登记相同、完整的内部消费者；`Inbox:ReceiveEnabled` 只控制传输入口，不影响本地投递。Api 只写、Worker 全开且使用同一镜像的分工天然满足这一前提。派发实例找不到任何内部消费者时进死信；只漏登部分消费者时，已登记的消费者照常收到、记录标为已发送，遗漏的消费者收不到，框架无法发现。
+
+| LastErrorCode | 含义 | 处理 |
+| --- | --- | --- |
+| internal-no-consumer | 派发实例没有登记该事件的任何内部消费者 | 补齐登记后重投 |
+| internal-invalid-payload | 载荷无法还原为消费者的事件类型 | 修正契约后重投 |
+| internal-unknown-tenant | 记录可读写，但租户目录明确返回该租户不存在 | 确认租户后重投或保留死信 |
+
+三者都直接进死信，不写拒收表。写收件箱或查询租户目录时抛出异常属于瞬态失败，按发送退避重试，LastErrorCode 为 transport-exception，警告日志注明失败发生在本地投递。
+
+先把共库中能派发发件箱的全部实例升级到支持本服务内事件的版本，再开始发布：旧版本会把带标记的记录交给实际传输。回滚前先停止发布，排空或隔离带标记的待发记录，并暂停这类死信的重投，直到支持该标记的 Worker 恢复。已有事件名在对外与内部之间切换前，先排空该事件的待发记录，或改用新事件名：已写入的记录按发布时的路由投递，订阅视图则跟随当前契约。
+
+本服务内事件替代的是"提交后尽快处理"的触发，不替代按业务状态对账：切换前已存在的待处理数据、耗尽重试进入 Failed 的收件箱记录不会自动补做。需要兜底时保留周期任务按业务状态补处理，或由管理端重放；处理器按业务状态保持幂等。
 
 ### 管理与排障
 

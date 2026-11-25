@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Leistd.EventBus.Abstractions;
 using Leistd.EventBus.Distributed.Diagnostics;
+using Leistd.EventBus.Distributed.Options;
 using Leistd.EventBus.Distributed.Subscriptions;
 using Leistd.EventBus.Distributed.Transport;
 using Leistd.EventBus.EntityFrameworkCore.Dispatching;
@@ -14,6 +15,7 @@ using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Leistd.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Leistd.EventBus.EntityFrameworkCore.Publishing;
 
@@ -22,6 +24,7 @@ internal sealed class EfCoreDistributedEventBus<TDbContext>(
     IDbContextProvider<TDbContext> contexts,
     ICurrentTenant tenant,
     DistributedEventQueue<TDbContext> queue,
+    IOptionsMonitor<DistributedEventOptions> options,
     TimeProvider clock,
     ICorrelationIdProvider? correlation = null) : IDistributedEventBus
     where TDbContext : DbContext
@@ -44,6 +47,7 @@ internal sealed class EfCoreDistributedEventBus<TDbContext>(
         if (Activity.Current?.Id is { } trace) headers[DistributedEventHeaders.TraceParent] = trace;
         if (Activity.Current?.TraceStateString is { } state) headers[DistributedEventHeaders.TraceState] = state;
         if (correlation?.Get() is { } id) headers[DistributedEventHeaders.CorrelationId] = id;
+        if (@event is IInternalDistributedEvent) headers[DistributedEventInternalDelivery.Header] = DistributedEventInternalDelivery.Value;
         var now = clock.GetUtcNow().UtcDateTime;
         var record = new DistributedEventOutbox
         {
@@ -52,7 +56,7 @@ internal sealed class EfCoreDistributedEventBus<TDbContext>(
             OccurredAt = @event.OccurredOn, Payload = JsonSerializer.Serialize(@event, @event.GetType(), JsonSerializerOptions.Web),
             Headers = headers, TraceId = DistributedEventTrace.FromHeaders(headers),
             CorrelationId = DistributedEventCorrelation.FromHeaders(headers), CreationTime = now, LastModificationTime = now,
-            NextAttemptAt = now.AddMinutes(1)
+            NextAttemptAt = options.CurrentValue.Outbox.DispatchEnabled ? now + DistributedEventRetry.ImmediateGrace : now
         };
         var db = await contexts.GetDbContextAsync(cancellationToken);
         var published = unit.ServiceProvider.GetRequiredService<PublishedEvents>().Records;

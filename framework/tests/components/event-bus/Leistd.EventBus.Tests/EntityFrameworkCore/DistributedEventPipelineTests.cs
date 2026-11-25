@@ -96,6 +96,7 @@ public sealed class DistributedEventPipelineTests
         Assert.Equal(1, host.Queue.Count);
         var row = await host.ReadAsync(db => db.Set<DistributedEventInbox>().IgnoreQueryFilters().SingleAsync());
         Assert.Equal(1, row.DuplicateCount);
+        Assert.Equal(host.Clock.GetUtcNow().UtcDateTime.AddMinutes(1), row.NextAttemptAt);
         Assert.Equal(DistributedEventTestHost.TenantA, row.TenantId);
         Assert.Equal(row.EventId, JsonDocument.Parse(row.Payload).RootElement.GetProperty("eventId").GetGuid());
         await host.Queue.RunAllAsync(host.Services);

@@ -59,6 +59,8 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddTransient<IDistributedEventManagementService, DistributedEventManagementService>();
         services.TryAddSingleton<IDistributedEventSubscriptions, DistributedEventSubscriptions>();
+        // 本服务内订阅始终从登记派生，不随宿主替换的订阅接口变化。
+        services.TryAddSingleton<DistributedEventSubscriptions>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, DistributedEventStartup>());
         services.AddDistributedEventHandler<DistributedEventTestHandler>(DistributedEventTestEvent.ConsumerName);
         return services;
@@ -124,12 +126,14 @@ public static class DependencyInjection
     private sealed class LoopbackRegistration;
 }
 
-internal sealed class DistributedEventStartup(IOptions<DistributedEventOptions> options, IDistributedEventSubscriptions subscriptions) : IHostedService
+internal sealed class DistributedEventStartup(IOptions<DistributedEventOptions> options, IDistributedEventSubscriptions subscriptions,
+    DistributedEventSubscriptions registrations) : IHostedService
 {
     public Task StartAsync(CancellationToken cancellationToken)
     {
         _ = options.Value;
         _ = subscriptions.GetAll();
+        _ = registrations.GetInternal();
         return Task.CompletedTask;
     }
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
