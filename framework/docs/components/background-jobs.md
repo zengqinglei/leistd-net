@@ -11,11 +11,14 @@
 | 记录每次执行的结果 | 注册 `IRecurringJobRunObserver`，由宿主决定存储与查询 |
 | 组件自带维护任务 | 组件在自己的 `Add*` 里登记，宿主只注册调度器；登记了任务而没有调度器时，宿主启动记一条 Warning |
 | 请求外且允许丢失的工作（非关键通知、缓存预热） | 注入 `IBackgroundTaskQueue` 入队。进程退出时未完成的工作会丢失，执行失败不重试。 |
-| 提交后必须完成的服务内工作 | 待办状态随业务事务提交，由 `Cluster` 周期任务按状态扫描处理。 |
+| 提交后必须完成的服务内工作 | 业务状态随事务提交，由领域事件在提交后入队立即触发，低频 `Cluster` 周期任务兜底。 |
 
-用条件更新推进本库状态。调用外部系统时传递稳定的业务操作标识，供对方识别重试。需要重试时，把尝试次数和下次处理时间记在业务表中，重试耗尽时标记业务状态。需要降低扫描延迟时，可设置秒级排期，例如 `RecurringJobSchedule.Every(TimeSpan.FromSeconds(5))`，实际开始还受集群锁和上一轮执行影响。
+1. 聚合方法将状态置为待处理，设置 `NextAttemptAt = now + 宽限`，同时用 `AddLocalEvent` 登记领域事件。待办状态与业务数据在同一事务提交。
+2. 本地事件处理器在默认的提交后阶段只用 `IBackgroundTaskQueue.TryQueue` 入队。入队失败记录告警，留给周期任务补做。慢操作在队列的新作用域中执行，不用 `Task.Run`。
+3. 两条入口调用同一个应用服务。服务先在短事务内用实体并发令牌认领，将状态改为处理中，并把 `NextAttemptAt` 设为租约截止时间。立即入口可略过同一操作首次尝试的创建宽限，扫描入口认领时仍须确认记录到期。认领提交后才调用外部系统，超时短于租约，同一业务操作的重试沿用同一标识。写回用认领后的令牌，令牌不匹配就丢弃本次结果。失败时恢复待处理并设下次退避时间，耗尽后标为失败。
+4. 兜底任务按低频排期（如 5 分钟），借助状态与 `NextAttemptAt` 的复合索引分批取记录。待处理和处理中都以 `NextAttemptAt <= now` 为到期条件，后者的到期时间即租约截止时间。
 
-当前进程能执行这项工作时，可在事务提交后通过 `IBackgroundTaskQueue` 立即尝试一次。业务状态和周期扫描保证失败后的补做。
+提交请求的进程缺少执行所需的网络或凭据时，省去该进程的处理器登记。由能执行的进程运行 `Cluster` 周期任务作为主路径，按可接受的延迟取 30 秒到 1 分钟。
 
 ## 安装
 
@@ -141,6 +144,124 @@ if (!queue.TryQueue((services, ct) => services.GetRequiredService<WelcomeMailer>
     logger.LogWarning("The background queue is full; the welcome mail for {UserId} was dropped.", userId);
 }
 ```
+
+### 提交后处理订单履约
+
+在采用 DDD 基座的业务项目中，聚合通过 `AddLocalEvent` 登记状态变更对应的事件。下例的订单聚合调用 `fulfillment.Request(Id, operationId, now, AddLocalEvent)`，由工作单元同时保存业务数据与待办状态。实体基类和事件收集见 [DDD 基座](../ddd-struct/ddd-struct.md#定义实体与本地事件)。
+
+```csharp
+using Leistd.BackgroundJobs;
+using Leistd.BackgroundJobs.Queues;
+using Leistd.BackgroundJobs.Recurring;
+using Leistd.EventBus.EventHandlers;
+using Leistd.EventBus.Events;
+using Leistd.Timing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+public enum FulfillmentStatus { NotRequested, Pending, Processing, Completed, Failed }
+public sealed class OrderFulfillmentRequestedEvent(Guid orderId, Guid operationId, DateTime occurredOn)
+    : LocalEvent(occurredOn)
+{
+    public Guid OrderId { get; } = orderId;
+    public Guid OperationId { get; } = operationId;
+}
+
+public sealed class OrderFulfillment
+{
+    public FulfillmentStatus Status { get; private set; }
+    public Guid OperationId { get; private set; }
+    public int Attempts { get; private set; }
+    public DateTime? NextAttemptAt { get; private set; }
+
+    public void Request(Guid orderId, Guid operationId, DateTime now, Action<ILocalEvent> addLocalEvent)
+    {
+        Status = FulfillmentStatus.Pending;
+        OperationId = operationId;
+        Attempts = 0;
+        NextAttemptAt = now.AddMinutes(1);
+        addLocalEvent(new OrderFulfillmentRequestedEvent(orderId, operationId, now));
+    }
+}
+
+internal sealed class OrderFulfillmentRequestedEventHandler(
+    IBackgroundTaskQueue queue, ILogger<OrderFulfillmentRequestedEventHandler> logger)
+    : IEventHandler<OrderFulfillmentRequestedEvent>
+{
+    public Task HandleAsync(OrderFulfillmentRequestedEvent @event, CancellationToken cancellationToken = default)
+    {
+        if (!queue.TryQueue(async (services, token) =>
+            await services.GetRequiredService<OrderFulfillmentProcessor>()
+                .ProcessAsync(@event.OrderId, @event.OperationId, token)))
+        {
+            logger.LogWarning("Could not queue fulfillment for order {OrderId}.", @event.OrderId);
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
+public sealed record FulfillmentClaim(Guid OperationId, string ConcurrencyStamp, int Attempt);
+
+public interface IFulfillmentStore
+{
+    Task<FulfillmentClaim?> TryClaimAsync(Guid orderId, Guid? immediateOperationId,
+        DateTime now, DateTime leaseUntil, int maxAttempts, CancellationToken ct);
+    Task WriteResultIfCurrentAsync(Guid orderId, string concurrencyStamp,
+        FulfillmentStatus status, DateTime? nextAttemptAt, CancellationToken ct);
+    Task<IReadOnlyList<Guid>> FindDueIdsAsync(DateTime now, int limit, CancellationToken ct);
+}
+
+public interface IFulfillmentClient
+{
+    Task<bool> TrySubmitAsync(Guid orderId, Guid operationId, TimeSpan timeout, CancellationToken ct);
+}
+
+internal sealed class OrderFulfillmentProcessor(IFulfillmentStore store, IFulfillmentClient client, IClock clock)
+{
+    public async Task ProcessAsync(Guid orderId, Guid? immediateOperationId, CancellationToken ct)
+    {
+        const int maxAttempts = 5;
+        var now = clock.Now;
+        var claim = await store.TryClaimAsync(orderId, immediateOperationId, now, now.AddMinutes(5), maxAttempts, ct);
+        if (claim is null)
+            return;
+
+        var succeeded = await client.TrySubmitAsync(orderId, claim.OperationId, TimeSpan.FromMinutes(2), ct);
+        var status = succeeded ? FulfillmentStatus.Completed : FulfillmentStatus.Failed;
+        DateTime? nextAttemptAt = null;
+        if (!succeeded && claim.Attempt < maxAttempts)
+        {
+            status = FulfillmentStatus.Pending;
+            nextAttemptAt = clock.Now.AddMinutes(5 * Math.Pow(2, claim.Attempt - 1));
+        }
+
+        await store.WriteResultIfCurrentAsync(orderId, claim.ConcurrencyStamp, status, nextAttemptAt, ct);
+    }
+}
+
+internal sealed class OrderFulfillmentSweepJob(
+    IFulfillmentStore store, OrderFulfillmentProcessor fulfillment, IClock clock) : IRecurringJob
+{
+    public async Task ExecuteAsync(RecurringJobContext context, CancellationToken ct)
+    {
+        foreach (var orderId in await store.FindDueIdsAsync(clock.Now, limit: 100, ct))
+            await fulfillment.ProcessAsync(orderId, immediateOperationId: null, ct);
+    }
+}
+
+builder.Services.AddScoped<OrderFulfillmentProcessor>();
+builder.Services.AddTransient<IEventHandler<OrderFulfillmentRequestedEvent>, OrderFulfillmentRequestedEventHandler>();
+builder.Services.AddRecurringJob<OrderFulfillmentSweepJob>(
+    "orders.fulfillment-sweep", RecurringJobSchedule.Every(TimeSpan.FromMinutes(5)), RecurringJobScope.Cluster);
+```
+
+宿主登记履约存储与外部客户端这两个业务接口的实现，并提供 `IClock`、本地事件总线和工作单元。
+
+- 认领在短事务内读取记录和令牌。立即入口只接受操作标识匹配且未尝试的待处理记录，扫描入口只接受到期记录。通过实体并发令牌提交认领，累加尝试次数、设置租约并返回更新后的令牌。并发失败返回空。到期记录已耗尽次数时按同一并发条件标失败。
+- 写回在独立短事务里按订单 Id 与认领令牌更新，匹配不到就丢弃结果。持久状态标为失败后，业务界面或运维可查阅和手动重试。
+- 扫描按状态和到期时间只读一批 Id，释放查询上下文后逐笔处理。
+- 外部客户端按传入的超时结束调用，将失败或超时返回为 `false`，向对方传递业务操作标识以识别重试。
 
 ## 接口参考
 

@@ -62,6 +62,7 @@ HTTP 输入模型（Controller 绑定的请求体与查询 DTO、框架端点绑
 规则判定在实体或领域服务；应用服务据其结果（如 `user.CanBeManagedBy(...)`）按用例选码抛出，自行组合实体字段做判定属于违规。
 
 缓存、通知等副作用经本地事件在提交后由应用层 `IEventHandler<TEvent>` 执行：纯实体变更的由实体 `AddLocalEvent(...)` 发出；随用例而异的（如本人改密与管理员重置的提醒）由应用服务发布。
+提交后必须完成的工作由本地事件处理器入队触发，周期任务兜底，见[后台任务规范](./background-jobs.md#1-选择与放置)。
 
 ```csharp
 // UserDomainService.CreateUserAsync(string username, CancellationToken cancellationToken)
