@@ -79,41 +79,30 @@
                 (searchChange)="searchCandidates($event)"
                 (valueChange)="pick($event)"
               >
-                <!-- 触发器保持单行：姓名或用户名被截断时，悬停或聚焦给出全文 -->
-                <div
-                  class="w-full"
-                  [hlmTooltip]="pickedLabel()"
-                  [appTruncatedTooltip]="pickedText"
-                  (focusin)="relayFocus($event)"
-                  (focusout)="relayFocus($event)"
+                <hlm-combobox-trigger
+                  buttonId="tenant-staff-person"
+                  class="h-auto min-h-9 w-full justify-between py-1.5 text-start font-normal whitespace-normal pointer-coarse:h-auto pointer-coarse:min-h-11"
                 >
-                  <hlm-combobox-trigger
-                    buttonId="tenant-staff-person"
-                    class="w-full justify-between font-normal"
-                  >
+                  @if (picked(); as person) {
                     <span class="flex min-w-0 items-center gap-2" data-testid="staff-picked">
-                      @if (picked(); as person) {
-                        <hlm-avatar class="size-6">
-                          <span hlmAvatarFallback class="text-xs">{{
-                            initial(person.displayName || person.username)
-                          }}</span>
-                        </hlm-avatar>
-                      }
-                      <span #pickedText class="min-w-0 truncate">
-                        @if (picked(); as person) {
-                          <span class="font-medium">{{
-                            person.displayName || person.username
-                          }}</span>
-                          <span class="ms-2 text-xs text-muted-foreground">{{
-                            person.username
-                          }}</span>
-                        } @else {
-                          {{ t('tenants.staff.personPlaceholder') }}
-                        }
+                      <hlm-avatar class="size-6 shrink-0">
+                        <span hlmAvatarFallback class="text-xs">{{
+                          initial(person.displayName || person.username)
+                        }}</span>
+                      </hlm-avatar>
+                      <span class="flex min-w-0 flex-col">
+                        <span class="font-medium wrap-anywhere">{{
+                          person.displayName || person.username
+                        }}</span>
+                        <span class="text-xs text-muted-foreground wrap-anywhere">{{
+                          person.username
+                        }}</span>
                       </span>
                     </span>
-                  </hlm-combobox-trigger>
-                </div>
+                  } @else {
+                    {{ t('tenants.staff.personPlaceholder') }}
+                  }
+                </hlm-combobox-trigger>
                 <hlm-combobox-content *hlmComboboxPortal>
                   <hlm-combobox-input
                     [placeholder]="t('tenants.staff.searchPeople')"
