@@ -79,7 +79,11 @@
                 (searchChange)="searchCandidates($event)"
                 (valueChange)="pick($event)"
               >
-                <!-- 触发器保持单行：姓名或用户名被截断时，悬停或聚焦给出全文 -->
+                <!--
+                  触发器保持单行：姓名或用户名被截断时，悬停或聚焦给出全文。
+                  提示只检查宿主自身的 :focus-visible，必须挂在实际聚焦的按钮上。
+                  这里展开 hlm-combobox-trigger 的模板，升级 Spartan 时与该模板对照。
+                -->
                 <button
                   type="button"
                   id="tenant-staff-person"
