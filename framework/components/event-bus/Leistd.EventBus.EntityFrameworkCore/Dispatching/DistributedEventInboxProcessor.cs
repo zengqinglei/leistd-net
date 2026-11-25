@@ -27,7 +27,6 @@ internal sealed class DistributedEventInboxProcessor<TDbContext>(
     IUnitOfWorkManager units,
     IDbContextProvider<TDbContext> contexts,
     IDistributedEventSubscriptions subscriptions,
-    DistributedEventSubscriptions registrations,
     IOptionsMonitor<DistributedEventOptions> options,
     TimeProvider clock,
     ILogger<DistributedEventInboxProcessor<TDbContext>> logger,
@@ -53,7 +52,7 @@ internal sealed class DistributedEventInboxProcessor<TDbContext>(
             attempt = row.AttemptCount;
             try
             {
-                var subscription = registrations.GetAllWithInternal(subscriptions).SingleOrDefault(x => x.EventName == row.EventName && x.Consumer == row.Consumer)
+                var subscription = subscriptions.GetAll().SingleOrDefault(x => x.EventName == row.EventName && x.Consumer == row.Consumer)
                     ?? throw new InvalidOperationException("The distributed event consumer is no longer registered.");
                 row.Headers.TryGetValue(DistributedEventHeaders.TraceParent, out var parent);
                 row.Headers.TryGetValue(DistributedEventHeaders.TraceState, out var state);

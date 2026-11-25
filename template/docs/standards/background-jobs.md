@@ -4,13 +4,24 @@
 
 ## 1. 选择与放置
 
-- 请求外的异步工作交给 `IBackgroundTaskQueue`，跨实例互斥用 `IDistributedLock`，定期维护登记为周期任务（`AddRecurringJob`，显式选 `Cluster` 或 `EveryInstance`；任务自身的开关登记时传 `isEnabled`，任务里不判断开关，一轮失败直接抛出，否则照样推进水位）；不另起线程或自造跨实例锁（只护进程内状态的 `lock` 除外）。
-- 提交后必须完成的工作：待办状态随业务事务提交，提交后入队立即尝试，`Cluster` 周期任务按状态补做，处理须幂等；能在请求内完成的直接调用，不走队列。
+从上到下选择第一项符合的场景。
+
+| 场景 | 用法 | 失败处理 |
+| --- | --- | --- |
+| 请求内可完成，且需当场反馈 | 直接调用应用服务或领域方法 | 请求失败，由调用方重试 |
+| 同一请求、同一进程内解耦副作用 | `ILocalEventBus`，领域事件用 `AddLocalEvent` | `BeforeCommit` 失败回滚，提交后失败不回滚、不重试 |
 <!--#if (IncludeDistributedEvents)-->
-- 须在 Worker 执行并直接使用重试、死信与重放时，改用本服务内事件，见[分布式事件](./distributed-events.md#发布与消费)。
+| 其他服务需要知道已发生的事实 | `IDistributedEventBus`，契约放共享包 | 发件箱与收件箱提供至少一次投递及失败恢复 |
 <!--#endif-->
+| 请求外且允许丢失 | `IBackgroundTaskQueue` | 随进程退出丢失，失败不重试 |
+| 提交后必须完成的服务内工作，或定期维护 | 业务状态 + `Cluster` 周期任务 | 按状态补做，业务状态记录重试耗尽 |
+
+待办状态随业务事务提交，由周期任务按状态扫描。用条件更新推进状态，外部调用带稳定的业务操作标识防止重试重复生效。业务表记录尝试次数和下次处理时间。需要尽快处理时可设秒级扫描排期，例如 5 秒，实际开始受锁和上一轮影响。当前进程能执行时，可在提交后入队立即尝试一次，由周期任务兜底。
+
+周期任务由启用调度器的宿主执行。默认是 API 宿主，拆分独立 Worker 后将集中扫描任务移到 Worker。用 `AddRecurringJob` 显式选 `Cluster` 或 `EveryInstance`，任务开关通过 `isEnabled` 登记，执行失败直接抛出。跨实例互斥使用 `IDistributedLock`，不另起线程或自造跨实例锁，只保护进程内状态时可用 `lock`。
+
 - 周期任务的执行记录使用 `IRecurringJobRunObserver`，由宿主实现存储，不包装任务类型。实现放 Infrastructure 的 `BackgroundJobs/` 目录，按记录的内容命名 `*Recorder`（如 `JobRunRecorder`），在 Infrastructure 的 `DependencyInjection.cs` 登记。
-- 观察者的契约以 `background-jobs` 组件随包文档的示例与注意事项为准（随包文档的定位见[后端说明](../../backend/README.md#leistd-框架-api)）：按 Scoped 经 `TryAddEnumerable` 登记；写记录时自建作用域并用宿主库，不复用任务的 DbContext；Started 与 Completed 都在持锁期间执行，两者都自设有限超时；记录 Id 预先生成，Completed 按 Id 幂等写入。
+- 观察者的登记、作用域、超时与幂等写入见 `background-jobs` 组件随包文档（定位见[后端说明](../../backend/README.md#leistd-框架-api)）。
 - 周期任务（`IRecurringJob`，`*Job`）放 Application 所属模块的 `BackgroundJobs/`；常驻消费者 `*Worker` 放所属模块的 `Workers/`。不建跨模块的顶层 `Jobs/`。
 
 ## 2. 测试

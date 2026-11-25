@@ -526,9 +526,6 @@ export class DistributedEvents {
                     ...this.rows().map((row) => row.error),
                     'message-too-large',
                     'retry-window-exceeded',
-                    'internal-no-consumer',
-                    'internal-invalid-payload',
-                    'internal-unknown-tenant',
                     'handler-exception',
                   ];
     return [

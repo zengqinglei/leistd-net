@@ -23,7 +23,6 @@ namespace Leistd.EventBus.EntityFrameworkCore.Receiving;
 
 internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
     IDistributedEventSubscriptions subscriptions,
-    DistributedEventSubscriptions registrations,
     ICurrentTenant tenant,
     IUnitOfWorkManager units,
     IDbContextProvider<TDbContext> contexts,
@@ -64,34 +63,17 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
     // 管理重新解码也走同一接收边界，但须知道是否真正接收，避免新增另一条拒收记录。
     internal async Task<bool> AcceptAsync(RawDistributedEvent raw, IncomingDistributedEvent message, CancellationToken ct, bool persistRejection = true, bool enqueue = true)
     {
-        var (result, error) = await StoreAsync(message, raw.ReceivedAt, subscriptions.GetAll(), enqueue, ct);
-        switch (result)
-        {
-            case DistributedEventAcceptance.UnknownTenant:
-                if (persistRejection) await RejectMessageAsync(raw, message, DistributedEventRejectionReasons.UnknownTenant, "The message tenant does not exist.", ct);
-                return false;
-            case DistributedEventAcceptance.InvalidPayload:
-                if (persistRejection) await RejectMessageAsync(raw, message, DistributedEventRejectionReasons.InvalidPayload, error!, ct);
-                return false;
-            case DistributedEventAcceptance.NoConsumer:
-                logger.LogDebug("No consumer is registered for distributed event {EventName}.", message.EventName);
-                return true;
-            default:
-                return true;
-        }
-    }
-
-    // 本服务内事件的本地入口：只匹配内部订阅，不写拒收表；由发件箱处理器把结果映射为发送成功或永久失败。
-    internal Task<(DistributedEventAcceptance Result, string? Error)> DeliverInternalAsync(IncomingDistributedEvent message, DateTime receivedAt, CancellationToken ct)
-        => StoreAsync(message, receivedAt, registrations.GetInternal(), enqueue: true, ct);
-
-    private async Task<(DistributedEventAcceptance Result, string? Error)> StoreAsync(IncomingDistributedEvent message, DateTime receivedAt,
-        IReadOnlyList<DistributedEventSubscription> subscribed, bool enqueue, CancellationToken ct)
-    {
         if (message.TenantId is { } tenantId && !await TenantExistsAsync(tenantId, ct))
-            return (DistributedEventAcceptance.UnknownTenant, null);
-        var consumers = subscribed.Where(x => x.EventName == message.EventName).ToArray();
-        if (consumers.Length == 0) return (DistributedEventAcceptance.NoConsumer, null);
+        {
+            if (persistRejection) await RejectMessageAsync(raw, message, DistributedEventRejectionReasons.UnknownTenant, "The message tenant does not exist.", ct);
+            return false;
+        }
+        var consumers = subscriptions.GetAll().Where(x => x.EventName == message.EventName).ToArray();
+        if (consumers.Length == 0)
+        {
+            logger.LogDebug("No consumer is registered for distributed event {EventName}.", message.EventName);
+            return true;
+        }
         string payload;
         try
         {
@@ -105,16 +87,17 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {
-            return (DistributedEventAcceptance.InvalidPayload, exception.Message);
+            if (persistRejection) await RejectMessageAsync(raw, message, DistributedEventRejectionReasons.InvalidPayload, exception.Message, ct);
+            return false;
         }
         using var change = tenant.Change(message.TenantId);
-        try { await PersistAsync(message, receivedAt, payload, consumers, false, enqueue, ct); }
+        try { await PersistAsync(message, raw.ReceivedAt, payload, consumers, false, enqueue, ct); }
         catch (DbUpdateException)
         {
             // 并发首次接收由唯一约束裁决；只有重读确认所有消费者均已存在才当作重复，其他写库故障仍向上传播。
-            if (!await PersistAsync(message, receivedAt, payload, consumers, true, enqueue, ct)) throw;
+            if (!await PersistAsync(message, raw.ReceivedAt, payload, consumers, true, enqueue, ct)) throw;
         }
-        return (DistributedEventAcceptance.Stored, null);
+        return true;
     }
 
     private async Task<bool> TenantExistsAsync(Guid id, CancellationToken ct)
@@ -197,12 +180,4 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
             throw;
         }
     }
-}
-
-internal enum DistributedEventAcceptance
-{
-    Stored,
-    NoConsumer,
-    InvalidPayload,
-    UnknownTenant
 }
