@@ -1,6 +1,6 @@
 # 后端开发规范
 
-本项目后端编码规范，同时遵循 [项目通用约定](./coding-common.md)。接口契约见 [API 规范](./api.md)，认证与权限侧别见 [认证与授权](./auth.md)。`Leistd.*` 的 API 以实际还原版本的包内文档与 XML 为准，定位方法见 [后端说明](../../backend/README.md#leistd-框架-api)。
+后端遵循[通用约定](./coding-common.md)、[API 规范](./api.md)与[认证授权](./auth.md)。`Leistd.*` API 以还原包的文档与 XML 为准。 [后端说明](../../backend/README.md#leistd-框架-api)
 
 ## 1. 技术栈
 
@@ -19,7 +19,7 @@
 
 与宿主实体、业务政策无关的通用机制由框架组件提供，不另建平行技术实现。
 
-目录按功能模块组织，类型目录是模块下的一级目录（如 `Settings/AppServices`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`）只放不属于下列类型的协作类型，按职责命名（`*Store`、`*Verifier`、`*Factory`、`*Guard`），`*Service` 只用于应用服务与领域服务。没有专属分类的框架扩展点实现放所属模块的 `Provider/`（配套定义可共置，如租户连接的 `TenantConnections/Provider`）；未分类的少量协作类型可留模块根；不预建空目录或没有实际职责的层级。
+按模块组织目录。类型目录放模块一级（如 `Settings/AppServices`）。子功能目录（如 `Auth/Sessions`）只放下列分类以外的协作类型，按职责命名（`*Store`、`*Verifier`、`*Factory`、`*Guard`）。`*Service` 只用于应用与领域服务。未分类的框架扩展点归模块的 `Provider/`，配套定义可共置（如 `TenantConnections/Provider`）。少量协作类型可留模块根，避免空目录与无职责层级。
 
 - **Application**：`AppServices`（接口与实现）、`Dtos`、`Mappings`、`Errors`、`Events`（应用层发布、不来自实体的事件）、`EventHandlers`、`BackgroundJobs`，按需 `Constants`、`Abstractions`（由宿主实现的端口）、`Provider`（框架扩展点实现）、`Policies`、`Options`（仅应用用例消费的配置）。跨模块共用、不属于任何模块的约定（认证方案名、分页）放 `Shared/`，不作兜底目录。
 - **Domain**：`Entities`（实体与聚合）、`ValueObjects`（不可变值类型，含有限状态枚举）、`DomainServices`、`Events`（实体发出的事件）、`Policies`、`Errors`、`Options`（仅领域自身消费的配置）、`Abstractions`（端口及其输入输出模型）、`Repositories`（聚合的自定义仓储接口）。不认识任何实体的领域共享能力按语义放 `Shared/`，它不是兜底目录；子目录名不与常用 BCL 类型同名。
@@ -44,7 +44,7 @@ HTTP 输入模型（Controller 绑定的请求体与查询 DTO、框架端点绑
 
 ### 3.2 时间
 
-- 业务代码注入 `Leistd.Timing.IClock`（`clock.Now`，恒为 UTC）。不就地读取 `DateTime.Now`/`UtcNow`、`DateTimeOffset.Now`/`UtcNow`、`TimeProvider.System.GetUtcNow()`：它们隐藏依赖、不可测。
+- 业务代码经 `Leistd.Timing.IClock` 读取 UTC（`clock.Now`），禁用 `DateTime.Now`/`UtcNow`、`DateTimeOffset.Now`/`UtcNow` 和 `TimeProvider.System.GetUtcNow()`。
 - ASP.NET Core 认证、Cookie、票据等框架集成回调要求 `TimeProvider` 时可注入 `TimeProvider`。
 - 实体不注入服务：时间相关方法接收 `DateTime now`，由调用方传入。
 - 契约里的时间字段写明单位（秒或毫秒）。
@@ -127,6 +127,8 @@ return new PagedResult<UserOutputDto>(totalCount, objectMapper.Map<List<User>, L
 ### 3.10 设置与 Options
 
 部署期定死的配置（连接与签名凭据、协议参数）用 `IOptions<T>`，不在服务里读 `IConfiguration["键"]`。租户级、用户级与运行期可改的宿主级设置、设置定义与分组见 [设置规范](./settings.md)。
+
+为已知收件人生成待投递、持久化或交付的文本时，在其租户中用 `RecipientTextRenderer` 按其语言与时区渲染，不直接读取环境区域性。常规请求查询沿用请求语言。
 
 ### 3.11 缓存
 

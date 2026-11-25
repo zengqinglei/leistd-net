@@ -232,6 +232,7 @@ public static class DependencyInjection
         services.TryAddTransient<IAccountPreferenceStore, RemoteAccountPreferenceStore>();
         services.TryAddTransient<ISystemAppService, RemoteSystemAppService>();
 #endif
+        services.TryAddTransient<RecipientTextRenderer>();
         services.TryAddTransient<AccountPreferenceValueValidator>();
         services.TryAddTransient<IAccountPreferenceAppService, AccountPreferenceAppService>();
         // 组件写入后发布的事件转成本项目的操作记录（提交后分发，回滚的写入不留痕）

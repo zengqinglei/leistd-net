@@ -1,11 +1,17 @@
 #if (LocalIdentity && IncludeNotifications)
+#if (IncludeLocalization)
+using System.Globalization;
+using CompanyName.ProjectName.Api.Localization;
+#endif
 using CompanyName.ProjectName.Api.Notifications;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
-#if (IncludeLocalization)
 using CompanyName.ProjectName.Application.Settings.Dtos;
 using CompanyName.ProjectName.Application.Settings.Preferences;
+#if (IncludeLocalization)
+using CompanyName.ProjectName.Application.Settings.Provider;
+using Leistd.Localization.AspNetCore;
+using Microsoft.Extensions.DependencyInjection;
 #endif
-using CompanyName.ProjectName.Application.Settings.Timing;
 using Leistd.Notifications.Dtos;
 using Leistd.Notifications.Publishing;
 #if (IncludeLocalization)
@@ -23,6 +29,41 @@ public sealed class NotificationSecurityAlertPublisherTests
 {
     private static readonly Guid Recipient = Guid.CreateVersion7();
     private static readonly DateTime LockedUntilUtc = new(2026, 3, 1, 5, 30, 0, DateTimeKind.Utc);
+
+#if (IncludeLocalization)
+    [Fact]
+    public async Task A_recipient_without_a_language_gets_the_default_even_under_another_culture()
+    {
+        using var services = new ServiceCollection()
+            .AddLogging()
+            .AddJsonLocalization(options =>
+            {
+                options.SupportedCultures = [.. SettingConstant.Display.SupportedLanguages];
+                options.ResourceAssemblies.Add(typeof(ApiResource).Assembly);
+                options.JsonResourceTypes.Add(typeof(ApiResource));
+            })
+            .BuildServiceProvider();
+        var publisher = new CapturingPublisher();
+        var alerts = new NotificationSecurityAlertPublisher(
+            publisher,
+            new RecipientTextRenderer(new PerUserPreferences(new Dictionary<Guid, string>())),
+            services.GetRequiredService<IStringLocalizerFactory>(),
+            NullLogger<NotificationSecurityAlertPublisher>.Instance);
+
+        var previous = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("zh-CN");
+            await alerts.PublishAsync(Recipient, new SecurityAlert(SecurityAlertKind.PasswordChanged));
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = previous;
+        }
+
+        Assert.Equal("Your password was changed", Assert.Single(publisher.Published).Notification.Title);
+    }
+#endif
 
     [Fact]
     public async Task The_unlock_time_is_written_in_the_recipients_time_zone_and_names_it()
@@ -57,9 +98,8 @@ public sealed class NotificationSecurityAlertPublisherTests
 
     private static NotificationSecurityAlertPublisher CreatePublisher(INotificationPublisher publisher) => new(
         publisher,
-        new PerUserTimeZones(new Dictionary<Guid, string>()),
+        new RecipientTextRenderer(new PerUserPreferences(new Dictionary<Guid, string>())),
 #if (IncludeLocalization)
-        new NoPreferences(),
         new TemplateLocalizerFactory(),
 #endif
         NullLogger<NotificationSecurityAlertPublisher>.Instance);
@@ -75,9 +115,8 @@ public sealed class NotificationSecurityAlertPublisherTests
         var publisher = new CapturingPublisher();
         var alerts = new NotificationSecurityAlertPublisher(
             publisher,
-            new PerUserTimeZones(timeZones),
+            new RecipientTextRenderer(new PerUserPreferences(timeZones)),
 #if (IncludeLocalization)
-            new NoPreferences(),
             new TemplateLocalizerFactory(),
 #endif
             NullLogger<NotificationSecurityAlertPublisher>.Instance);
@@ -101,28 +140,13 @@ public sealed class NotificationSecurityAlertPublisherTests
     }
 
     // 当前用户是另一个时区：用错入口就会拿到纽约时间
-    private sealed class PerUserTimeZones(IReadOnlyDictionary<Guid, string> timeZones) : IUserTimeZoneProvider
-    {
-        public Task<TimeZoneInfo> GetAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(TimeZoneInfo.FindSystemTimeZoneById("America/New_York"));
-
-        public Task<TimeZoneInfo> GetForUserAsync(Guid userId, CancellationToken cancellationToken = default)
-            => Task.FromResult(timeZones.TryGetValue(userId, out var id) ? TimeZoneInfo.FindSystemTimeZoneById(id) : TimeZoneInfo.Utc);
-
-        public Task<DateTime> ToUserTimeAsync(DateTime utc, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public bool TryResolve(string? timeZoneId, out TimeZoneInfo timeZone) => UserTimeZoneProvider.TryResolveId(timeZoneId, out timeZone);
-    }
-#if (IncludeLocalization)
-
-    private sealed class NoPreferences : IAccountPreferenceStore
+    private sealed class PerUserPreferences(IReadOnlyDictionary<Guid, string> timeZones) : IAccountPreferenceStore
     {
         public Task<AccountPreferencesOutputDto?> GetForCurrentUserAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult<AccountPreferencesOutputDto?>(null);
+            => Task.FromResult<AccountPreferencesOutputDto?>(WithTimeZone("America/New_York"));
 
         public Task<AccountPreferencesOutputDto?> GetForUserAsync(Guid userId, CancellationToken cancellationToken = default)
-            => Task.FromResult<AccountPreferencesOutputDto?>(null);
+            => Task.FromResult<AccountPreferencesOutputDto?>(timeZones.TryGetValue(userId, out var id) ? WithTimeZone(id) : null);
 
         public Task<AccountPreferencesOutputDto> SetForCurrentUserAsync(
             Guid userId,
@@ -130,8 +154,15 @@ public sealed class NotificationSecurityAlertPublisherTests
             string? value,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+
+        private static AccountPreferencesOutputDto WithTimeZone(string id) => new()
+        {
+            Preferences = new AccountPreferenceValuesDto { TimeZone = id },
+            PreferenceOverrides = new AccountPreferenceValuesDto()
+        };
     }
 
+#if (IncludeLocalization)
     // 只关心占位符怎么填：正文模板里只留 {Until}
     private sealed class TemplateLocalizerFactory : IStringLocalizerFactory
     {
