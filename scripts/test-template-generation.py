@@ -29,6 +29,7 @@ import os
 from pathlib import Path
 import posixpath
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -742,7 +743,7 @@ def check_verify_scopes(output, pwsh, expected, expected_fast, local_identity):
 
 def check_verify_script(output, values):
     """scripts/verify.ps1：两种模式的步骤清单符合启用的能力；注入失败时以该步退出码退出，后续步骤不执行；
-    -Fast 恰好执行它列出的步骤，有前端而缺 node_modules 时不执行任何步骤即失败。
+    测试步骤退出 0 后必须交付本轮执行证据；-Fast 有前端而缺 node_modules 时立即失败。
 
     命令换成记录调用的替身（PATH 最前），判据只看实际被调用的命令序列与退出码。
     同一脚本内容与相同相关取值只核对一次。
@@ -769,24 +770,69 @@ def check_verify_script(output, values):
         assert install[2].strip() == 'npm ci --no-audit', f'frontend-install must pass --no-audit (no implicit audit request): {install}'
     assert all(row in rows for row in fast_rows), 'verify -Fast rows must be the same steps as the full mode'
     check_verify_scopes(output, pwsh, expected, expected_fast, values['LocalIdentity'])
+
+    def run_with_shims(environment, fast=False):
+        # Install the shims after PowerShell starts. Its launcher may resolve dotnet via PATH.
+        command = '$env:PATH = $env:SHIM_PATH; & $env:SHIM_VERIFY'
+        if fast:
+            command += ' -Fast'
+        return subprocess.run([pwsh, '-NoProfile', '-Command', command + '; exit $LASTEXITCODE'],
+                              capture_output=True, text=True, encoding='utf-8', errors='replace', env=environment)
+
     with tempfile.TemporaryDirectory(dir=output.parent) as shim_root:
         shims = Path(shim_root)
+        report_dir = output / 'test-reports'
+        report_names = {'frontend-test': 'unit-frontend.xml', 'frontend-e2e': 'e2e.xml'}
+        reports = {}
+        for step, _, command in rows:
+            if step.startswith('backend-test:'):
+                project = step.partition(':')[2]
+                layer = 'unit' if project.endswith('.UnitTests') else 'integration'
+                reports[command] = f'{layer}-{project}.xml'
+            elif step in report_names:
+                reports[command] = report_names[step]
+        driver = shims / 'record-command.py'
+        driver.write_text(
+            """import json
+import os
+from pathlib import Path
+import sys
+
+line = ' '.join(sys.argv[1:])
+with Path(os.environ['SHIM_LOG']).open('a', encoding='utf-8') as log:
+    print(line, file=log)
+if line == os.environ['SHIM_FAIL']:
+    sys.exit(7)
+name = json.loads(os.environ['SHIM_REPORTS']).get(line)
+if name:
+    mode = os.environ['SHIM_REPORT_MODE'] if name == os.environ['SHIM_REPORT_TARGET'] else 'executed'
+    if mode != 'missing':
+        cases = {'zero': '', 'skipped': '<testcase name="skipped"><skipped /></testcase>',
+                 'executed': '<testcase name="executed" time="0.001" />'}
+        report = Path(os.environ['SHIM_REPORT_DIR']) / name
+        report.write_text('<testsuites><testsuite>' + cases[mode] + '</testsuite></testsuites>', encoding='utf-8')
+""",
+            encoding='utf-8',
+        )
         for name in SHIM_COMMANDS:
             if os.name == 'nt':
-                (shims / f'{name}.cmd').write_text('@echo off\r\necho %~n0 %*>>"%SHIM_LOG%"\r\nif "%~n0 %*"=="%SHIM_FAIL%" exit /b 7\r\nexit /b 0\r\n', encoding='utf-8')
+                (shims / f'{name}.cmd').write_text(f'@echo off\r\n"{sys.executable}" "{driver}" {name} %*\r\n',
+                                                   encoding='utf-8')
             else:
                 shim = shims / name
-                shim.write_text('#!/bin/sh\nline="$(basename "$0") $*"\nprintf \'%s\\n\' "$line" >> "$SHIM_LOG"\n[ "$line" = "$SHIM_FAIL" ] && exit 7\nexit 0\n', encoding='utf-8')
+                shim.write_text(f'#!/bin/sh\nexec {shlex.quote(sys.executable)} {shlex.quote(str(driver))} {name} "$@"\n',
+                                encoding='utf-8')
                 shim.chmod(0o755)
         commands = [row[2] for row in rows]
         failing = len(commands) // 2
         log = shims / 'calls.log'
-        environment = dict(os.environ, PATH=str(shims) + os.pathsep + os.environ.get('PATH', ''), SHIM_LOG=str(log), SHIM_FAIL=commands[failing])
-        report_dir = output / 'test-reports'
+        environment = dict(os.environ, SHIM_PATH=str(shims) + os.pathsep + os.environ.get('PATH', ''),
+                           SHIM_VERIFY=str(script), SHIM_LOG=str(log), SHIM_FAIL=commands[failing], SHIM_REPORT_DIR=str(report_dir),
+                           SHIM_REPORTS=json.dumps(reports), SHIM_REPORT_MODE='executed', SHIM_REPORT_TARGET='')
         report_dir.mkdir(exist_ok=True)
         stale_report = report_dir / 'unit-stale.xml'
         stale_report.write_text('<testsuites />', encoding='utf-8')
-        run = subprocess.run([pwsh, '-NoProfile', '-File', str(script)], capture_output=True, text=True, encoding='utf-8', errors='replace', env=environment)
+        run = run_with_shims(environment)
         calls = log.read_text(encoding='utf-8').splitlines() if log.exists() else []
         assert not stale_report.exists(), 'verify must remove reports from previous runs'
         assert 'Verification timings:' in run.stdout and 'Total wall time' in run.stdout, 'verify must report timings after a failed step'
@@ -796,16 +842,32 @@ def check_verify_script(output, values):
         if values['SpaFrontend']:
             assert not node_modules.exists(), 'generated output must not contain frontend/node_modules'
             missing_log = log.with_name('missing.log')
-            missing = subprocess.run([pwsh, '-NoProfile', '-File', str(script), '-Fast'], capture_output=True, text=True, encoding='utf-8', errors='replace',
-                                     env=dict(fast_environment, SHIM_LOG=str(missing_log)))
+            missing = run_with_shims(dict(fast_environment, SHIM_LOG=str(missing_log)), fast=True)
             assert missing.returncode == 1 and 'npm ci' in missing.stdout and not missing_log.exists(), \
                 f'verify -Fast without node_modules must fail before any step: {missing.returncode} {missing.stdout}{missing.stderr}'
             node_modules.mkdir()
         try:
             fast_log = log.with_name('fast.log')
-            fast = subprocess.run([pwsh, '-NoProfile', '-File', str(script), '-Fast'], capture_output=True, text=True, encoding='utf-8', errors='replace',
-                                  env=dict(fast_environment, SHIM_LOG=str(fast_log)))
+            fast = run_with_shims(dict(fast_environment, SHIM_LOG=str(fast_log)), fast=True)
             fast_calls = fast_log.read_text(encoding='utf-8').splitlines() if fast_log.exists() else []
+            full_log = log.with_name('full.log')
+            full = run_with_shims(dict(fast_environment, SHIM_LOG=str(full_log)))
+            assert full.returncode == 0, f'verify with executed cases failed: {full.stdout}{full.stderr}'
+            assert full_log.read_text(encoding='utf-8').splitlines() == commands
+            assert {path.name for path in report_dir.glob('*.xml')} == set(reports.values())
+
+            # The first test command exits 0 in each counterexample. Other steps must not run.
+            test_command = next(iter(reports))
+            step = rows[commands.index(test_command)][0]
+            for mode in ('zero', 'skipped', 'missing'):
+                counterexample_log = log.with_name(f'{mode}.log')
+                counterexample = run_with_shims(
+                    dict(fast_environment, SHIM_LOG=str(counterexample_log), SHIM_REPORT_MODE=mode,
+                         SHIM_REPORT_TARGET=reports[test_command]), fast=True,
+                )
+                assert counterexample.returncode == 1 and step in counterexample.stdout, \
+                    f'verify must reject {mode} at {step}: {counterexample.stdout}{counterexample.stderr}'
+                assert counterexample_log.read_text(encoding='utf-8').splitlines() == commands[:commands.index(test_command) + 1]
         finally:
             if values['SpaFrontend']:
                 node_modules.rmdir()
@@ -813,7 +875,7 @@ def check_verify_script(output, values):
     assert calls == commands[:failing + 1], f'verify must stop at the failing step: ran {calls}, expected {commands[:failing + 1]}'
     assert fast.returncode == 0, f'verify -Fast with all steps passing must succeed: {fast.stdout}{fast.stderr}'
     assert fast_calls == [row[2] for row in fast_rows], f'verify -Fast must run exactly its listed steps: ran {fast_calls}'
-    report_dir.rmdir()
+    shutil.rmtree(report_dir)
     with VERIFY_LOCK:
         VERIFY_CHECKED[key] = {'Key': verify_key(output, values), 'Steps': expected, 'FailingStep': rows[failing][0],
                                'ExitCode': run.returncode, 'Calls': len(calls)}

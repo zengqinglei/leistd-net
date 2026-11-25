@@ -77,15 +77,23 @@ describe('WebhookSubscriptionDialog', () => {
     open();
     fill('ERP', 'https://erp.example.test/hooks');
     component.toggleEvent('user.created', true);
-    component.addHeader();
-    component.addHeader();
-    const [first] = (
-      component as unknown as { formModel: () => { headers: { key: number }[] } }
-    ).formModel().headers;
-    component.setHeader(first.key, 'name', ' X-Tenant-Code ');
-    component.setHeader(first.key, 'value', 'acme');
+    const headers = document.querySelector<HTMLElement>('[data-testid="webhook-headers"]')!;
+    const addHeader = headers.querySelector<HTMLButtonElement>(':scope > button')!;
+    addHeader.click();
+    addHeader.click();
+    await fixture.whenStable();
 
-    await component.save();
+    const inputs = headers.querySelectorAll<HTMLInputElement>('input');
+    expect(inputs).toHaveLength(4);
+    const [name, value] = inputs;
+    name.value = ' X-Tenant-Code ';
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    value.value = 'acme';
+    value.dispatchEvent(new Event('input', { bubbles: true }));
+    await fixture.whenStable();
+
+    headers.closest('form')!.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    await fixture.whenStable();
 
     expect(saved?.headers).toEqual({ 'X-Tenant-Code': 'acme' });
     expect(saved?.description).toBeNull();

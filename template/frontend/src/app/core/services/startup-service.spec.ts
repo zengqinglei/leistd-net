@@ -10,7 +10,7 @@ import { AuthService } from './auth-service';
 import { SessionContextService } from './session-context-service';
 import { StartupService } from './startup-service';
 
-import type { Mock, MockedObject } from 'vitest';
+import type { MockedObject } from 'vitest';
 
 describe('StartupService', () => {
   let authService: Pick<MockedObject<AuthService>, 'initializeAuth'>;
@@ -18,7 +18,6 @@ describe('StartupService', () => {
   // 漏掉的真实请求还会被降级逻辑吞掉而照样变绿。
   let sessionContext: Pick<MockedObject<SessionContextService>, 'establish' | 'clear'>;
   let service: StartupService;
-  let isProtectedRoute: Mock;
 
   beforeEach(() => {
     // 认证数据的清理由会话上下文统一负责（它有独立单测），这里只需要认证探测本身。
@@ -39,16 +38,7 @@ describe('StartupService', () => {
       ],
     });
     service = TestBed.inject(StartupService);
-    // 固定为受保护路由，覆盖认证探测的全部状态转换分支；判据本身由末尾两条用例
-    // 用真实实现验证（mockRestore 还原真实实现 + openAt）。
-    isProtectedRoute = vi
-      .spyOn(
-        service as unknown as {
-          isProtectedRoute(): boolean;
-        },
-        'isProtectedRoute',
-      )
-      .mockReturnValue(true);
+    openAt('/platform/users');
   });
 
   /** 设定地址栏但不导航：启动流跑在初始导航之前，读到的只能是地址栏。 */
@@ -153,7 +143,6 @@ describe('StartupService', () => {
 
   describe('retry', () => {
     it('lands on the held target once startup succeeds, without reading the address bar', async () => {
-      isProtectedRoute.mockRestore();
       openAt('/platform/users?offset=20');
       authService.initializeAuth.mockRejectedValue(httpError(503));
       await service.load();
@@ -186,10 +175,8 @@ describe('StartupService', () => {
     });
   });
 
-  /** 入口路由判据用真实实现跑：上面的用例把它打桩成 true，判据坏掉不会变红。 */
   describe('entry route gate', () => {
     it('establishes the subject on a protected route', async () => {
-      isProtectedRoute.mockRestore();
       authService.initializeAuth.mockResolvedValue();
       openAt('/platform/users');
 
@@ -200,7 +187,6 @@ describe('StartupService', () => {
     });
 
     it('does not probe the session on a public route', async () => {
-      isProtectedRoute.mockRestore();
       authService.initializeAuth.mockResolvedValue();
       openAt('/');
 
@@ -214,7 +200,7 @@ describe('StartupService', () => {
 
   /**
    * 外部登录回调页：提供商带着 code 跳回来，这一刻还没有会话，回调组件自己去换。
-   * 启动流程若没认出它，就会先探一次会话（受保护判据打桩成 true 时即可观察到），
+   * 启动流程若没认出它，可能会先探一次会话，
    * 把回调当普通页面处理，外部登录断在这一步且不报错。
    */
   it('lets the external sign-in callback run without probing the session', async () => {
@@ -235,7 +221,6 @@ describe('StartupService', () => {
   describe('on the OIDC callback', () => {
     // 回调判据落在路径上：查询串里含 `/auth/callback` 的普通页面会话过期时应按已登出处理。
     it('does not mistake an auth path inside the query string for the callback', async () => {
-      isProtectedRoute.mockRestore();
       openAt('/workspace?returnUrl=/auth/callback');
       authService.initializeAuth.mockResolvedValue();
       sessionContext.establish.mockRejectedValue(httpError(401));
@@ -247,7 +232,6 @@ describe('StartupService', () => {
     });
 
     it('still treats a 401 outside the callback as signed out', async () => {
-      isProtectedRoute.mockRestore();
       openAt('/platform/users');
       authService.initializeAuth.mockResolvedValue();
       sessionContext.establish.mockRejectedValue(httpError(401));

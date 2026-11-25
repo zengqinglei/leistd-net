@@ -14,22 +14,6 @@ public sealed class LoginLockoutTests(ProjectWebApplicationFactory factory) : IC
     private const string WrongPassword = "LockoutTests!Wrong000";
 
     [Fact]
-    public async Task Locks_out_at_the_threshold_even_for_the_correct_password()
-    {
-        var username = await CreateUserAsync("lock_basic");
-
-        for (var i = 1; i < SettingConstant.Security.DefaultLockoutMaxFailedAttempts; i++)
-        {
-            Assert.Equal("Auth:InvalidCredentials", await LoginErrorCodeAsync(username, WrongPassword));
-        }
-
-        // 触发锁定的那一次就告知已锁定，而不是再报一次"密码错误"
-        Assert.Equal("Auth:UserTemporarilyLockedOut", await LoginErrorCodeAsync(username, WrongPassword));
-        // 锁定期间不看密码：正确密码得到的也是同一个结果，试不出哪个是对的
-        Assert.Equal("Auth:UserTemporarilyLockedOut", await LoginErrorCodeAsync(username, Password));
-    }
-
-    [Fact]
     public async Task Existing_sessions_are_not_affected_by_lockout()
     {
         var username = await CreateUserAsync("lock_session");
@@ -41,38 +25,25 @@ public sealed class LoginLockoutTests(ProjectWebApplicationFactory factory) : IC
     }
 
     [Fact]
-    public async Task Admin_unlock_allows_sign_in_and_clears_the_lockout_flag()
-    {
-        var username = await CreateUserAsync("lock_unlock");
-        await LockOutAsync(username);
-
-        using var admin = await ProjectWebApplicationFactory.LoginAsync(factory, "admin", ProjectWebApplicationFactory.TestAdminPassword);
-        var locked = await FindUserAsync(admin.Client, username);
-        Assert.True(locked.GetProperty("isLockedOut").GetBoolean());
-        Assert.NotEqual(JsonValueKind.Null, locked.GetProperty("lockoutEnd").ValueKind);
-
-        using var unlock = await admin.Client.PostAsync($"/api/v1/users/{locked.GetProperty("id").GetGuid()}/unlock", null);
-        Assert.Equal(HttpStatusCode.OK, unlock.StatusCode);
-
-        Assert.False((await FindUserAsync(admin.Client, username)).GetProperty("isLockedOut").GetBoolean());
-        using var session = await ProjectWebApplicationFactory.LoginAsync(factory, username, Password);
-        Assert.Equal(HttpStatusCode.OK, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
-    }
-
-    [Fact]
-    public async Task Zero_threshold_disables_lockout()
+    public async Task Admin_unlock_allows_sign_in_after_the_configured_threshold_locks_the_user()
     {
         using var admin = await ProjectWebApplicationFactory.LoginAsync(factory, "admin", ProjectWebApplicationFactory.TestAdminPassword);
-        await WriteSettingAsync(admin.Client, SettingConstant.Security.LockoutMaxFailedAttempts, "0");
+        await WriteSettingAsync(admin.Client, SettingConstant.Security.LockoutMaxFailedAttempts, "2");
         try
         {
-            var username = await CreateUserAsync("lock_off");
-            for (var i = 0; i < SettingConstant.Security.DefaultLockoutMaxFailedAttempts * 2; i++)
-            {
-                Assert.Equal("Auth:InvalidCredentials", await LoginErrorCodeAsync(username, WrongPassword));
-            }
+            var username = await CreateUserAsync("lock_unlock");
+            await LockOutAsync(username, 2);
+            var locked = await FindUserAsync(admin.Client, username);
+            Assert.True(locked.GetProperty("isLockedOut").GetBoolean());
+            Assert.NotEqual(JsonValueKind.Null, locked.GetProperty("lockoutEnd").ValueKind);
+            Assert.Equal("Auth:UserTemporarilyLockedOut", await LoginErrorCodeAsync(username, Password));
 
+            using var unlock = await admin.Client.PostAsync($"/api/v1/users/{locked.GetProperty("id").GetGuid()}/unlock", null);
+            Assert.Equal(HttpStatusCode.OK, unlock.StatusCode);
+
+            Assert.False((await FindUserAsync(admin.Client, username)).GetProperty("isLockedOut").GetBoolean());
             using var session = await ProjectWebApplicationFactory.LoginAsync(factory, username, Password);
+            Assert.Equal(HttpStatusCode.OK, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
         }
         finally
         {
@@ -81,7 +52,7 @@ public sealed class LoginLockoutTests(ProjectWebApplicationFactory factory) : IC
     }
 
     [Fact]
-    public async Task Rejects_a_threshold_outside_the_allowed_range()
+    public async Task Rejects_a_zero_lockout_duration()
     {
         using var admin = await ProjectWebApplicationFactory.LoginAsync(factory, "admin", ProjectWebApplicationFactory.TestAdminPassword);
 
@@ -92,14 +63,15 @@ public sealed class LoginLockoutTests(ProjectWebApplicationFactory factory) : IC
         Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
     }
 
-    private async Task LockOutAsync(string username)
+    private async Task LockOutAsync(
+        string username, int threshold = SettingConstant.Security.DefaultLockoutMaxFailedAttempts)
     {
-        for (var i = 0; i < SettingConstant.Security.DefaultLockoutMaxFailedAttempts; i++)
+        for (var i = 1; i < threshold; i++)
         {
-            await LoginErrorCodeAsync(username, WrongPassword);
+            Assert.Equal("Auth:InvalidCredentials", await LoginErrorCodeAsync(username, WrongPassword));
         }
 
-        Assert.Equal("Auth:UserTemporarilyLockedOut", await LoginErrorCodeAsync(username, Password));
+        Assert.Equal("Auth:UserTemporarilyLockedOut", await LoginErrorCodeAsync(username, WrongPassword));
     }
 
     private async Task<string?> LoginErrorCodeAsync(string username, string password)

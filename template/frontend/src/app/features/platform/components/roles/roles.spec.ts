@@ -109,6 +109,22 @@ describe('Roles page query round trip', () => {
     fixture.detectChanges();
   });
 
+  it('offers role creation only to a user with the create permission', async () => {
+    await fixture.whenStable();
+    expect(service.getRoles).toHaveBeenCalled();
+    const host = fixture.nativeElement as HTMLElement;
+    const createButton = () => host.querySelector('button:has(ng-icon[name="lucidePlus"])');
+    expect(createButton()).toBeNull();
+
+    TestBed.inject(AuthorizationService).setPermissions({
+      permissions: [PERMISSIONS.roles.default, PERMISSIONS.roles.create],
+      isSuperAdmin: false,
+      versionToken: 'r2',
+    });
+    await fixture.whenStable();
+    expect(createButton()).not.toBeNull();
+  });
+
   it('writes paging to the URL and refetches the new page', async () => {
     table().paginationChange.emit({ pageIndex: 2, pageSize: 20 } as PaginationState);
     await fixture.whenStable();

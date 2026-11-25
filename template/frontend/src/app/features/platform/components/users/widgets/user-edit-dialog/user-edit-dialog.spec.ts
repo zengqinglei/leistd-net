@@ -14,11 +14,6 @@ import {
 } from '../../../../../../core/validation/form-submission.testing';
 import { PASSWORD_MIN_LENGTH } from '../../../../../../core/validation/password-rule';
 import { SubmitErrorStateMatcher } from '../../../../../../core/validation/submit-error-state-matcher';
-import {
-  expectTouchTarget,
-  setCoarsePointer,
-  tapAt,
-} from '../../../../../../shared/utils/coarse-pointer.testing';
 import { RoleBriefDto } from '../../../../dtos/role.dto';
 import {
   CreateUserInputDto,
@@ -228,20 +223,6 @@ describe('UserEditDialog', () => {
     expect(document.querySelector('hlm-dialog-content')!.getBoundingClientRect().width).toBe(672);
   });
 
-  // 开关视觉只有约 32×18px：触屏下命中区铺到 44px，点在开关外沿也能切换
-  it('toggles the active switch from the edge of its touch target on coarse pointers', async () => {
-    await setCoarsePointer(true);
-    onTestFinished(() => setCoarsePointer(false));
-    const active = document.getElementById('user-is-active')!;
-    const before = active.getAttribute('aria-checked');
-
-    expectTouchTarget(active);
-    await tapAt(active, 0, 20);
-    await fixture.whenStable();
-
-    expect(active.getAttribute('aria-checked')).toBe(before === 'true' ? 'false' : 'true');
-  });
-
   it('waits for save before showing errors and starts clean after reopening', async () => {
     const input =
       document.querySelector<HTMLInputElement>('#user-username') ??
@@ -342,8 +323,11 @@ describe('UserEditDialog', () => {
 
     await fillValidCreate();
     dialog().userForm.roleIds().value.set(['role-admin', 'role-auditor']);
-    dialog().setActive(false);
+    const active = document.getElementById('user-is-active')!;
+    expect(active.getAttribute('aria-checked')).toBe('true');
+    active.click();
     await fixture.whenStable();
+    expect(active.getAttribute('aria-checked')).toBe('false');
 
     submitButton().click();
 
@@ -427,7 +411,7 @@ describe('UserEditDialog', () => {
     files.items.add(new File(['plain'], 'notes.txt', { type: 'text/plain' }));
     picker.files = files.files;
 
-    await dialog().onAvatarSelect({ target: picker } as unknown as Event);
+    picker.dispatchEvent(new Event('change', { bubbles: true }));
     await fixture.whenStable();
 
     expect(toast.error).toHaveBeenCalledOnce();

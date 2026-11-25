@@ -8,6 +8,7 @@ import { of, throwError } from 'rxjs';
 
 import {
   confirmWithCode,
+  reauthenticateCancelButton,
   reauthenticateForm,
 } from '../../../../core/components/reauthenticate-dialog/reauthenticate-dialog.testing';
 import { ApplicationHttpError } from '../../../../core/errors/application-http-error';
@@ -100,9 +101,7 @@ describe('ExternalAuthCallback', () => {
 
   it('establishes the session before navigating', async () => {
     fixture.detectChanges();
-    await new Promise((resolve) => setTimeout(resolve));
-
-    expect(calls).toContain('navigate');
+    await expect.poll(() => calls).toContain('navigate');
     expect(calls.indexOf('establish')).toBeGreaterThanOrEqual(0);
     expect(calls.indexOf('establish')).toBeLessThan(calls.indexOf('navigate'));
   });
@@ -120,9 +119,7 @@ describe('ExternalAuthCallback', () => {
       }),
     );
     fixture.detectChanges();
-    await new Promise((resolve) => setTimeout(resolve));
-
-    expect(navigate).toHaveBeenCalledOnce();
+    await expect.poll(() => navigate.mock.calls.length).toBe(1);
     const [target, extras] = navigate.mock.calls[0]!;
     expect(typeof target === 'string' ? target : router.serializeUrl(target)).toBe(
       '/auth/two-factor?returnUrl=%2Fworkspace%2Fsettings%2Fsecurity',
@@ -141,11 +138,8 @@ describe('ExternalAuthCallback', () => {
         vi.mocked(TestBed.inject(SessionContextService).establish).mockRejectedValue(error);
       if (step === 'navigate') vi.mocked(TestBed.inject(Router).navigate).mockRejectedValue(error);
       fixture.detectChanges();
-      await new Promise((resolve) => setTimeout(resolve));
-      fixture.detectChanges();
       const host = fixture.nativeElement as HTMLElement;
-      expect(host.querySelector('a')?.getAttribute('href')).toBe('/auth/login');
-      expect(host.querySelector('a')?.getAttribute('href')).toBe('/auth/login');
+      await expect.poll(() => host.querySelector('a')?.getAttribute('href')).toBe('/auth/login');
     },
   );
 
@@ -160,8 +154,7 @@ describe('ExternalAuthCallback', () => {
         return true;
       });
     fixture.detectChanges();
-    await new Promise((resolve) => setTimeout(resolve));
-    expect(navigate).toHaveBeenCalledWith('/workspace/settings/security');
+    await expect.poll(() => navigate.mock.calls).toContainEqual(['/workspace/settings/security']);
     expect(calls.indexOf('establish')).toBeLessThan(calls.indexOf('navigate-return'));
   });
 
@@ -177,9 +170,7 @@ describe('ExternalAuthCallback', () => {
     );
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
     fixture.detectChanges();
-    await new Promise((resolve) => setTimeout(resolve));
-
-    expect(navigate).toHaveBeenCalledOnce();
+    await expect.poll(() => navigate.mock.calls.length).toBe(1);
     expect(TestBed.inject(Router).serializeUrl(navigate.mock.calls[0][0] as UrlTree)).toBe(
       '/auth/two-factor-setup?returnUrl=%2Fworkspace%2Fsettings%2Fsecurity',
     );
@@ -195,9 +186,7 @@ describe('ExternalAuthCallback', () => {
       .spyOn(TestBed.inject(FullPageNavigationService), 'replace')
       .mockImplementation(() => undefined);
     fixture.detectChanges();
-    await new Promise((resolve) => setTimeout(resolve));
-
-    expect(leave).toHaveBeenCalledExactlyOnceWith(target);
+    await expect.poll(() => leave.mock.calls).toEqual([[target]]);
     expect(authService.loadUser).not.toHaveBeenCalled();
     expect(calls).not.toContain('establish');
   });
@@ -219,10 +208,7 @@ describe('ExternalAuthCallback', () => {
     );
 
     fixture.detectChanges();
-    await new Promise((resolve) => setTimeout(resolve));
-    fixture.detectChanges();
-
-    expect(fixture.nativeElement.textContent).toContain(reason);
+    await expect.poll(() => fixture.nativeElement.textContent).toContain(reason);
     expect(calls).not.toContain('navigate');
   });
 
@@ -239,9 +225,9 @@ describe('ExternalAuthCallback', () => {
     );
 
     fixture.detectChanges();
-    await new Promise((resolve) => setTimeout(resolve));
-    fixture.detectChanges();
-
+    await expect
+      .poll(() => (fixture.nativeElement as HTMLElement).querySelector('a[href="/auth/login"]'))
+      .not.toBeNull();
     expect(fixture.nativeElement.textContent).not.toContain(detail);
   });
 
@@ -259,23 +245,21 @@ describe('ExternalAuthCallback', () => {
     );
 
     fixture.detectChanges();
-    await new Promise((resolve) => setTimeout(resolve));
-    fixture.detectChanges();
-
+    await expect
+      .poll(() => (fixture.nativeElement as HTMLElement).querySelector('a[href="/auth/login"]'))
+      .not.toBeNull();
     expect(accountService.externalLoginCallback).not.toHaveBeenCalled();
     expect(calls).not.toContain('navigate');
-    const back = (fixture.nativeElement as HTMLElement).querySelector('a[href="/auth/login"]');
-    expect(back).not.toBeNull();
   });
 
   it('returns a cancelled link to the security settings without completing it', async () => {
     returnWith({ intent: 'link', error: 'cancelled' });
 
     fixture.detectChanges();
-    await new Promise((resolve) => setTimeout(resolve));
-
+    await expect
+      .poll(() => vi.mocked(TestBed.inject(Router).navigate).mock.calls)
+      .toContainEqual([['/workspace/settings/security']]);
     expect(accountService.linkExternalLogin).not.toHaveBeenCalled();
-    expect(TestBed.inject(Router).navigate).toHaveBeenCalledWith(['/workspace/settings/security']);
   });
 
   // 绑定时会话不够新：票据没被消费，留在回调页请本人确认身份，带上验证码重试同一次绑定
@@ -287,8 +271,7 @@ describe('ExternalAuthCallback', () => {
     const navigate = TestBed.inject(Router).navigate;
 
     fixture.detectChanges();
-    await new Promise((resolve) => setTimeout(resolve));
-    await fixture.whenStable();
+    await expect.poll(reauthenticateForm).not.toBeNull();
 
     expect(accountService.linkExternalLogin).toHaveBeenCalledWith('github', {
       password: undefined,
@@ -297,13 +280,14 @@ describe('ExternalAuthCallback', () => {
     expect(navigate).not.toHaveBeenCalled();
 
     await confirmWithCode(fixture, '123456');
-    await new Promise((resolve) => setTimeout(resolve));
+    await expect
+      .poll(() => vi.mocked(navigate).mock.calls)
+      .toContainEqual([['/workspace/settings/security']]);
 
     expect(accountService.linkExternalLogin).toHaveBeenLastCalledWith('github', {
       password: undefined,
       twoFactorCode: '123456',
     });
-    expect(navigate).toHaveBeenCalledWith(['/workspace/settings/security']);
   });
 
   // 用不了身份验证器：重新登录后回到账户与安全重新发起绑定，不回到这张票据的回调页
@@ -314,8 +298,7 @@ describe('ExternalAuthCallback', () => {
     );
 
     fixture.detectChanges();
-    await new Promise((resolve) => setTimeout(resolve));
-    await fixture.whenStable();
+    await expect.poll(reauthenticateForm).not.toBeNull();
     reauthenticateForm()!
       .querySelector<HTMLButtonElement>('[data-testid="reauthenticate-sign-in-again-link"]')!
       .click();
@@ -343,14 +326,13 @@ describe('ExternalAuthCallback', () => {
     );
 
     fixture.detectChanges();
-    await new Promise((resolve) => setTimeout(resolve));
-    (
-      fixture.componentInstance as unknown as { onReauthVisibleChange(v: boolean): void }
-    ).onReauthVisibleChange(false);
-    await new Promise((resolve) => setTimeout(resolve));
+    await expect.poll(reauthenticateCancelButton).not.toBeNull();
+    reauthenticateCancelButton()!.click();
+    await expect
+      .poll(() => vi.mocked(TestBed.inject(Router).navigate).mock.calls)
+      .toContainEqual([['/workspace/settings/security']]);
 
     expect(accountService.linkExternalLogin).toHaveBeenCalledOnce();
-    expect(TestBed.inject(Router).navigate).toHaveBeenCalledWith(['/workspace/settings/security']);
   });
 
   // 后退键重放旧回调：会话仍在时直接回到应用，而不是对已登录用户显示"登录失败"。
@@ -358,16 +340,14 @@ describe('ExternalAuthCallback', () => {
     returnWith({ intent: 'login', error: 'failed' });
 
     fixture.detectChanges();
-    await new Promise((resolve) => setTimeout(resolve));
-    fixture.detectChanges();
+    await expect
+      .poll(() => (fixture.nativeElement as HTMLElement).querySelector('a[href="/auth/login"]'))
+      .not.toBeNull();
 
     expect(accountService.externalLoginCallback).not.toHaveBeenCalled();
     // 没有本次下发会话的结果：先读当前用户探测会话，再进入应用
     expect(authService.loadUser).toHaveBeenCalledOnce();
     expect(calls).toEqual(['establish', 'navigate']);
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('a[href="/auth/login"]'),
-    ).not.toBeNull();
   });
 });
 //#endif

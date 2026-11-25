@@ -13,6 +13,7 @@ using System.Security.Claims;
 #if (OpenIddictServer)
 using System.Net.Http.Json;
 using CompanyName.ProjectName.Application.Auth.Options;
+using CompanyName.ProjectName.Application.Initialization;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
@@ -33,7 +34,21 @@ public sealed class AuthenticationModeTests(ProjectWebApplicationFactory factory
     }
 
     [Fact]
-    public async Task Identity_registers_its_service_scope_and_omits_retired_machine_scopes()
+    public async Task Initialization_removes_a_stored_scope_outside_the_catalog()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var scopeManager = scope.ServiceProvider.GetRequiredService<IOpenIddictScopeManager>();
+        var staleName = $"retired-{Guid.NewGuid():N}";
+        await scopeManager.CreateAsync(new OpenIddictScopeDescriptor { Name = staleName });
+        Assert.NotNull(await scopeManager.FindByNameAsync(staleName));
+
+        await scope.ServiceProvider.GetRequiredService<ISystemInitializer>().InitializeAsync();
+
+        Assert.Null(await scopeManager.FindByNameAsync(staleName));
+    }
+
+    [Fact]
+    public async Task Identity_registers_and_publishes_its_service_scope()
     {
         using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         await using var scope = factory.Services.CreateAsyncScope();
@@ -44,17 +59,6 @@ public sealed class AuthenticationModeTests(ProjectWebApplicationFactory factory
         Assert.NotNull(available);
         Assert.Contains(available, option => option.Name == resource && option.Audience == resource && !option.MachineOnly);
         Assert.NotNull(await scopeManager.FindByNameAsync(resource));
-
-        string[] retiredScopes =
-        [
-            "tenant-routing.read", "tenant-migration.read", "account-preferences.read",
-            "system-directory.read", "administrators.read"
-        ];
-        foreach (var retired in retiredScopes)
-        {
-            Assert.DoesNotContain(available, option => option.Name == retired);
-            Assert.Null(await scopeManager.FindByNameAsync(retired));
-        }
     }
 }
 #endif

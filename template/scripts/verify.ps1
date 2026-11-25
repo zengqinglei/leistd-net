@@ -34,11 +34,11 @@ $slowTestThresholds = [ordered]@{ Unit = 300; Integration = 5000; E2E = 15000 }
 
 function Step(
     [string]$Name, [string]$Directory, [string]$Command, [string[]]$Arguments,
-    [switch]$Fast, [string]$Scope = 'Static', [switch]$RequiredForE2E
+    [switch]$Fast, [string]$Scope = 'Static', [switch]$RequiredForE2E, [string]$Report
 ) {
     [PSCustomObject]@{
         Name = $Name; Directory = $Directory; Command = $Command; Arguments = $Arguments
-        Fast = [bool]$Fast; Scope = $Scope; RequiredForE2E = [bool]$RequiredForE2E
+        Fast = [bool]$Fast; Scope = $Scope; RequiredForE2E = [bool]$RequiredForE2E; Report = $Report
     }
 }
 
@@ -154,7 +154,9 @@ foreach ($project in $testProjects) {
     $isUnit = $project.BaseName -like '*.UnitTests'
     $layer = if ($isUnit) { 'unit' } else { 'integration' }
     $report = Join-Path $reportDir "$layer-$($project.BaseName).xml"
-    $steps.Add((Step "backend-test:$($project.BaseName)" 'backend' 'dotnet' @('test', $relative, '-c', 'Release', '--no-build', '--logger', "junit;LogFilePath=$report") -Fast:$isUnit -Scope Backend))
+    $arguments = @('test', $relative, '-c', 'Release', '--no-build', '--logger', "junit;LogFilePath=$report",
+        '--', 'RunConfiguration.TreatNoTestsAsError=true')
+    $steps.Add((Step "backend-test:$($project.BaseName)" 'backend' 'dotnet' $arguments -Fast:$isUnit -Scope Backend -Report $report))
 }
 #if (SpaFrontend)
 $steps.Add((Step 'frontend-install' 'frontend' 'npm' @('ci', '--no-audit') -Scope Frontend -RequiredForE2E))
@@ -165,10 +167,10 @@ $browserInstall = @('exec', '--', 'playwright', 'install', 'chromium')
 if ($env:VERIFY_INSTALL_BROWSER_DEPS -eq '1') { $browserInstall += '--with-deps' }
 $steps.Add((Step 'frontend-browser-install' 'frontend' 'npm' $browserInstall -Scope Frontend -RequiredForE2E))
 $steps.Add((Step 'frontend-lint' 'frontend' 'npm' @('run', 'lint') -Fast -Scope Frontend))
-$steps.Add((Step 'frontend-test' 'frontend' 'npm' @('test', '--', '--watch=false', '--reporters=default', '--reporters=junit', '--output-file=../test-reports/unit-frontend.xml') -Scope Frontend))
+$steps.Add((Step 'frontend-test' 'frontend' 'npm' @('test', '--', '--watch=false', '--reporters=default', '--reporters=junit', '--output-file=../test-reports/unit-frontend.xml') -Scope Frontend -Report (Join-Path $reportDir 'unit-frontend.xml')))
 $steps.Add((Step 'frontend-build' 'frontend' 'npm' @('run', 'build') -Scope Frontend -RequiredForE2E))
 #if (LocalIdentity)
-$steps.Add((Step 'frontend-e2e' 'frontend' 'npm' @('run', 'e2e') -Scope E2E))
+$steps.Add((Step 'frontend-e2e' 'frontend' 'npm' @('run', 'e2e') -Scope E2E -Report (Join-Path $reportDir 'e2e.xml')))
 #endif
 #endif
 
@@ -210,6 +212,17 @@ try {
         if ($exitCode -ne 0) {
             Write-Host "Verification failed at step '$($step.Name)' (exit code $exitCode); remaining steps were not run." -ForegroundColor Red
             exit $exitCode
+        }
+        if ($step.Report) {
+            if (-not (Test-Path -LiteralPath $step.Report -PathType Leaf)) {
+                Write-Host "Verification failed at step '$($step.Name)': missing JUnit report '$($step.Report)'." -ForegroundColor Red
+                exit 1
+            }
+            $report = [xml](Get-Content -LiteralPath $step.Report -Raw)
+            if (-not $report.SelectSingleNode('//testcase[not(skipped)]')) {
+                Write-Host "Verification failed at step '$($step.Name)': no tests executed in '$($step.Report)'." -ForegroundColor Red
+                exit 1
+            }
         }
     }
     Write-Host "Verification passed: $($selected.Count) steps." -ForegroundColor Green

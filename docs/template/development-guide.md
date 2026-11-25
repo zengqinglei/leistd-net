@@ -225,6 +225,8 @@ pwsh scripts/test-template-matrix.ps1 -SkipPack -Scenarios <失败场景> -Front
 
 按改动选择本地验证见[本地验证配方](../framework/quality-assurance.md#本地验证配方)；测试分层、矩阵、端到端分工与 lint 缓存口径见[模板质量验证](./quality-assurance.md)。删除检查或测试按[删除与替换的验收](../framework/quality-assurance.md#删除与替换的验收)。
 
+某一端的验证步骤新增对另一端文件的读取时，同步更新 `verify.ps1` 的改动路径选择和对应的 `-List` 场景断言。
+
 `test-template-postgresql-e2e.ps1` 在真实 PostgreSQL 上验证本地 Framework 包→Identity/Resource 生成→DbMigrator→API→Shared/Dedicated 隔离的整条链路，要求本机 Docker 与 PowerShell（psql 用容器自带的）。矩阵与该脚本默认各自打包当前 Framework 源码。
 
 每次矩阵运行使用独立的 run 目录 `.tmp/runs/<run-id>/`（`<run-id>` = PID+时间戳），因此**多个 AI/终端可并行执行**：

@@ -25,8 +25,8 @@
     <PackageReference Include="System.Linq.Dynamic.Core" />
     <PackageReference Include="Leistd.Data" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
-<!--#if (LocalIdentity || IncludeNotifications || IncludeRealTime || TenantWorkspace)-->
-    <!-- 两步验证、清理任务与实时订阅的截止边界用官方时间替身 -->
+<!--#if (LocalIdentity || IncludeNotifications || IncludeRealTime || TenantWorkspace || !IncludeOperationRecords)-->
+    <!-- 两步验证、清理任务、实时订阅与结构化操作日志用官方时间替身 -->
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
 <!--#endif-->
 <!--#if (IncludeNotifications || IncludeRealTime)-->
