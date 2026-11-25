@@ -2,7 +2,7 @@ import { Location } from '@angular/common';
 import { HttpErrorResponse, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 //#if (TenantWorkspace)
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
 //#endif
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
@@ -68,6 +68,16 @@ describe('StartupService', () => {
         provideRouter([{ path: 'platform/users', children: [] }]),
         { provide: AuthService, useValue: authService },
         { provide: SessionContextService, useValue: sessionContext },
+        //#if (TenantWorkspace)
+        {
+          provide: WorkspaceContextService,
+          useValue: {
+            target: signal<string | null>(null),
+            nameFromUrl: () => null,
+            loadForStartup: (context: Promise<void>) => context,
+          },
+        },
+        //#endif
       ],
     });
     service = TestBed.inject(StartupService);
@@ -95,22 +105,6 @@ describe('StartupService', () => {
     expect(sessionContext.clear).toHaveBeenCalled();
     expect(service.status()).toBe('success');
   });
-  //#if (TenantWorkspace)
-
-  for (const code of ['Workspace:Forbidden', 'Workspace:Unavailable']) {
-    it(`leaves ${code} on a deep link to the workspace guard instead of failing startup`, async () => {
-      openAt('/w/other/platform');
-      sessionContext.establish.mockRejectedValue(
-        ApplicationHttpError.from(new HttpErrorResponse({ status: 403, error: { code } })),
-      );
-      await service.load();
-      expect(service.status()).toBe('success');
-      expect(service.error()).toBeNull();
-      expect(sessionContext.clear).not.toHaveBeenCalled();
-      await expect(firstValueFrom(service.settled('/w/other/platform'))).resolves.toBe(true);
-    });
-  }
-  //#endif
 
   it('marks startup as failed when the auth service is unavailable (503)', async () => {
     const error = httpError(503);
@@ -348,6 +342,9 @@ describe('StartupService HTTP requests', () => {
 
   it('keeps permissions and settings in flight together and waits for settings on permission failure', async () => {
     const { done } = await start();
+    //#if (TenantWorkspace)
+    http.expectOne(directory).flush(workspaces);
+    //#endif
     const permissions = http.expectOne('/api/v1/permissions/current');
     const settings = http.expectOne('/api/v1/settings');
 
@@ -363,6 +360,9 @@ describe('StartupService HTTP requests', () => {
 
   it('shows the permission outage when settings return 401 first without signing out', async () => {
     const { done } = await start();
+    //#if (TenantWorkspace)
+    http.expectOne(directory).flush(workspaces);
+    //#endif
     http.expectOne('/api/v1/settings').flush(null, { status: 401, statusText: 'Unauthorized' });
     http
       .expectOne('/api/v1/permissions/current')
@@ -441,22 +441,51 @@ describe('StartupService HTTP requests', () => {
     await retry;
   });
 
-  it('shows the cold workspace denial without another permission request', async () => {
-    TestBed.inject(Location).replaceState('/w/other/platform');
+  for (const [code, reason] of [
+    ['Workspace:Forbidden', 'forbidden'],
+    ['Workspace:Unavailable', 'unavailable'],
+  ]) {
+    it(`shows the cold workspace denial without another permission request when ${reason}`, async () => {
+      TestBed.inject(Location).replaceState('/w/other/platform');
+      const { done } = await start('t1');
+      http.expectOne(directory).flush(workspaces);
+      for (const path of [permissions, settings]) {
+        http.expectOne(path).flush({ code }, { status: 403, statusText: 'Forbidden' });
+      }
+      await done;
+      expect(startup.status()).toBe('success');
+
+      const harness = await RouterTestingHarness.create();
+      await harness.navigateByUrl('/w/other/platform', WorkspaceContent);
+      expect(TestBed.inject(Router).url).toContain(`reason=${reason}`);
+      expect(TestBed.inject(Location).path()).toBe('/w/other/platform');
+      http.expectNone(permissions);
+    });
+  }
+
+  it('reloads with the workspace header when a tenant account enters from the host route', async () => {
     const { done } = await start('t1');
     http.expectOne(directory).flush(workspaces);
     for (const path of [permissions, settings]) {
-      http
-        .expectOne(path)
-        .flush({ code: 'Workspace:Forbidden' }, { status: 403, statusText: 'Forbidden' });
+      const request = http.expectOne(path);
+      expect(request.request.headers.has('X-Workspace')).toBe(false);
+      request.flush(path === permissions ? permissionSnapshot : []);
     }
     await done;
 
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/w/other/platform', WorkspaceContent);
-    expect(TestBed.inject(Router).url).toContain('/workspace-denied?');
-    expect(TestBed.inject(Location).path()).toBe('/w/other/platform');
-    http.expectNone(permissions);
+    const entered = harness.navigateByUrl('/platform', WorkspaceContent);
+    await vi.waitFor(() => {
+      const pending = http.match((request) => request.url === permissions || request.url === settings);
+      expect(pending).toHaveLength(2);
+      for (const request of pending) {
+        expect(request.request.headers.get('X-Workspace')).toBe('acme');
+        request.flush(request.request.url === permissions ? permissionSnapshot : []);
+      }
+    }, { interval: 1 });
+    await entered;
+    expect(TestBed.inject(Router).url).toBe('/w/acme/platform');
+    http.expectNone(directory);
   });
   //#endif
 });

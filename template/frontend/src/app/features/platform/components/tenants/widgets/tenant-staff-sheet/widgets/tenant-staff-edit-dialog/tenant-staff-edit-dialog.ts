@@ -36,6 +36,7 @@ import {
   applicationErrorMessage,
 } from '../../../../../../../../core/errors/application-http-error';
 import { WORKSPACE_SCOPE } from '../../../../../../../../core/interceptors/http-context-tokens';
+import { WorkspaceContextService } from '../../../../../../../../core/services/workspace-context-service';
 import { injectFormSubmission } from '../../../../../../../../core/validation/form-submission';
 import { isSubmittedInvalid } from '../../../../../../../../core/validation/submit-error-state-matcher';
 import { ImeGuard } from '../../../../../../../../shared/directives/ime-guard';
@@ -89,6 +90,7 @@ interface CandidateQuery {
 })
 export class TenantStaffEditDialog {
   private readonly http = inject(HttpClient);
+  private readonly workspace = inject(WorkspaceContextService);
   private readonly formRoot = viewChild.required<ElementRef<HTMLElement>>('accessFormRoot');
   private readonly submitForm = injectFormSubmission();
   //#if (IncludeLocalization)
@@ -252,6 +254,7 @@ export class TenantStaffEditDialog {
         }
         throw error;
       }
+      if (!member) this.workspace.refreshAfterAccessChange(homeUserId);
       const person = member
         ? (member.displayName ?? member.username)
         : (this.picked()?.displayName ?? this.picked()?.username ?? '');

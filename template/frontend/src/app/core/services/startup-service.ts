@@ -5,15 +5,15 @@ import { Observable } from 'rxjs';
 import { filter, map, take } from 'rxjs/operators';
 
 import { ApplicationHttpError } from '../errors/application-http-error';
-//#if (TenantWorkspace)
-import { workspaceDenial } from '../errors/workspace-access-error';
-//#endif
 import { EntryRouteService } from '../routing/entry-route-service';
 import { AuthService } from './auth-service';
 //#if (Impersonation)
 import { ImpersonationService } from './impersonation-service';
 //#endif
 import { SessionContextService } from './session-context-service';
+//#if (TenantWorkspace)
+import { WorkspaceContextService } from './workspace-context-service';
+//#endif
 
 export type StartupStatus = 'loading' | 'success' | 'failed';
 
@@ -40,6 +40,9 @@ export class StartupService {
   private readonly injector = inject(Injector);
   //#if (Impersonation)
   private readonly impersonation = inject(ImpersonationService);
+  //#endif
+  //#if (TenantWorkspace)
+  private readonly workspace = inject(WorkspaceContextService);
   //#endif
   private _status = signal<StartupStatus>('loading');
   private _error = signal<unknown | null>(null);
@@ -80,22 +83,22 @@ export class StartupService {
     }
 
     try {
+      //#if (TenantWorkspace)
+      this.workspace.target.set(this.workspace.nameFromUrl(this.entryRoute.url()));
+      //#endif
       await this.authService.initializeAuth();
       // 权限与设置在同一次启动中就位，未就位前按无权限处理，避免受保护入口闪现。
+      //#if (TenantWorkspace)
+      await this.workspace.loadForStartup(this.sessionContext.establish());
+      //#else
       await this.sessionContext.establish();
+      //#endif
       //#if (Impersonation)
       // 模拟态只有服务端的会话声明知道；顶栏的模拟提示要在外壳首帧就位，否则会闪一下"正常会话"。
       await this.impersonation.load();
       //#endif
       this._status.set('success');
     } catch (err: unknown) {
-      //#if (TenantWorkspace)
-      // 工作区拒绝由入口守卫呈现终局说明页，不当作全局启动故障。
-      if (this.entryRoute.path().startsWith('/w/') && workspaceDenial(err)) {
-        this._status.set('success');
-        return;
-      }
-      //#endif
       if (err instanceof ApplicationHttpError && err.status === 401) {
         this.sessionContext.clear();
         this._status.set('success');
