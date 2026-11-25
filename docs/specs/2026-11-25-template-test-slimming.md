@@ -134,14 +134,37 @@
 
 ### 实施前基线
 
-从 `5e699f41` 在本机以 SDK 10.0.402 生成工作区并执行默认 `pwsh scripts/verify.ps1`。用例数来自本轮 JUnit，前端 spec 数同时与 Vitest 的发现结果核对。耗时为 `verify.ps1` 各步骤的墙钟秒数。
+从 `5e699f41` 在本机（`local`，macOS arm64，SDK 10.0.402）生成工作区并执行默认 `pwsh scripts/verify.ps1`。用例数来自本轮 JUnit，前端 spec 数同时与 Vitest 的发现结果核对。耗时为 `verify.ps1` 各步骤的墙钟秒数。
 
 | 场景 | 前端 spec / 用例 | 后端单元 | 后端集成 | E2E | 后端单元 / 集成（s） | 前端单元 / E2E（s） | 完整入口（s） |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `identity-workspace` | 192 / 2239 | 371 | 872 | 16 | 17.79 / 362.70 | 159.86 / 53.22 | 802.07 |
 | `resource-capabilities-03` | — | 201 | 192 | — | 4.85 / 231.40 | — | 287.33 |
 
-Identity 全部通过，Resource 仅 B1 的提交分支失败。实施后节点如有不同，两轮墙钟用于记录各自的验证成本。
+Identity 从干净生成的工作区起步，`-Sync` 已还原和安装依赖，进入 `verify.ps1` 时尚未编译，全部通过。Resource 在同一个工作区先跑 B1 定向采集，再以 `-Sync -Discard` 恢复源码，保留了编译缓存，完整入口仅 B1 的提交分支失败。两轮没有清空节点级下载和镜像缓存。
+
+### 实施后完整验收
+
+从 `89e24c2a` 在本机（`local`，macOS arm64，SDK 10.0.402）分别生成并执行默认 `pwsh scripts/verify.ps1`，三种场景全部通过。Identity 在同一工作区先跑了 C3 正反例，有后端构建产物。两个 Resource 工作区在 `-Sync` 安装依赖后首次构建。它们使用节点上已有的下载、浏览器与镜像缓存。此处耗时是各轮的验收记录，性能对照使用另起的同口径运行。
+
+| 场景 | 前端 spec / 用例 | 后端单元 | 后端集成 | E2E | 后端单元 / 集成（s） | 前端单元 / E2E（s） | 完整入口（s） |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `identity-workspace` | 192 / 2239 | 372 | 872 | 14 | 3.33 / 228.18 | 73.35 / 37.82 | 455.18 |
+| `resource-capabilities-03` | — | 201 | 192 | — | 2.49 / 68.64 | — | 98.39 |
+| `resource-workspace` | 142 / 1435 | 206 | 278 | — | 2.92 / 91.60 | 46.41 / — | 225.01 |
+
+Identity 前端仍为 192 个 spec 和 2239 条用例（A2 删 1 条，C1 补 1 条）。后端单元从 371 到 372，集成保持 872（补 2 条，下沉 2 条），E2E 从 16 到 14，准入为 14/20，上限仍为 20。纯 API Resource 仍为 201 单元及 192 集成，原有的 1 条失败已修复。
+
+### Identity 同节点、同构建缓存起点复测
+
+在单个自动调度任务内，本机（`local`，macOS arm64，SDK 10.0.402）对两份新生成的 `identity-workspace` 依次运行默认 `pwsh scripts/verify.ps1`。两份各自用 `-Sync` 还原及安装依赖，计时开始前均无后端编译产物、Angular 构建缓存或测试报告。候选依赖源相同，共用节点级 npm 下载、Playwright 浏览器和 Docker 镜像缓存。工作区准备不计入入口耗时。
+
+| 提交 | 前端 spec / 用例 | 后端单元 | 后端集成 | E2E | 后端单元 / 集成（s） | 前端单元 / E2E（s） | 完整入口（s） |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `5e699f41` | 192 / 2239 | 371 | 872 | 16 | 3.34 / 200.59 | 73.11 / 46.19 | 467.78 |
+| `89e24c2a` | 192 / 2239 | 372 | 872 | 14 | 3.38 / 185.93 | 74.89 / 32.16 | 404.49 |
+
+两轮均通过全部 17 步。本次同口径运行观测到完整入口少 63.29 秒，E2E 从 46.19 秒到 32.16 秒。整体对照各跑一轮，各阶段耗时仍受运行间波动影响。原基线 802.07 秒及验收 455.18 秒保留为两次原始记录，仅对照本表。
 
 ### B1 和 B2 的反例
 
@@ -159,14 +182,14 @@ Identity 全部通过，Resource 仅 B1 的提交分支失败。实施后节点�
 | A3 | 缩减日期格式的重复语言样本 | 槽位保留中英文代表，往返保留 ISO、月在前、日在前及日语年月日格式，同一用例继续覆盖年初、年末和闰日。地区标签仍由中文 `zh-CN`、`zh-TW` 的既有断言覆盖。 |
 | C1 | 删除管理员单独打开角色列表的用例，下沉管理员和受限会话的创建按钮断言 | `A_role_reader_can_list_roles_but_cannot_create_them` 验证真实宿主允许受限角色读取、拒绝其创建且允许管理员创建。`offers role creation only to a user with the create permission` 固定组件接线。`signs in through the login page` 和 `opens the protected role list with a restricted session` 保留真实 Cookie 会话访问受保护列表。 |
 | C2 | 删除全事件选择后独立的选中状态断言 | `WebhookSubscriptionDialog` 的 `submits ["*"] for all events and drops the individual choices` 保证请求载荷。E2E 仍由浏览器点击全事件并提交，保留真实接收端、签名头、成功状态、密钥显示、筛选和投递详情接线。 |
-| C3 | 登录失败阈值与零阈值的重复 HTTP 用例 | `Reaching_the_threshold_locks_temporarily_and_resets_the_count` 和 `A_zero_threshold_never_locks` 固定领域规则。`Admin_unlock_allows_sign_in_after_the_configured_threshold_locks_the_user` 用租户设定阈值 2 验证普通登录接线，保留拒绝、管理员解除与恢复登录。会话维持和 `Rejects_a_zero_lockout_duration` 的 HTTP 400 映射继续覆盖。 |
+| C3 | 登录失败阈值与零阈值的重复 HTTP 用例 | `Reaching_the_threshold_locks_temporarily_and_resets_the_count` 和 `A_zero_threshold_never_locks` 固定领域规则。`Admin_unlock_allows_sign_in_after_the_configured_threshold_locks_the_user` 使用租户阈值 2，在解锁前用正确口令登录并断言 HTTP 401、`Auth:UserTemporarilyLockedOut`，随后验证管理员解锁与恢复登录。会话维持和 `Rejects_a_zero_lockout_duration` 的 HTTP 400 映射继续覆盖。 |
 | C4 | 下沉五个退役名称的否定断言 | `The_default_catalog_excludes_retired_machine_scopes` 固定默认目录。`Initialization_removes_a_stored_scope_outside_the_catalog` 预置实际旧记录并验证清理。`Identity_registers_and_publishes_its_service_scope` 保留服务级 scope 的 API 与落库接线。 |
 | C5 | 审查后保留 | `Concurrent_first_writes_of_one_user_setting_both_succeed_and_leave_one_row` 覆盖 HTTP 并发写。`Interleaved_first_write_inside_an_outer_transaction_recovers_and_commits_host_entities` 覆盖 PostgreSQL 跨连接提交和保存点恢复。 |
 | C6 | 删除 390 px 跨源导航变体 | `SystemSwitcher` 的 `closes only the menu on Escape inside a real drawer` 覆盖真实抽屉内打开菜单、按 Escape 并保留抽屉。`navigates to another origin with the current workspace path` 保留浏览器跨源导航及目标工作区路径。两个冷入口继续检查。 |
 
 ### C7 同机对照
 
-本机分别构建改动前后的 `resource-workspace` Release 集成测试项目，再按前、后交错次序运行 `dotnet test -c Release --no-build --no-restore --filter FullyQualifiedName~ResourceBrowserSessionTests`，每轮均为 39/39 通过。计时包括测试进程启动，不含构建。表里的宿主与数据库克隆数取自前后各一次带计数的全类运行。
+本机（`local`）分别构建改动前后的 `resource-workspace` Release 集成测试项目，再按前、后交错次序运行 `dotnet test -c Release --no-build --no-restore --filter FullyQualifiedName~ResourceBrowserSessionTests`，每轮均为 39/39 通过。每轮使用已编译的各自工作区和同一节点镜像缓存，计时包括测试进程启动。宿主与数据库克隆数另在 `worker-01`（改动前）和 `local`（改动后）采集，均用各自先编译好的工作区运行全类。
 
 | 构建 | 第 1 轮（s） | 第 2 轮（s） | 第 3 轮（s） | 中位（s） | 组内极差（s） | 宿主 / 数据库克隆 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -177,7 +200,7 @@ Identity 全部通过，Resource 仅 B1 的提交分支失败。实施后节点�
 
 ### 前端改单条用例耗时
 
-同一节点的 Identity Workspace Vitest JUnit 用例墙钟。前为 `5e699f41` 的完整入口，后为 A 的全量前端复测（含 C1 的组件覆盖）。表内改写用例均低于 100 ms。
+两轮均在本机（`local`）。数据为 Identity Workspace Vitest JUnit 用例墙钟。前为 `5e699f41` 的完整入口，后为 A 的全量前端复测（含 C1 的组件覆盖）。运行 Vitest 时前端依赖已安装，两份前端生成目录均未运行过 Angular 测试或构建。表内改写用例均低于 100 ms。
 
 | 单条用例 | 改写前（ms） | 改写后（ms） |
 | --- | ---: | ---: |
@@ -230,3 +253,13 @@ Identity 全部通过，Resource 仅 B1 的提交分支失败。实施后节点�
 
 - 在生成项目执行 `npm test -- --watch=false --include …`，依次破坏受保护路由判断、重认证关闭、恢复码继续、过期 QR 丢弃、头像变更、请求头录入、开关保存、日历索引、周起始回退、日期精度与往返，以及角色按钮条件。各组预期用例均失败。禁用外部登录回调处理后，该 spec 的 16 条均失败。
 - 在生成的 Identity Workspace 执行 `dotnet test -c Release --filter …`，放宽角色创建策略、停用存量清理、把退役名称加入默认目录、把零阈值当成有效锁定阈值。角色创建、存量清理、默认目录和 `A_zero_threshold_never_locks` 均按预期失败。
+- 对 `89e24c2a` 执行 `dotnet test -c Release --filter FullyQualifiedName~Admin_unlock_allows_sign_in_after_the_configured_threshold_locks_the_user`，正例通过。在生成目录临时跳过登录路径上的两个临时锁定判定后，已锁定用户的正确口令请求返回 HTTP 200，用例在预期 HTTP 401 处失败。另一次变异固定读取默认阈值，第二次错误口令返回 `Auth:InvalidCredentials`，用例在预期 `Auth:UserTemporarilyLockedOut` 处失败。
+
+### 静态闸门与模板验证包
+
+对验收代码 `89e24c2a` 运行以下命令。
+
+- `pwsh scripts/check-all.ps1`。52 道全部通过，包括模板条件分支、公开内容和规范读取成本。
+- `pwsh template-package/test-template-package.ps1`。模板验证包 `0.0.1-local.20261125125512` 通过包内容比对、隔离安装、两个场景的来源标记及反例和重建零差异。
+- `python3 scripts/test-template-generation.py --shard control --workers 2 --output .tmp/test-slimming/generation-control`。6144 种原始输入映射、18 个实际等价比较、4 个 CI 变体、10 种 `verify.ps1` 签名全部通过。
+- 本次没有框架或随框架包文档变更，未运行 `framework/build/test-package-consumption.ps1`。
