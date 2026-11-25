@@ -4,11 +4,11 @@
 
 - API 表达资源和业务动作，不暴露内部实现细节；请求、响应、错误格式保持一致。
 - 所有破坏性操作必须具备认证、授权、审计和幂等策略；认证与权限规则见 [认证与授权](auth.md)。
-- 删除不存在的资源（本地或外部）视为成功：按 [§2.2](#22-空响应) 的空响应返回（业务接口 200，框架组件端点 204）、不写操作记录，见[通用约定 §3.6](./coding-common.md#36-删除幂等且保留真实失败)。
+- 删除不存在的本地或外部资源按 [§2.2](#22-空响应) 返回成功，不写操作记录。 [通用约定 §3.6](./coding-common.md#36-删除幂等且保留真实失败)
 
 ## 2. 响应格式
 
-**成功直接返回业务对象（裸对象，不包裹），失败统一返回 RFC 9457 `ProblemDetails`**（§2.4）。该风格由框架全局异常处理（`Leistd.ExceptionHandling.AspNetCore`）落地，不在 Controller 里包 `Ok(...)` 或自定义 `{success,data}` 信封。
+**成功直接返回业务对象**，Controller 不包 `Ok(...)` 或 `{success,data}`。失败由 `Leistd.ExceptionHandling.AspNetCore` 统一返回 RFC 9457 `ProblemDetails`（§2.4）。
 
 > JSON 序列化：属性 camelCase、忽略 null 值、枚举序列化为 camelCase 字符串且不收数字；查询串里的分类取值同样写 camelCase（见[通用约定 §3.8](./coding-common.md#38-枚举只在边界转换)）。
 
@@ -28,6 +28,7 @@ HTTP 200：Controller 返回 `Task<TOutputDto>`，无 I/O 时可同步返回 DTO
 ### 2.3 分页响应
 
 分页查询返回 `PagedResult<T>`，HTTP 200，固定字段 `totalCount` + `items`。
+列表项只含有上界的字段和摘要，无上界字段按 id 获取单资源详情。 [Google AIP-157](https://google.aip.dev/157#view-enumeration)
 
 ### 2.4 错误响应
 
@@ -132,9 +133,9 @@ HTTP 200：Controller 返回 `Task<TOutputDto>`，无 I/O 时可同步返回 DTO
 
 ## 5. 分页规范
 
-分页查询使用 `offset/limit` 偏移分页（与 `PageRequest` 一致），不使用 `page/pageSize`。下表为基础默认值；业务 DTO 可以派生并覆写属性默认值或校验特性，接口须说明自己的边界。
+分页沿用 `PageRequest` 的 `offset/limit`，不使用 `page/pageSize`。派生 DTO 可覆写默认值或校验特性，接口须说明边界。
 
-业务列表遵循本节；组件列表以对应组件契约为准，租户、操作记录、通知的分页当前采用固定排序（创建时间倒序、同刻按 Id 倒序），不提供 `sorting`。
+组件列表以组件契约为准。租户、操作记录和通知按创建时间倒序，同刻按 Id 倒序，无 `sorting`。
 
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
