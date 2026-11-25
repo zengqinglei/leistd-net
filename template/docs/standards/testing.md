@@ -22,25 +22,25 @@
 | 推送前 | ≤ 3 分钟 | 相关静态检查、构建和目标回归确认可交付 |
 | 合并关卡 | 墙钟 ≤ 10 分钟 | CI 覆盖本次改动与适用的 E2E，含还原、构建和浏览器安装 |
 
-单元与集成测试只设耗时预算。超预算先收窄范围，E2E 可先按受影响分组跑，完整档另设必过阶段；项目预算写进 `docs/project/testing.md`。分片前先确认节点已缓存依赖。
+单元与集成测试只设耗时预算。超预算先收窄范围，避免靠重跑过关。E2E 可先按分组跑，完整档另设必过阶段，其预算写进 `docs/project/testing.md`。分片前确认节点已缓存依赖。
 
 ### 1.1 完整验证由谁承担
 
-本地和 CI 共用 `pwsh scripts/verify.ps1`，完整验证需 Docker。MR/PR 按改动选择验证，纯文档只检查静态闸门；默认分支、手动和本地默认全量，定时只审计依赖。`-List` 查看步骤。每轮汇总各步墙钟和慢用例，JUnit 在 `test-reports/`，警告阈值定义在 `scripts/verify.ps1` 的 `$slowTestThresholds`。单元测试目标 ≤ 100 ms。
+`pwsh scripts/verify.ps1` 默认全量，需 Docker。MR/PR 按改动选步，纯文档只跑静态闸门。`-List` 查看步骤。JUnit 写入 `test-reports/`，各步耗时和慢用例见运行汇总，警告阈值见脚本的 `$slowTestThresholds`。单元测试目标 ≤ 100 ms。
 
-`pwsh scripts/verify.ps1 -Fast` 跑静态检查、后端还原、构建、风格和单元测试，无需 Docker。
+`-Fast` 跑静态检查、后端还原、构建、风格和单元测试，无需 Docker。
 <!--#if (SpaFrontend)-->
 `-Fast` 同时跑前端 lint，依赖缺失时先在 `frontend/` 跑 `npm ci`。
 CI 在锁文件变化、定时和手动运行时审计前端生产依赖。改依赖后在 `frontend/` 跑 `node scripts/audit-dependencies.mjs`。有修复版本的 high/critical 公告阻断，其余告警。
 <!--#endif-->
 后端包版本或项目文件变更、定时和手动时，CI 跑 `pwsh scripts/audit-backend-dependencies.ps1`，high/critical 须为 0；改后端依赖后本地同样运行。
 
-阶段完成默认跑受影响测试项目全量，含集成测试、相关 lint、构建和关键路径。项目在 `docs/project/testing.md` 登记必过 CI 的入口、范围与保护设置后，本地可用 `-Fast` 加目标集成测试，由 CI 承担合并关卡。
+阶段完成默认跑受影响项目的单元与集成测试全集、相关 lint 和构建。数据库、事务、租户、HTTP 授权、协议或网络取消有变更时，尽早验证对应真实路径。项目在 `docs/project/testing.md` 登记必过 CI 的入口、范围和保护设置后，本地可用 `-Fast` 加目标集成测试。
 
 <!--#if (Ci == "github")-->
-`.github/workflows/ci.yml` 默认分支完整验证通过后发布镜像。项目要求每次变更经 merge queue，且 `merge_group` 上的完整 `verify` 必过并验证发布树时，可以只构建和发布镜像。
+`.github/workflows/ci.yml` 推荐要求分支保持最新或用 merge queue。默认分支完整验证通过后发布镜像。若所有变更经 merge queue，且 `merge_group` 的完整 `verify` 必过并验证发布树，默认分支可只构建和发布镜像。
 <!--#elseif (Ci == "gitlab")-->
-`.gitlab-ci.yml` 默认分支完整验证通过后发布镜像。项目要求所有变更经快进合并、关闭服务端自动 rebase、开启 Pipelines must succeed，且发布树已通过关卡（适用时含完整 E2E），可以只构建和发布镜像。
+`.gitlab-ci.yml` 默认分支完整验证通过后发布镜像。所有变更均须快进合并、关闭服务端自动 rebase、启用 Pipelines must succeed，且发布树通过关卡（适用时含完整 E2E），才可省略合入后验证。缓存默认不在受保护与非受保护分支间共享。
 <!--#endif-->
 
 ### 1.2 按开发场景选择范围
@@ -105,7 +105,7 @@ backend/tests/
 - 实体配置、唯一索引与全局查询过滤器在集成测试里验证，不用 EF InMemory 或 SQLite 代替（前者放过违反的约束与不可翻译的查询，后者锁死独立事务）。
 - 批量 `ExecuteUpdate` / `ExecuteDelete` 不经过变更跟踪器：断言结果时换一个作用域读，否则读到仍被跟踪的旧实体。
 - 外部服务用 fake、mock 或明确的测试环境；日志用 `FakeLogger`，不手写替身。
-- 时间边界（锁定、验证码与令牌有效期、限频窗口）用 `FakeTimeProvider` 或显式时刻验证，不靠真实时间流逝。集成测试在 `ConfigureTestServices` 里 `RemoveAll<TimeProvider>()` 后登记假时钟（起点取当前时刻），`IClock`、Cookie 认证与 OpenIddict 随之跟随。内存缓存、HybridCache 一级和内存分布式缓存的到期也跟随假时钟；Redis、Data Protection 限时保护器与 OIDC 处理器的寿命校验用各自机制。PostgreSQL 时间只存到微秒：固定时钟起点按微秒对齐，持久化时刻换新作用域读回再比较，不放大容差。
+- 集成测试在 `ConfigureTestServices` 中 `RemoveAll<TimeProvider>()` 后登记假时钟，起点取当前时刻。`IClock`、Cookie 认证、OpenIddict 及三类进程内缓存跟随宿主时钟。单测直接构造真实缓存时显式接入假时钟。Redis、Data Protection 与 OIDC 处理器各用自身的寿命校验机制。PostgreSQL 时间精确到微秒，固定时钟起点按微秒对齐，换新作用域读回后比较，不放大容差。
 - 端到端只验接线与生效值，不等安全窗口过期；确需观察到期时用配置缩短窗口（如 `OAuth:AccessTokenLifetime`，见[配置参考](../deploy/configuration.md#生产边界)）并断言已生效；有上限的等待（网络、取消、超时）不在此列。
 - 领域规则、状态变化、权限和错误语义应通过可观察行为断言。
 - 各层注册入口覆盖注册结果、生命周期与相同登记重复调用不重复生效，有意覆盖组件默认实现的登记验证两种调用顺序；有注册或配置决策（选择实现、派生 Options）的宿主扩展测行为，单纯转调由启动集成测试覆盖（见[后端开发规范 §4](./coding-backend.md#4-依赖注入)）；注册面是契约，编译期看不出错。
@@ -154,7 +154,7 @@ Linux 关闭触屏仿真不恢复 fine/hover，须分实例；见 `frontend/src/
 E2E 只放真实部署才能证明的东西：真实界面的登录与会话、跨进程或跨服务的接线（含启用时的实时推送）和一条主流程冒烟。
 权限矩阵、越权、审计字段与软删除由集成测试负责（真实 PostgreSQL + `WebApplicationFactory`）。
 
-各层只处理五类用例：重复覆盖、已由下层覆盖、实现细节、已删功能遗留、只验证框架或第三方。PR/MR 逐条记录替代覆盖或删除理由。关键路径、认证授权、租户隔离和合规判定只下沉，先补下层。
+用例按行为命名，避免用轮次命名。各层只精简五类用例：重复覆盖（共享实现验一次，同主题变体保留主路径）、已由下层覆盖、实现细节、已删功能遗留、仅验证框架或第三方。PR/MR 前三类写替代覆盖，后两类写删除理由。认证授权、租户隔离和合规判定等关键路径只下沉，先补下层。
 
 各层的时间规则：
 
@@ -183,7 +183,7 @@ python3 scripts/check-setting-group-icons.py              # 每个系统设置�
 <!--#endif-->
 ```
 <!--#if (LocalIdentity)-->
-`node frontend/scripts/check-e2e-admission.mjs` 发现全部 E2E 用例，核对每条恰好一个合法 `@proves:` 标签及总数上限。完整验证选中 E2E 时执行，`-Fast` 用已安装依赖检查，纯文档验证跳过。用例证明哪类跨进程接线写进 PR/MR，类别与上限见脚本。
+选中 E2E 时用 `node frontend/scripts/check-e2e-admission.mjs` 核对每例唯一的合法 `@proves:` 标签及总数上限。`-Fast` 用已有依赖检查，纯文档跳过。PR/MR 审查标签是否符合实际接线。
 <!--#endif-->
 <!--#if (SpaFrontend && IncludeOperationRecords)-->
 每个动作码都须有 `operationRecords.actions.<码>` 词条（单向，多余词条不报）；漏配时界面只把那一行显示成裸码（`role.deleted`）。新增动作码时同一提交补中英句子。
