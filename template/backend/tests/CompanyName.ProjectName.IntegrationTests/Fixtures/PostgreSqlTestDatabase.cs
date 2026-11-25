@@ -11,7 +11,7 @@ namespace CompanyName.ProjectName.IntegrationTests.Fixtures;
 /// 迁移校验会以"有待执行迁移"失败，不会静默放行。</para>
 /// <para>克隆用 <c>CREATE DATABASE … TEMPLATE</c>，比每个宿主各跑一遍迁移快得多，各宿主的数据互不可见。
 /// 克隆要求模板库上没有连接，因此迁移用不进连接池的连接。</para>
-/// <para>容器关闭了 fsync：数据随容器丢弃，不需要落盘保证。容器由 Testcontainers 在测试进程退出后回收。</para>
+/// <para>数据目录用 tmpfs，关闭 fsync。容器由 Testcontainers 在测试进程退出后回收。</para>
 /// </remarks>
 internal static class PostgreSqlTestDatabase
 {
@@ -59,6 +59,7 @@ internal static class PostgreSqlTestDatabase
             Environment.GetEnvironmentVariable("RPR_DOCKER_LABELS"),
             Environment.GetEnvironmentVariable("RPR_DOCKER_NAME_PREFIX"));
         var builder = new PostgreSqlBuilder("postgres:18-alpine")
+            .WithTmpfsMount("/var/lib/postgresql")
             .WithCommand("-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off", "-c", "max_connections=500");
         var container = (ownership?.Apply(builder) ?? builder).Build();
         await container.StartAsync();
