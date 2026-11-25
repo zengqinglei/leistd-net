@@ -79,49 +79,30 @@
                 (searchChange)="searchCandidates($event)"
                 (valueChange)="pick($event)"
               >
-                <!--
-                  触发器保持单行：姓名或用户名被截断时，悬停或聚焦给出全文。
-                  提示只检查宿主自身的 :focus-visible，必须挂在实际聚焦的按钮上。
-                  这里展开 hlm-combobox-trigger 的模板，升级 Spartan 时与该模板对照。
-                -->
-                <button
-                  type="button"
-                  id="tenant-staff-person"
-                  brnComboboxTrigger
-                  brnComboboxAnchor
-                  brnComboboxPopoverTrigger
-                  brnFieldControlDescribedBy
-                  hlmBtn
-                  variant="outline"
-                  data-slot="combobox-trigger"
-                  class="w-full justify-between font-normal data-placeholder:text-muted-foreground"
-                  [hlmTooltip]="pickedLabel()"
-                  [appTruncatedTooltip]="pickedText"
+                <hlm-combobox-trigger
+                  buttonId="tenant-staff-person"
+                  class="h-auto min-h-9 w-full justify-between py-1.5 text-start font-normal whitespace-normal pointer-coarse:h-auto pointer-coarse:min-h-11"
                 >
-                  <span class="flex min-w-0 items-center gap-2" data-testid="staff-picked">
-                    @if (picked(); as person) {
-                      <hlm-avatar class="size-6">
+                  @if (picked(); as person) {
+                    <span class="flex min-w-0 items-center gap-2" data-testid="staff-picked">
+                      <hlm-avatar class="size-6 shrink-0">
                         <span hlmAvatarFallback class="text-xs">{{
                           initial(person.displayName || person.username)
                         }}</span>
                       </hlm-avatar>
-                    }
-                    <span #pickedText class="min-w-0 truncate">
-                      @if (picked(); as person) {
-                        <span class="font-medium">{{ person.displayName || person.username }}</span>
-                        <span class="ms-2 text-xs text-muted-foreground">{{
+                      <span class="flex min-w-0 flex-col">
+                        <span class="font-medium wrap-anywhere">{{
+                          person.displayName || person.username
+                        }}</span>
+                        <span class="text-xs text-muted-foreground wrap-anywhere">{{
                           person.username
                         }}</span>
-                      } @else {
-                        {{ t('tenants.staff.personPlaceholder') }}
-                      }
+                      </span>
                     </span>
-                  </span>
-                  <ng-icon
-                    name="lucideChevronDown"
-                    class="text-muted-foreground text-[length:--spacing(4)]"
-                  />
-                </button>
+                  } @else {
+                    {{ t('tenants.staff.personPlaceholder') }}
+                  }
+                </hlm-combobox-trigger>
                 <hlm-combobox-content *hlmComboboxPortal>
                   <hlm-combobox-input
                     [placeholder]="t('tenants.staff.searchPeople')"

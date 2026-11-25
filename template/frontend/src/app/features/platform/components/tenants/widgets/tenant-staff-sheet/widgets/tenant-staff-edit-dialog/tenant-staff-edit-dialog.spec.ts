@@ -258,29 +258,40 @@ describe('TenantStaffEditDialog', () => {
     readable(account, linkedUsername);
   });
 
-  it('gives the single-line person trigger a focusable full-text tooltip when it truncates', async () => {
+  it('keeps the full selected name and username readable at narrow widths', async () => {
     await page.viewport(390, 844);
     onTestFinished(() => page.viewport(1280, 800));
+    const displayName = 'Alexandra Konstantinopoulou-Montgomery';
+    const username = 'alexandra.konstantinopoulou.montgomery';
     await setup();
-    flushCandidates(2, {
-      username: 'alexandra.konstantinopoulou.montgomery',
-      displayName: 'Alexandra Konstantinopoulou-Montgomery',
-    });
+    flushCandidates(2, { username, displayName });
     await fixture.whenStable();
     await openPicker();
     document.querySelector<HTMLElement>('[role="option"][data-value="home-1"]')!.click();
     await fixture.whenStable();
     fixture.detectChanges();
+
+    const button = trigger();
+    const [name, account] = button.querySelectorAll<HTMLElement>(
+      '[data-testid="staff-picked"] > span > span',
+    );
+    expect(name.textContent.trim()).toBe(displayName);
+    expect(account.textContent.trim()).toBe(username);
+    const buttonBounds = button.getBoundingClientRect();
+    for (const text of [name, account]) {
+      expect(getComputedStyle(text).textOverflow).not.toBe('ellipsis');
+      expect(text.scrollWidth).toBeLessThanOrEqual(text.clientWidth);
+      expect(text.scrollHeight).toBeLessThanOrEqual(text.clientHeight);
+      expect(text.getBoundingClientRect().bottom).toBeLessThanOrEqual(buttonBounds.bottom);
+    }
+    expect(dialog().scrollWidth).toBeLessThanOrEqual(dialog().clientWidth);
+
     const preview = dialog().querySelector('[data-testid="staff-linked-preview"]')!;
     expect(preview.id).toBeTruthy();
-    await focusWithKeyboard(trigger());
-    await expect
-      .poll(() => document.querySelector('[role="tooltip"]')?.textContent?.trim() ?? '')
-      .toBe('Alexandra Konstantinopoulou-Montgomery alexandra.konstantinopoulou.montgomery');
-    expect(trigger().getAttribute('aria-describedby')).toBe(preview.id);
-    trigger().blur();
-    await expect.poll(() => document.querySelector('[role="tooltip"]')).toBeNull();
-    expect(trigger().getAttribute('aria-describedby')).toBe(preview.id);
+    await focusWithKeyboard(button);
+    await fixture.whenStable();
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    expect(button.getAttribute('aria-describedby')).toBe(preview.id);
   });
 
   it('hints at the 200 limit, previews the linked account and grants with a toast', async () => {
