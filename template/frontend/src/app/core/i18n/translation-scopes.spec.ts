@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import { Component, ErrorHandler, inject } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
@@ -138,6 +139,57 @@ describe('translation scope routing', () => {
     expect(TestBed.inject(TranslocoService).translate('users.title')).toBe('用户管理');
   });
 
+  it('keeps the latest deep link recoverable across two cancellations before the first successful navigation', async () => {
+    localStorage.setItem(LanguageService.STORAGE_KEY, 'en');
+    const loader = new DelayedScopeLoader();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    TestBed.configureTestingModule({
+      providers: [
+        ...provideTranslocoTesting(['en', 'zh-CN'], loader),
+        { provide: ErrorHandler, useValue: { handleError: vi.fn() } },
+        provideRouter([
+          {
+            path: 'users',
+            providers: [provideTranslocoScope('users')],
+            resolve: { translations: resolveTranslationScopes },
+            component: ScopedPage,
+          },
+        ]),
+      ],
+    });
+    await TestBed.inject(LanguageService).initialized;
+    const harness = await RouterTestingHarness.create();
+    const router = TestBed.inject(Router);
+    const location = TestBed.inject(Location);
+    const recovery = TestBed.inject(TranslationScopeRecovery);
+    const first = '/users?sort=name#list';
+    const latest = '/users?sort=role#members';
+
+    const entered = router.navigateByUrl(first);
+    await vi.waitFor(() => expect(loader.requests).toContain('users/en'), { interval: 1 });
+    loader.fail('users/en');
+    expect(await entered).toBe(false);
+    expect(recovery.failedUrl()).toBe(first);
+    expect(location.path(true)).toBe(first);
+
+    expect(await router.navigateByUrl(latest)).toBe(false);
+    expect(harness.routeNativeElement).toBeNull();
+    expect(recovery.failedUrl()).toBe(latest);
+    expect(location.path(true)).toBe(latest);
+
+    loader.restore('users/en');
+    const retried = recovery.retry();
+    await vi.waitFor(() => expect(loader.gates.get('users/en')?.isStopped).toBe(false), {
+      interval: 1,
+    });
+    loader.resolve('users/en');
+    await retried;
+    harness.detectChanges();
+    expect(router.url).toBe(latest);
+    expect(harness.routeNativeElement?.textContent).toBe('Users');
+    expect(recovery.failedUrl()).toBeNull();
+  });
+
   it('cancels scope entry on failure and preserves the current page and language', async () => {
     localStorage.setItem(LanguageService.STORAGE_KEY, 'en');
     const loader = new DelayedScopeLoader();
@@ -160,13 +212,15 @@ describe('translation scope routing', () => {
     });
     const language = TestBed.inject(LanguageService);
     await language.initialized;
-    const harness = await RouterTestingHarness.create('/');
+    const home = '/?tab=recent#top';
+    const harness = await RouterTestingHarness.create(home);
     const entered = TestBed.inject(Router).navigateByUrl('/users');
     await vi.waitFor(() => expect(loader.requests).toContain('users/en'));
     loader.fail('users/en');
     expect(await entered).toBe(false);
     harness.detectChanges();
     expect(harness.routeNativeElement!.textContent).toBe('Home');
+    expect(TestBed.inject(Location).path(true)).toBe(home);
     expect(language.activeLang()).toBe('en');
     expect(TestBed.inject(TranslocoService).getActiveLang()).toBe('en');
     expect(document.documentElement.lang).toBe('en');

@@ -1,11 +1,18 @@
 import { Location } from '@angular/common';
 import { HttpErrorResponse, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-//#if (TenantWorkspace)
-import { Component, signal } from '@angular/core';
-//#endif
+// prettier-ignore
+import {
+  //#if (TenantWorkspace)
+  Component,
+  //#endif
+  inject,
+  //#if (TenantWorkspace)
+  signal,
+  //#endif
+} from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter, Router } from '@angular/router';
+import { NavigationEnd, provideRouter, Router } from '@angular/router';
 //#if (TenantWorkspace)
 import { RouterTestingHarness } from '@angular/router/testing';
 //#endif
@@ -67,7 +74,15 @@ describe('StartupService', () => {
     TestBed.configureTestingModule({
       providers: [
         StartupService,
-        provideRouter([{ path: 'platform/users', children: [] }]),
+        provideRouter([
+          { path: 'platform/users', children: [] },
+          {
+            path: 'platform/retry',
+            children: [],
+            runGuardsAndResolvers: 'always',
+            canActivate: [(_, state) => inject(StartupService).settled(state.url)],
+          },
+        ]),
         { provide: AuthService, useValue: authService },
         { provide: SessionContextService, useValue: sessionContext },
         //#if (TenantWorkspace)
@@ -189,6 +204,29 @@ describe('StartupService', () => {
       expect(router.url).toBe('/platform/users?offset=20#list');
       expect(TestBed.inject(Location).path(true)).toBe('/platform/users?offset=20#list');
       expect(TestBed.inject(EntryRouteService).takeHeld()).toBeNull();
+    });
+
+    it('completes another navigation when retrying the currently active address', async () => {
+      const target = '/platform/retry?offset=20#list';
+      const router = TestBed.inject(Router);
+      const navigated: string[] = [];
+      router.events.subscribe((event) => {
+        if (event instanceof NavigationEnd) navigated.push(event.urlAfterRedirects);
+      });
+      authService.initializeAuth.mockResolvedValue();
+      await service.load();
+      expect(await router.navigateByUrl(target)).toBe(true);
+
+      authService.initializeAuth.mockRejectedValue(httpError(503));
+      await service.load();
+      expect(await router.navigateByUrl(target, { onSameUrlNavigation: 'reload' })).toBe(false);
+      expect(TestBed.inject(Location).path(true)).toBe(target);
+
+      authService.initializeAuth.mockResolvedValue();
+      await service.retry();
+
+      expect(service.status()).toBe('success');
+      expect(navigated).toEqual([target, target]);
     });
 
     it('keeps the held target while startup still fails', async () => {
