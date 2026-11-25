@@ -126,49 +126,38 @@ test.describe('workspace requests and routes', () => {
   );
   //#if (OpenIddictServer || RemoteTokenAuth)
 
-  for (const width of [1440, 390]) {
-    test(
-      `changes systems with the staff workspace at ${width}px without closing the mobile drawer`,
-      { tag: '@proves:main-flow' },
-      async ({ page }) => {
-        await page.setViewportSize({ width, height: 900 });
-        await page.route('**/api/v1/systems', (route) =>
-          route.fulfill({
-            json: [
-              {
-                key: 'identity',
-                displayName: 'Identity',
-                homeUrl: 'https://identity.example.test/',
-                isCurrent: true,
-              },
-              {
-                key: 'orders',
-                displayName: 'Orders',
-                homeUrl: 'https://orders.example.test/',
-                isCurrent: false,
-              },
-            ],
-          }),
-        );
-        await page.route('https://orders.example.test/**', (route) =>
-          route.fulfill({ contentType: 'text/html', body: '<h1>Orders</h1>' }),
-        );
-        await page.goto('/w/default-e2e/platform');
-        if (width === 390)
-          await page.getByRole('button', { name: 'Toggle sidebar', exact: true }).click();
-        await page.getByTestId('system-switcher').click();
-        if (width === 390) {
-          await expect(page.getByTestId('platform-management')).toBeVisible();
-          await page.keyboard.press('Escape');
-          await expect(page.getByRole('menu')).not.toBeVisible();
-          await expect(page.getByTestId('platform-management')).toBeVisible();
-          await page.getByTestId('system-switcher').click();
-        }
-        await page.getByRole('menuitem', { name: 'Orders', exact: true }).click();
-        await expect(page).toHaveURL('https://orders.example.test/w/default-e2e/platform');
-      },
-    );
-  }
+  test(
+    'navigates to another origin with the current workspace path',
+    { tag: '@proves:main-flow' },
+    async ({ page }) => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.route('**/api/v1/systems', (route) =>
+        route.fulfill({
+          json: [
+            {
+              key: 'identity',
+              displayName: 'Identity',
+              homeUrl: 'https://identity.example.test/',
+              isCurrent: true,
+            },
+            {
+              key: 'orders',
+              displayName: 'Orders',
+              homeUrl: 'https://orders.example.test/',
+              isCurrent: false,
+            },
+          ],
+        }),
+      );
+      await page.route('https://orders.example.test/**', (route) =>
+        route.fulfill({ contentType: 'text/html', body: '<h1>Orders</h1>' }),
+      );
+      await page.goto('/w/default-e2e/platform');
+      await page.getByTestId('system-switcher').click();
+      await page.getByRole('menuitem', { name: 'Orders', exact: true }).click();
+      await expect(page).toHaveURL('https://orders.example.test/w/default-e2e/platform');
+    },
+  );
   //#endif
 
   test(

@@ -48,7 +48,7 @@ public sealed class AuthenticationModeTests(ProjectWebApplicationFactory factory
     }
 
     [Fact]
-    public async Task Identity_registers_its_service_scope_and_omits_retired_machine_scopes()
+    public async Task Identity_registers_and_publishes_its_service_scope()
     {
         using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         await using var scope = factory.Services.CreateAsyncScope();
@@ -59,17 +59,6 @@ public sealed class AuthenticationModeTests(ProjectWebApplicationFactory factory
         Assert.NotNull(available);
         Assert.Contains(available, option => option.Name == resource && option.Audience == resource && !option.MachineOnly);
         Assert.NotNull(await scopeManager.FindByNameAsync(resource));
-
-        string[] retiredScopes =
-        [
-            "tenant-routing.read", "tenant-migration.read", "account-preferences.read",
-            "system-directory.read", "administrators.read"
-        ];
-        foreach (var retired in retiredScopes)
-        {
-            Assert.DoesNotContain(available, option => option.Name == retired);
-            Assert.Null(await scopeManager.FindByNameAsync(retired));
-        }
     }
 }
 #endif

@@ -15,6 +15,6 @@ test(
 
     await expect(page).not.toHaveURL(/\/auth\/login/);
     await page.goto('/platform/roles');
-    await expect(page.getByRole('button', { name: 'New role' })).toBeVisible();
+    await expect(page.getByRole('row').filter({ hasText: 'E2E viewer' })).toBeVisible();
   },
 );
