@@ -12,7 +12,7 @@ namespace Leistd.EventBus.EntityFrameworkCore.Stores;
 
 internal sealed class DistributedEventCatalog<TDbContext>(
     DistributedEventDatabaseScope<TDbContext> scope,
-    IDistributedEventSubscriptions subscriptions,
+    DistributedEventSubscriptions subscriptions,
     IOptionsMonitor<DistributedEventOptions> options,
     ICurrentTenant tenant,
     TimeProvider clock,
@@ -89,7 +89,7 @@ internal sealed class DistributedEventCatalog<TDbContext>(
             var receiveErrors = await incoming.Where(x => x.LastErrorCode != null).GroupBy(x => x.EventName)
                 .Select(g => g.OrderByDescending(x => x.LastModificationTime).ThenByDescending(x => x.Id)
                     .Select(x => new { x.EventName, x.LastErrorCode, x.LastModificationTime }).First()).ToListAsync(token);
-            var registered = subscriptions.GetAll();
+            var registered = subscriptions.GetRegistered();
             var names = registered.Select(x => x.EventName).Concat(sent.Select(x => x.EventName)).Concat(received.Select(x => x.EventName)).Distinct().Order().ToArray();
             return names.Select(name =>
             {

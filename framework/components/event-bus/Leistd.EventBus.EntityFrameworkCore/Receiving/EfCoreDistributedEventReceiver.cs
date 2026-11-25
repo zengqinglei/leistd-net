@@ -3,6 +3,7 @@ using System.Text.Json;
 using Leistd.Data.Connections;
 using Leistd.EventBus.Distributed.Errors;
 using Leistd.EventBus.Distributed.Diagnostics;
+using Leistd.EventBus.Distributed.Options;
 using Leistd.EventBus.Distributed.Subscriptions;
 using Leistd.EventBus.Distributed.Transport;
 using Leistd.EventBus.EntityFrameworkCore.Dispatching;
@@ -16,16 +17,18 @@ using Leistd.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Leistd.EventBus.EntityFrameworkCore.Receiving;
 
 internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
-    IDistributedEventSubscriptions subscriptions,
+    DistributedEventSubscriptions subscriptions,
     ICurrentTenant tenant,
     IUnitOfWorkManager units,
     IDbContextProvider<TDbContext> contexts,
     DistributedEventQueue<TDbContext> queue,
     IServiceScopeFactory scopes,
+    IOptionsMonitor<DistributedEventOptions> options,
     TimeProvider clock,
     ILogger<EfCoreDistributedEventReceiver<TDbContext>> logger,
     IDistributedEventTransport? transport = null) : IDistributedEventReceiver
@@ -60,17 +63,34 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
     // 管理重新解码也走同一接收边界，但须知道是否真正接收，避免新增另一条拒收记录。
     internal async Task<bool> AcceptAsync(RawDistributedEvent raw, IncomingDistributedEvent message, CancellationToken ct, bool persistRejection = true, bool enqueue = true)
     {
+        var (result, error) = await StoreAsync(message, raw.ReceivedAt, subscriptions.GetAll(), enqueue, ct);
+        switch (result)
+        {
+            case DistributedEventAcceptance.UnknownTenant:
+                if (persistRejection) await RejectMessageAsync(raw, message, DistributedEventRejectionReasons.UnknownTenant, "The message tenant does not exist.", ct);
+                return false;
+            case DistributedEventAcceptance.InvalidPayload:
+                if (persistRejection) await RejectMessageAsync(raw, message, DistributedEventRejectionReasons.InvalidPayload, error!, ct);
+                return false;
+            case DistributedEventAcceptance.NoConsumer:
+                logger.LogDebug("No consumer is registered for distributed event {EventName}.", message.EventName);
+                return true;
+            default:
+                return true;
+        }
+    }
+
+    // 本服务内事件的本地入口：只匹配内部订阅，不写拒收表；由发件箱处理器把结果映射为发送成功或永久失败。
+    internal Task<(DistributedEventAcceptance Result, string? Error)> DeliverInternalAsync(IncomingDistributedEvent message, DateTime receivedAt, CancellationToken ct)
+        => StoreAsync(message, receivedAt, subscriptions.GetInternal(), enqueue: true, ct);
+
+    private async Task<(DistributedEventAcceptance Result, string? Error)> StoreAsync(IncomingDistributedEvent message, DateTime receivedAt,
+        IReadOnlyList<DistributedEventSubscription> subscribed, bool enqueue, CancellationToken ct)
+    {
         if (message.TenantId is { } tenantId && !await TenantExistsAsync(tenantId, ct))
-        {
-            if (persistRejection) await RejectMessageAsync(raw, message, DistributedEventRejectionReasons.UnknownTenant, "The message tenant does not exist.", ct);
-            return false;
-        }
-        var consumers = subscriptions.GetAll().Where(x => x.EventName == message.EventName).ToArray();
-        if (consumers.Length == 0)
-        {
-            logger.LogDebug("No consumer is registered for distributed event {EventName}.", message.EventName);
-            return true;
-        }
+            return (DistributedEventAcceptance.UnknownTenant, null);
+        var consumers = subscribed.Where(x => x.EventName == message.EventName).ToArray();
+        if (consumers.Length == 0) return (DistributedEventAcceptance.NoConsumer, null);
         string payload;
         try
         {
@@ -84,17 +104,16 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {
-            if (persistRejection) await RejectMessageAsync(raw, message, DistributedEventRejectionReasons.InvalidPayload, exception.Message, ct);
-            return false;
+            return (DistributedEventAcceptance.InvalidPayload, exception.Message);
         }
         using var change = tenant.Change(message.TenantId);
-        try { await PersistAsync(message, raw.ReceivedAt, payload, consumers, false, enqueue, ct); }
+        try { await PersistAsync(message, receivedAt, payload, consumers, false, enqueue, ct); }
         catch (DbUpdateException)
         {
             // 并发首次接收由唯一约束裁决；只有重读确认所有消费者均已存在才当作重复，其他写库故障仍向上传播。
-            if (!await PersistAsync(message, raw.ReceivedAt, payload, consumers, true, enqueue, ct)) throw;
+            if (!await PersistAsync(message, receivedAt, payload, consumers, true, enqueue, ct)) throw;
         }
-        return true;
+        return (DistributedEventAcceptance.Stored, null);
     }
 
     private async Task<bool> TenantExistsAsync(Guid id, CancellationToken ct)
@@ -134,7 +153,8 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
                 Payload = payload, Headers = new(message.Headers), Coordinates = new(message.Coordinates),
                 TraceId = DistributedEventTrace.FromHeaders(message.Headers),
                 CorrelationId = DistributedEventCorrelation.FromHeaders(message.Headers),
-                ReceivedAt = receivedAt, LastModificationTime = now, NextAttemptAt = now.AddMinutes(1)
+                ReceivedAt = receivedAt, LastModificationTime = now,
+                NextAttemptAt = enqueue && options.CurrentValue.Inbox.ProcessingEnabled ? now + DistributedEventRetry.ImmediateGrace : now
             };
             db.Set<DistributedEventInbox>().Add(row);
             if (enqueue) queue.InboxAfterCommit(row);
@@ -176,4 +196,12 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
             throw;
         }
     }
+}
+
+internal enum DistributedEventAcceptance
+{
+    Stored,
+    NoConsumer,
+    InvalidPayload,
+    UnknownTenant
 }

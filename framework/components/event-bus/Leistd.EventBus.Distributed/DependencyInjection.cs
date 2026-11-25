@@ -58,7 +58,8 @@ public static class DependencyInjection
         options.ValidateOnStart();
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddTransient<IDistributedEventManagementService, DistributedEventManagementService>();
-        services.TryAddSingleton<IDistributedEventSubscriptions, DistributedEventSubscriptions>();
+        services.TryAddSingleton<DistributedEventSubscriptions>();
+        services.TryAddSingleton<IDistributedEventSubscriptions>(sp => sp.GetRequiredService<DistributedEventSubscriptions>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, DistributedEventStartup>());
         services.AddDistributedEventHandler<DistributedEventTestHandler>(DistributedEventTestEvent.ConsumerName);
         return services;

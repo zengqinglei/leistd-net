@@ -12,10 +12,19 @@ internal sealed class DistributedEventSubscriptions(
 {
     private readonly DistributedEventSubscription[] subscriptions = Validate(registrations);
 
-    public IReadOnlyList<DistributedEventSubscription> GetAll()
-        => options.Value.TestEvent.Enabled
-            ? subscriptions
-            : subscriptions.Where(x => x.EventType != typeof(DistributedEventTestEvent)).ToArray();
+    // 三种视图都从同一份已校验登记派生：传输只见对外订阅，本地投递只匹配内部订阅，处理、重放与目录查完整登记。
+    public IReadOnlyList<DistributedEventSubscription> GetAll() => [.. Enabled.Where(x => !IsInternal(x))];
+
+    public IReadOnlyList<DistributedEventSubscription> GetRegistered() => [.. Enabled];
+
+    public IReadOnlyList<DistributedEventSubscription> GetInternal() => [.. Enabled.Where(IsInternal)];
+
+    private IEnumerable<DistributedEventSubscription> Enabled => options.Value.TestEvent.Enabled
+        ? subscriptions
+        : subscriptions.Where(x => x.EventType != typeof(DistributedEventTestEvent));
+
+    private static bool IsInternal(DistributedEventSubscription subscription)
+        => typeof(IInternalDistributedEvent).IsAssignableFrom(subscription.EventType);
 
     private static DistributedEventSubscription[] Validate(IEnumerable<DistributedEventSubscription> registrations)
     {
