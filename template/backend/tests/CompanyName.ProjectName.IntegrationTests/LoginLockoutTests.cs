@@ -36,6 +36,7 @@ public sealed class LoginLockoutTests(ProjectWebApplicationFactory factory) : IC
             var locked = await FindUserAsync(admin.Client, username);
             Assert.True(locked.GetProperty("isLockedOut").GetBoolean());
             Assert.NotEqual(JsonValueKind.Null, locked.GetProperty("lockoutEnd").ValueKind);
+            Assert.Equal("Auth:UserTemporarilyLockedOut", await LoginErrorCodeAsync(username, Password));
 
             using var unlock = await admin.Client.PostAsync($"/api/v1/users/{locked.GetProperty("id").GetGuid()}/unlock", null);
             Assert.Equal(HttpStatusCode.OK, unlock.StatusCode);
@@ -71,7 +72,6 @@ public sealed class LoginLockoutTests(ProjectWebApplicationFactory factory) : IC
         }
 
         Assert.Equal("Auth:UserTemporarilyLockedOut", await LoginErrorCodeAsync(username, WrongPassword));
-        Assert.Equal("Auth:UserTemporarilyLockedOut", await LoginErrorCodeAsync(username, Password));
     }
 
     private async Task<string?> LoginErrorCodeAsync(string username, string password)
