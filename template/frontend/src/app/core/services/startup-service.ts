@@ -121,7 +121,7 @@ export class StartupService {
     }
     const target = this.entryRoute.takeHeld();
     if (target) {
-      await this.router.navigateByUrl(target);
+      await this.router.navigateByUrl(target, { onSameUrlNavigation: 'reload' });
     }
   }
 

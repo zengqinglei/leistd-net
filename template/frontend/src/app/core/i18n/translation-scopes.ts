@@ -27,7 +27,7 @@ export class TranslationScopeRecovery {
   }
 
   fail(url: string): void {
-    if (!this.router.navigated) {
+    if (!this.router.lastSuccessfulNavigation()) {
       this.failedUrlState.set(url);
     }
   }
