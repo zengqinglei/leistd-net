@@ -1,8 +1,14 @@
 import { Location } from '@angular/common';
 import { HttpErrorResponse, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+//#if (TenantWorkspace)
+import { Component } from '@angular/core';
+//#endif
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
+//#if (TenantWorkspace)
+import { RouterTestingHarness } from '@angular/router/testing';
+//#endif
 // prettier-ignore
 import {
   //#if (IncludeNotifications || IncludeRealTime)
@@ -12,10 +18,16 @@ import {
 } from 'rxjs';
 
 import { ApplicationHttpError } from '../errors/application-http-error';
+//#if (TenantWorkspace)
+import { workspaceDeniedGuard, workspaceGuard } from '../guards/workspace-guard';
+//#endif
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../i18n/transloco.testing';
 //#endif
 import { httpErrorInterceptor } from '../interceptors/http-error-interceptor';
+//#if (TenantWorkspace)
+import { workspaceInterceptor } from '../interceptors/workspace-interceptor';
+//#endif
 //#if (RemoteTokenAuth)
 import { MOCKED_URL } from '../mock/mocked-url';
 import { FullPageNavigationService } from '../routing/full-page-navigation-service';
@@ -27,6 +39,9 @@ import { SessionContextService } from './session-context-service';
 import { SignalRService } from './signalr-service';
 //#endif
 import { StartupService } from './startup-service';
+//#if (TenantWorkspace)
+import { WorkspaceContextService } from './workspace-context-service';
+//#endif
 
 import type { MockedObject } from 'vitest';
 
@@ -264,6 +279,11 @@ describe('StartupService', () => {
   //#endif
 });
 
+//#if (TenantWorkspace)
+@Component({ template: '<p>Workspace content</p>' })
+class WorkspaceContent {}
+//#endif
+
 describe('StartupService HTTP requests', () => {
   let http: HttpTestingController;
   let startup: StartupService;
@@ -271,8 +291,31 @@ describe('StartupService HTTP requests', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
-        provideRouter([{ path: 'auth/login', children: [] }]),
-        provideHttpClient(withInterceptors([httpErrorInterceptor])),
+        provideRouter([
+          { path: 'auth/login', children: [] },
+          //#if (TenantWorkspace)
+          { path: 'platform', component: WorkspaceContent, canActivate: [workspaceGuard] },
+          {
+            path: 'w/:workspace/platform',
+            component: WorkspaceContent,
+            canActivate: [workspaceGuard],
+          },
+          {
+            path: 'workspace-denied',
+            component: WorkspaceContent,
+            canActivate: [workspaceDeniedGuard],
+          },
+          { path: 'account', component: WorkspaceContent },
+          //#endif
+        ]),
+        provideHttpClient(
+          withInterceptors([
+            //#if (TenantWorkspace)
+            workspaceInterceptor,
+            //#endif
+            httpErrorInterceptor,
+          ]),
+        ),
         provideHttpClientTesting(),
         //#if (IncludeLocalization)
         ...provideTranslocoTesting(),
@@ -282,7 +325,10 @@ describe('StartupService HTTP requests', () => {
         { provide: FullPageNavigationService, useValue: { replace: vi.fn() } },
         //#endif
         //#if (IncludeNotifications || IncludeRealTime)
-        { provide: SignalRService, useValue: { sessionRejected$: EMPTY, reset: vi.fn() } },
+        {
+          provide: SignalRService,
+          useValue: { sessionRejected$: EMPTY, reset: vi.fn(), setWorkspace: vi.fn() },
+        },
         //#endif
       ],
     });
@@ -293,9 +339,9 @@ describe('StartupService HTTP requests', () => {
 
   afterEach(() => http.verify());
 
-  async function start() {
+  async function start(tenantId: string | null = null) {
     const done = startup.load();
-    http.expectOne('/api/v1/auth/me').flush({ id: 'signed-in', username: 'admin' });
+    http.expectOne('/api/v1/auth/me').flush({ id: 'signed-in', username: 'admin', tenantId });
     await Promise.resolve();
     return { done };
   }
@@ -328,4 +374,89 @@ describe('StartupService HTTP requests', () => {
     expect(TestBed.inject(AuthService).isAuthenticated()).toBe(true);
     expect(TestBed.inject(Location).path()).toBe('/platform');
   });
+  //#if (TenantWorkspace)
+
+  const directory = '/api/v1/auth/me/workspaces';
+  const permissions = '/api/v1/permissions/current';
+  const settings = '/api/v1/settings';
+  const workspaces = [{ name: 'acme', tenantId: 't1', userId: 'acme-member' }];
+  const permissionSnapshot = { permissions: [], isSuperAdmin: false, versionToken: 'v1' };
+
+  for (const [path, tenantId, scope] of [
+    ['/w/ACME/platform', null, 'ACME'],
+    ['/w/acme/platform', 't1', 'acme'],
+    ['/platform', null, null],
+  ] as const) {
+    it(`reuses the first request batch when ${tenantId ? 'a tenant account' : 'a host account'} enters ${path}`, async () => {
+      TestBed.inject(Location).replaceState(path);
+      const { done } = await start(tenantId);
+      const batch = http.match((request) => [directory, permissions, settings].includes(request.url));
+      const requestKeys = batch.map(({ request }) => [request.url, request.headers.get('X-Workspace')]);
+      const expected = [[directory, null], [permissions, scope], [settings, scope]];
+      if (scope && !tenantId) expected.push([permissions, null]);
+      expect(requestKeys).toHaveLength(expected.length);
+      expect(requestKeys).toEqual(expect.arrayContaining(expected));
+      for (const pending of batch) {
+        const response =
+          pending.request.url === directory
+            ? workspaces
+            : pending.request.url === permissions
+              ? permissionSnapshot
+              : [];
+        pending.flush(response);
+      }
+      await done;
+
+      const harness = await RouterTestingHarness.create();
+      await harness.navigateByUrl(path, WorkspaceContent);
+      const workspace = TestBed.inject(WorkspaceContextService);
+      expect(workspace.current()).toBe(scope ? 'acme' : null);
+      expect(workspace.actorId()).toBe(scope ? 'acme-member' : 'signed-in');
+      //#if (IncludeNotifications || IncludeRealTime)
+      if (scope) {
+        expect(TestBed.inject(SignalRService).setWorkspace).toHaveBeenCalledWith('acme', !tenantId);
+      }
+      //#endif
+      if (path === '/platform') {
+        await harness.navigateByUrl('/account', WorkspaceContent);
+        await harness.navigateByUrl('/platform', WorkspaceContent);
+      }
+      http.expectNone(directory);
+    });
+  }
+
+  it('lets the first workspace guard see the directory error and retries it on the next navigation', async () => {
+    const { done } = await start();
+    http.expectOne(directory).flush(null, { status: 503, statusText: 'Unavailable' });
+    http.expectOne(permissions).flush(permissionSnapshot);
+    http.expectOne(settings).flush([]);
+    await done;
+
+    expect(startup.status()).toBe('success');
+    const harness = await RouterTestingHarness.create();
+    await expect(harness.navigateByUrl('/platform')).rejects.toMatchObject({ status: 503 });
+    http.expectNone(directory);
+    const retry = harness.navigateByUrl('/platform', WorkspaceContent);
+    await vi.waitFor(() => http.expectOne(directory).flush(workspaces), { interval: 1 });
+    await retry;
+  });
+
+  it('shows the cold workspace denial without another permission request', async () => {
+    TestBed.inject(Location).replaceState('/w/other/platform');
+    const { done } = await start('t1');
+    http.expectOne(directory).flush(workspaces);
+    for (const path of [permissions, settings]) {
+      http
+        .expectOne(path)
+        .flush({ code: 'Workspace:Forbidden' }, { status: 403, statusText: 'Forbidden' });
+    }
+    await done;
+
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/w/other/platform', WorkspaceContent);
+    expect(TestBed.inject(Router).url).toContain('/workspace-denied?');
+    expect(TestBed.inject(Location).path()).toBe('/w/other/platform');
+    http.expectNone(permissions);
+  });
+  //#endif
 });
