@@ -105,9 +105,12 @@
             >{{ kpi.valueText }}</span
           >
         } @else {
-          <span class="shrink-0 text-3xl font-semibold tabular-nums" data-testid="kpi-value">{{
-            kpi.valueText
-          }}</span>
+          <span
+            class="shrink-0 text-3xl font-semibold tabular-nums"
+            data-testid="kpi-value"
+            [class.text-destructive]="kpi.id === 'failed' && statistics()!.failed.value > 0"
+            >{{ kpi.valueText }}</span
+          >
         }
         @if (kpi.sparkline; as sparkline) {
           <tanstack-chart

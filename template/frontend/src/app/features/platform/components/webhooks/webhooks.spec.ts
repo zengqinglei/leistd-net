@@ -296,6 +296,23 @@ describe('Webhooks page', () => {
     return { ...STATISTICS, range: { ...STATISTICS.range, start, end } };
   }
 
+  it('uses a destructive count only when failed deliveries are present', async () => {
+    await setup(manage);
+    const failedCount = () =>
+      fixture.debugElement.query(By.css('[data-testid="kpi-failed"] [data-testid="kpi-value"]'));
+
+    expect(failedCount().classes['text-destructive']).toBe(true);
+
+    service.getStatistics.mockReturnValue(
+      of({ ...STATISTICS, failed: { ...STATISTICS.failed, value: 0 } }),
+    );
+    component.reloadStatistics();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(failedCount().classes['text-destructive']).toBeFalsy();
+  });
+
   // 统计的 UTC 边界直接带进列表的时间范围，失败数与列表对得上
   it('opens the failed deliveries of the statistics range from the failed card', async () => {
     await setup(manage);
