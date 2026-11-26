@@ -18,7 +18,7 @@
 ### 取舍依据
 
 - `docs/architecture/design-principles.md` §5。
-- **优先官方机制：** OpenIddict 的授权和退出响应事件只把 ID2019 交给控制器，由 `GetOpenIddictServerResponse()` 读取。依赖方使用 ASP.NET Core OIDC 的 `OnRemoteFailure` 和 `OnAccessDenied`。
+- **优先官方机制：** OpenIddict 的授权和退出响应事件只把 ID2019 或 ID2013 的请求令牌失败交给控制器，由 `GetOpenIddictServerResponse()` 读取。依赖方使用 ASP.NET Core OIDC 的 `OnRemoteFailure` 和 `OnAccessDenied`。
 - **安全：** 「重新登录」的目标只取已登记的值，从不取请求参数，避免开放重定向；不复用过期请求里的任何状态，MFA 和 step-up 照常执行；不自动重新挑战，避免跳转循环。
 - **UI：** 沿用模板现有错误页的 Spartan Empty 写法（`template/docs/standards/frontend-ui.md`），按原型图实现。
   - 原型图：<https://claude.ai/artifact/7yTkUV7gXUP9Ayv5kFz1oP>
@@ -59,7 +59,7 @@
 | F2 依赖方会话结束（401） | 页面可见：立即发起顶层登录，并带上 `returnUrl`（深链）。页面不可见：记下「待登录」，等页面恢复可见时再发起（R6）。Identity 会话有效时静默完成，回到深链；会话失效时登录（含 MFA）后回到深链。全程不出现中间页。 |
 | F3 交互式登录时间窗 | 依赖方的 `RemoteAuthenticationTimeout` 与 Identity 的 `OpenIddictServerOptions.RequestTokenLifetime` 使用同一个显式值，默认 1 小时（R7）。 |
 | F4 超出时间窗（在登录页停留超过 1 小时） | Identity 侧显示 `login-expired` 友好页（R1、R2），依赖方侧显示 `expired` 友好页（R3），都只需点一次即可重新登录。深链不保留。 |
-| F5 退出请求过期 | `logout-expired` 友好页（R1、R2） |
+| F5 退出请求令牌失效 | `logout-expired` 友好页（R1、R2） |
 | F6 被拒绝 | 依赖方 `denied` 友好页（R3） |
 | F7 机器端点、合法依赖方回调、Identity 的其他协议错误 | 保持原有协议响应 |
 
@@ -92,8 +92,8 @@
 
 本节描述 F4、F5 的兜底行为（见 R0）。
 
-- 在授权和退出响应事件中，等待 OpenIddict 处理合法的协议回调，再仅将请求令牌过期或失效的 ID2019 交给控制器。控制器用 `HttpContext.GetOpenIddictServerResponse()` 读取并导向相应的友好页。
-- 其他无法安全回调的协议错误由 OpenIddict 输出原有的本地协议响应。缺少 PKCE challenge、未登记的退出回调地址以及重放已兑现的请求令牌（ID2013）均保持 HTTP 400 和原协议错误体。
+- 在授权和退出响应事件中，先由 OpenIddict 处理合法的协议回调。带有 OpenIddict 请求令牌格式 `request_uri` 的 `invalid_token` 响应，仅在 ID2019（过期或失效）或 ID2013（已兑现）时交给控制器。控制器用 `HttpContext.GetOpenIddictServerResponse()` 读取并导向相应的友好页。浏览器后退再访问已兑现的授权地址时，也走此路径。
+- 其他无法安全回调的协议错误由 OpenIddict 输出原有的本地协议响应。缺少 PKCE challenge 或退出回调地址未登记时，仍返回 HTTP 400 和原协议错误体。
 - 授权和退出以外的端点及合法授权回调各自保持既有的协议约定：
   - `/connect/token`：状态码和 JSON 错误体不变；
   - `/connect/userinfo`：质询的状态码、`WWW-Authenticate` 标头，以及空响应体都不变；
@@ -101,8 +101,8 @@
 
 | 种类 | 触发条件 | 原型图画板 |
 | --- | --- | --- |
-| `login-expired` | 授权端点：ID2019（request token 过期或失效） | `IdentityExpired`；无登记入口时为 `IdentityUnknownClient` |
-| `logout-expired` | 退出端点：ID2019（退出请求缓存过期或失效）；以及退出确认页的确认凭据失效（`isValid: false`） | 通常为无应用版本（见 R2） |
+| `login-expired` | 授权请求令牌过期或失效（ID2019）、已兑现（ID2013） | `IdentityExpired`；无登记入口时为 `IdentityUnknownClient` |
+| `logout-expired` | 退出请求令牌过期或失效（ID2019）、已兑现（ID2013），或退出确认页的确认凭据失效（`isValid: false`） | 通常为无应用版本（见 R2） |
 
 #### R2 「重新登录」与「返回」的目标
 
@@ -166,7 +166,7 @@
 
 #### R5 验收
 
-1. 时钟越过交互式登录时间窗（R7）后（用 `FakeTimeProvider` 或配置缩短寿命，不靠真实等待），授权端点和退出端点分别显示对应的友好页，不再出现协议原文。先写修复前失败的用例。
+1. 时钟越过交互式登录时间窗（R7）后（用 `FakeTimeProvider` 或配置缩短寿命，不靠真实等待），或再次访问已兑现的请求令牌时，授权端点和退出端点分别显示对应的友好页，不再出现协议原文。先写修复前失败的用例。
 2. 点「重新登录 {应用名}」后，经登记的 `HomeUrl` 发起一次新的授权，并完整走完登录，包括 MFA。真实浏览器验证一次。
 3. `client_id` 未登记、应用缺少 `HomeUrl`、`client_id` 缺失：只回 Identity 首页，页面里不出现任何外部链接。
 4. 能合法回调的授权错误，照常带 OAuth 错误回调；`/connect/token` 的错误仍是 JSON。

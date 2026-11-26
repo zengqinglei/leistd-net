@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
+using static OpenIddict.Abstractions.OpenIddictConstants;
 using static OpenIddict.Server.AspNetCore.OpenIddictServerAspNetCoreHandlerFilters;
 using static OpenIddict.Server.AspNetCore.OpenIddictServerAspNetCoreHandlers;
 using static OpenIddict.Server.OpenIddictServerEvents;
@@ -155,7 +156,8 @@ public static class OpenIddictServerExtensions
     private static void AddRequestTokenErrorPassthrough<TContext>(OpenIddictServerBuilder options)
         where TContext : BaseRequestContext
     {
-        const string invalidRequestTokenErrorUri = "https://documentation.openiddict.com/errors/ID2019";
+        const string redeemedTokenErrorUri = "https://documentation.openiddict.com/errors/ID2013";
+        const string expiredTokenErrorUri = "https://documentation.openiddict.com/errors/ID2019";
 
         // 先让官方处理器完成合法回调。仅把失效的请求令牌交给控制器，其余本地错误继续由官方处理器输出。
         options.AddEventHandler<TContext>(handler => handler
@@ -163,7 +165,8 @@ public static class OpenIddictServerExtensions
             .SetOrder(ProcessStatusCodePagesErrorResponse<TContext>.Descriptor.Order - 500)
             .UseInlineHandler(context =>
             {
-                if (context.Transaction.Response?.ErrorUri == invalidRequestTokenErrorUri)
+                if (context.Transaction.Response is { Error: Errors.InvalidToken, ErrorUri: redeemedTokenErrorUri or expiredTokenErrorUri }
+                    && context.Transaction.Request?.RequestUri?.StartsWith(RequestUris.Prefixes.Generic, StringComparison.OrdinalIgnoreCase) == true)
                     context.SkipRequest();
 
                 return ValueTask.CompletedTask;
