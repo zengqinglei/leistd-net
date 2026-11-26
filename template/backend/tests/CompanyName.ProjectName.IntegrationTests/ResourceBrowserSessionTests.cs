@@ -553,7 +553,8 @@ public sealed class ResourceBrowserSessionTests
         var query = AuthorizationRequest(challenge);
         issuer.Nonce = query["nonce"];
         using var callback = await browser.GetAsync(SignInCallback(query["state"]));
-        Assert.Equal(HttpStatusCode.BadRequest, callback.StatusCode);
+        Assert.Equal(HttpStatusCode.Found, callback.StatusCode);
+        Assert.Equal("/auth/sign-in-failed?reason=expired", callback.Headers.Location?.OriginalString);
         Assert.False(callback.Headers.TryGetValues("Set-Cookie", out var values) && values.Any(value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=")));
         var cookie = await LoginAsync(host, issuer);
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/logout");
