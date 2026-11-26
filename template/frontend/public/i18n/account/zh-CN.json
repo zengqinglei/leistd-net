@@ -204,7 +204,6 @@
     "descriptionUnknown": "有应用请求退出你在此处的登录。",
     "confirm": "退出登录",
     "cancel": "保持登录",
-    "invalid": "这个退出请求已过期或属于其他会话，请回到应用重新发起退出。",
     "backHome": "返回首页",
     "loading": "正在核对退出请求…",
     "failed": "未能核对这个退出请求。",

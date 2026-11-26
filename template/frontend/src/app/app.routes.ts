@@ -22,6 +22,31 @@ import { WorkspaceLayout } from './layout/workspace/workspace-layout';
 import { PLATFORM_ENTRY_PERMISSIONS } from './shared/constants/permission.constants';
 
 const baseRoutes: Routes = [
+  //#if (OpenIddictServer)
+  {
+    path: 'auth/login-expired',
+    //#if (IncludeLocalization)
+    providers: [provideTranslocoScope('identityExpiry')],
+    resolve: { translations: resolveTranslationScopes },
+    //#endif
+    loadComponent: () =>
+      import('./features/account/components/identity-expired/identity-expired').then(
+        (m) => m.IdentityExpired,
+      ),
+  },
+  {
+    path: 'auth/logout-expired',
+    //#if (IncludeLocalization)
+    providers: [provideTranslocoScope('identityExpiry')],
+    resolve: { translations: resolveTranslationScopes },
+    //#endif
+    data: { logout: true },
+    loadComponent: () =>
+      import('./features/account/components/identity-expired/identity-expired').then(
+        (m) => m.IdentityExpired,
+      ),
+  },
+  //#endif
   //#if (LocalIdentity)
   {
     path: 'auth',
@@ -31,6 +56,17 @@ const baseRoutes: Routes = [
     //#endif
     component: EmptyLayout,
     loadChildren: () => import('./features/account/account.routes').then((r) => r.AUTH_ROUTES),
+  },
+  //#endif
+  //#if (ResourceBrowserSession)
+  {
+    path: 'auth/sign-in-failed',
+    //#if (IncludeLocalization)
+    providers: [provideTranslocoScope('signInFailed')],
+    resolve: { translations: resolveTranslationScopes },
+    //#endif
+    loadComponent: () =>
+      import('./core/components/sign-in-failed/sign-in-failed').then((m) => m.SignInFailed),
   },
   //#endif
   //#if (RemoteTokenAuth)

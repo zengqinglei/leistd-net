@@ -208,7 +208,7 @@
 <!--#if (OpenIddictServer)-->
 ### 依赖方的登录与退出
 
-授权（`/connect/authorize`）与退出（`/connect/logout`）启用了 OpenIddict 请求缓存：首个请求校验后存为 request token（控制库的令牌表），再重定向回同一端点、只带 `client_id` 与 `request_uri`，此后才进入控制器。依赖方因此可以跨站 POST 发起，重入是顶层 GET，Lax 会话 Cookie 随之送达；附加在重入地址上的参数不能改写缓存的请求。request token 一次性：授权完成或退出完成时即被标记为已兑现，同一 `request_uri` 再次进入返回 400；过期记录由已有的令牌清理任务删除。
+授权（`/connect/authorize`）和退出（`/connect/logout`）启用 OpenIddict 请求缓存。首个请求校验后写入控制库，再以 `client_id`、`request_uri` 回到同一端点。跨站 POST 转为顶层 GET 后可带 Lax 会话 Cookie。重入参数无法改写缓存内容，请求只能兑现一次。缓存失效且无法按协议回调时显示友好页，可返回应用登记的 `HomeUrl`。过期记录由令牌清理任务删除。
 
 已登录但受限（见“本地账号”）的会话在授权端点拿不到授权码：带 `prompt=none` 的请求按协议返回 `interaction_required`；交互请求转到设置页 `/auth/two-factor-setup`，`returnUrl` 是同一个缓存请求（只带 `client_id`、`request_uri` 与已有的重新认证证明），设置完成后整页回到这里继续授权。`/connect/logout` 照常可用。这条限制只管本地 Cookie 会话发起的新授权：已签发的令牌，以及在受限生效前签发的授权码的兑换，走既有令牌与授权链路，不受本地 Cookie 的设置要求约束，会话撤销与到期规则照旧；令牌交换可以代表用户、结果可能带委托方（`act`），也按既有链路处理；client_credentials 这类机器凭据不会被设置要求挡住。不新增跨协议的全量撤销。
 
@@ -216,7 +216,7 @@
 
 请求要求重新认证（`prompt=login`，或 `max_age` 已超过）时，跳转登录页的回跳地址带一份受保护的证明：绑定这一个 `request_uri`，只有证明签发之后才开始的会话或待完成登录（即一次新的口令或外部登录）能兑现它，签发前就已存在的都不行，更早的待完成登录连同临时 Cookie 作废。判据是会话开始时间与挑战签发时间（完整精度），不是只到秒的 `auth_time` 或 Cookie 签发时间。证明只抵消 `prompt=login` 与 `max_age=0` 的"每次都要认证"；正数 `max_age` 在回跳时仍按当前认证年龄判断。登录、第二步验证与外部登录都回到同一地址；没有新认证就回跳会再次要求登录，证明挪给别的请求无效。
 
-退出时，`id_token_hint` 中的会话标识（`sid`）与当前 Identity 会话一致才直接退出并回到登记的退出回调；没有 hint、hint 属于别的会话时转到确认页 `/auth/logout-confirm`（RP-Initiated Logout 1.0 §2）。确认页的地址只有 `request_uri` 与受保护的确认凭据，后者绑定该退出请求与当前会话的用户、租户、会话标识，有效 10 分钟。页面经 `GET /api/v1/auth/logout-confirmation` 核对凭据并取得官方 antiforgery 令牌，用户确认时整页 POST 回 `/connect/logout`；防伪令牌或凭据不符时再次显示确认页，会话保持。重新登录后，旧确认页不能结束新会话；取消不退出，发起退出的应用已清掉的本地会话不会因此恢复。当前没有会话时直接回到退出回调。
+退出时，`id_token_hint` 中的会话标识（`sid`）与当前 Identity 会话一致才直接退出并回到登记的退出回调；没有 hint、hint 属于别的会话时转到确认页 `/auth/logout-confirm`（RP-Initiated Logout 1.0 §2）。确认页的地址只有 `request_uri` 与受保护的确认凭据，后者绑定该退出请求与当前会话的用户、租户、会话标识，有效 10 分钟。页面经 `GET /api/v1/auth/logout-confirmation` 核对凭据并取得 antiforgery 令牌，确认时整页 POST 到 `/connect/logout`。提交时绑定不符须重新确认。重载页且凭据失效时显示退出失效页，只提供 Identity 首页。旧确认页无法结束新会话。取消会保留 Identity 会话，依赖方已清除的会话不会恢复。没有会话时直接回到退出回调。
 
 开放应用的"会话绑定"（`sessionBound`，创建与更新都必须显式给值，缺失或 null 返回 400）决定授权是否跟随签发时的 Identity 会话：
 
@@ -259,7 +259,7 @@ Google 使用微软官方 AddGoogle（UserInfo v3）；GitHub 使用 aspnet-cont
 
 本服务须在 Identity 登记为开启会话绑定的浏览器依赖方，登记项见 [服务间调用](service-invocation.md#identity-与资源服务对接)；会话绑定使 Identity 退出后本服务的会话在访问令牌到期时收敛，而不是靠刷新令牌继续存活。
 
-前端导航至 `GET /api/v1/auth/login?returnUrl=...`，仅接受站内 returnUrl；回调后 `GET /api/v1/auth/me` 还原用户、角色与租户。登录挑战是官方默认的 302，授权码以查询串回到 `/api/v1/auth/signin`（`response_mode=query`），浏览器不渲染中转页；授权码可能留在历史与访问日志里，由一次性兑换、机密客户端与 PKCE 防重放。`POST /api/v1/auth/logout` 先删本服务端票据（旧 Cookie 立即失效），再以表单携带 `id_token_hint` 发往 Identity，hint 不进地址栏；会话标识匹配时免确认退出，否则先确认。退出回调按官方默认回应用根 `/`，根路径须可匿名显示（模板为公开首页）。项目若把根设为受保护入口，应由守卫直接发起登录、不先渲染 `/auth/login`，或自行设置 `SignedOutRedirectUri`。`/auth/login` 仅作手动入口与 Mock 退出落点。退出表单依赖一段内联脚本自动提交（禁用脚本时显示提交按钮）；宿主若加内容安全策略，要放行这段脚本或接受手动提交。
+登录入口 `GET /api/v1/auth/login?returnUrl=...` 仅接受站内路径。挑战以 302 跳转，授权码以查询串回到 `/api/v1/auth/signin`（`response_mode=query`）。一次性兑换、机密客户端与 PKCE 防重放。登录成功后 `GET /api/v1/auth/me` 还原用户、角色与租户。回调失败进入 `/auth/sign-in-failed`，点击按钮才重新发起登录。`POST /api/v1/auth/logout` 先删本服务端票据（旧 Cookie 立即失效），再以表单携带 `id_token_hint` 发往 Identity，hint 不进地址栏；会话标识匹配时免确认退出，否则先确认。退出回调按官方默认回应用根 `/`，根路径须可匿名显示（模板为公开首页）。项目若把根设为受保护入口，应由守卫直接发起登录、不先渲染 `/auth/login`，或自行设置 `SignedOutRedirectUri`。`/auth/login` 仅作手动入口与 Mock 退出落点。退出表单依赖一段内联脚本自动提交（禁用脚本时显示提交按钮）；宿主若加内容安全策略，要放行这段脚本或接受手动提交。
 
 有 Authorization 头的请求只选官方 Bearer 验证，失败不回退到 Cookie；无头时选 Cookie。角色与租户取已验证访问令牌的声明，不能假定 ID token 具有资源声明：会话主体在登录（登录回调的 `OnTokenValidated`）与续期时都由同一处按访问令牌的验证结果构建：保留验证结果中的声明（签发方放进访问令牌的 `acr`、`amr`、`auth_time` 也在其中），只出现在 id_token 里的声明不进会话。这个 OIDC 处理器不做声明映射，默认 `ClaimActions` 已清空；不要往里加映射，需要额外声明时由签发方放进访问令牌。需要重新认证时，用官方 `OpenIdConnectChallengeProperties` 的 `MaxAge` 与 `Prompt` 发起挑战；它们只要求 Identity 重新验证身份，不是多因素或升级认证——那需要 Identity 把 `amr`/`acr` 签发进访问令牌，模板没有内置。`OnValidatePrincipal` 在过期前一分钟于服务端刷新，同一会话由分布式锁串行化，采用最新 refresh token。明确拒绝、坏响应、验签失败或主体不一致注销会话；认证中心不可达时可沿用当前主体至 `expires_at + SessionCookie:RefreshGracePeriod`（默认 1 小时），每会话 30 秒重试一次，远端续期整体超时 10 秒。截止只限制故障回落：正常签发方仍可接受有效 refresh token 续期，辅助节流记录丢失不能重开宽限。超限且不可达则注销；恢复后成功续期无需重新登录。请求取消与失锁照常传播，锁和票据存储失败不算认证中心不可达。宽限不会延长访问令牌，Token Exchange 可能失败而本地会话继续；分区时 Identity 撤销的生效受此窗口限制，本地成员停用仍即时生效。访问令牌保存在服务器，框架提供的 `IUserAccessTokenAccessor` 为下游 Token Exchange 提供经过验证的请求令牌。
 

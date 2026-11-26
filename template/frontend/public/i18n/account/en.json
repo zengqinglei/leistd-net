@@ -204,7 +204,6 @@
     "descriptionUnknown": "An application is asking to sign you out of this account.",
     "confirm": "Sign out",
     "cancel": "Stay signed in",
-    "invalid": "This sign-out request has expired or belongs to another session. Sign out again from the application.",
     "backHome": "Back to home",
     "loading": "Checking the sign-out request...",
     "failed": "The sign-out request could not be checked.",

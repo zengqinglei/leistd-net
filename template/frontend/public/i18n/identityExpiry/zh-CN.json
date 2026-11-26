@@ -1,0 +1,11 @@
+{
+  "loginTitle": "登录请求已过期",
+  "loginDescription": "页面停留的时间较长，这次登录请求已经失效。请回到 {{app}} 重新登录，系统会为你发起一次新的登录。",
+  "loginDescriptionUnknown": "这次登录请求已经失效。请回到你原来使用的应用，重新发起登录。",
+  "logoutTitle": "退出请求已失效",
+  "logoutDescription": "这次退出请求已经过期，你的会话可能已经结束。如果仍处于登录状态，请回到 {{app}} 重新退出。",
+  "logoutDescriptionUnknown": "这次退出请求已经过期，你的会话可能已经结束。如果仍处于登录状态，请回到原来的应用重新退出。",
+  "signInAgain": "重新登录 {{app}}",
+  "backToApp": "返回 {{app}}",
+  "backHome": "返回 Identity 首页"
+}

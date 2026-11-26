@@ -243,6 +243,12 @@ export interface ExternalLoginLinkOutputDto {
 //#endif
 //#if (OpenIddictServer)
 
+/** 授权或退出请求失效后可返回的应用。 */
+export interface InteractionApplicationOutputDto {
+  displayName: string;
+  homeUrl: string;
+}
+
 /** 依赖方发起退出、需要用户确认时，确认页所需的信息。 */
 export interface LogoutConfirmationOutputDto {
   /** 确认凭据仍然有效且属于当前会话；为 false 时其余字段为空，应提示从应用重新发起退出。 */

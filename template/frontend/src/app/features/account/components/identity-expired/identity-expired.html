@@ -1,0 +1,49 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+  <!--#else-->
+  <ng-container>
+    <!--#endif-->
+    @let app = application();
+    <main class="flex min-h-svh items-center justify-center bg-background">
+      <div hlmEmpty class="p-4 sm:p-6">
+        <div hlmEmptyHeader>
+          <div hlmEmptyMedia variant="icon">
+            <ng-icon [name]="logout ? 'lucideLogOut' : 'lucideClock'" />
+          </div>
+          <h1 hlmEmptyTitle>
+            {{ logout ? t('identityExpiry.logoutTitle') : t('identityExpiry.loginTitle') }}
+          </h1>
+          <p hlmEmptyDescription>
+            @if (logout) {
+              {{
+                app
+                  ? t('identityExpiry.logoutDescription', { app: app.displayName })
+                  : t('identityExpiry.logoutDescriptionUnknown')
+              }}
+            } @else {
+              {{
+                app
+                  ? t('identityExpiry.loginDescription', { app: app.displayName })
+                  : t('identityExpiry.loginDescriptionUnknown')
+              }}
+            }
+          </p>
+        </div>
+        <div hlmEmptyContent class="flex-wrap justify-center sm:flex-row">
+          @if (app) {
+            <a hlmBtn [href]="app.homeUrl">
+              {{
+                logout
+                  ? t('identityExpiry.backToApp', { app: app.displayName })
+                  : t('identityExpiry.signInAgain', { app: app.displayName })
+              }}
+            </a>
+            <a hlmBtn variant="outline" routerLink="/">{{ t('identityExpiry.backHome') }}</a>
+          } @else {
+            <a hlmBtn routerLink="/">{{ t('identityExpiry.backHome') }}</a>
+          }
+        </div>
+      </div>
+    </main>
+  </ng-container>
+</ng-container>

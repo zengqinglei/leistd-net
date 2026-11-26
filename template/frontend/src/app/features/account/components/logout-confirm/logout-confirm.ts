@@ -70,14 +70,19 @@ export class LogoutConfirm implements OnInit {
     const requestUri = query.get('request_uri');
     const confirmation = query.get('confirmation');
     if (!requestUri || !confirmation) {
-      this.confirmation.set({ isValid: false });
+      await this.router.navigateByUrl('/auth/logout-expired', { replaceUrl: true });
       return;
     }
     this.loadError.set(null);
     try {
-      this.confirmation.set(
-        await lastValueFrom(this.accountService.getLogoutConfirmation(requestUri, confirmation)),
+      const info = await lastValueFrom(
+        this.accountService.getLogoutConfirmation(requestUri, confirmation),
       );
+      if (!info.isValid) {
+        await this.router.navigateByUrl('/auth/logout-expired', { replaceUrl: true });
+        return;
+      }
+      this.confirmation.set(info);
     } catch (error) {
       this.loadError.set(applicationErrorMessage(error));
     }
@@ -86,7 +91,7 @@ export class LogoutConfirm implements OnInit {
   protected confirm(): void {
     const info = this.confirmation();
     const query = this.route.snapshot.queryParamMap;
-    if (!info?.isValid || !info.antiforgeryFieldName || !info.antiforgeryToken) {
+    if (!info?.antiforgeryFieldName || !info.antiforgeryToken) {
       return;
     }
     this.submitting.set(true);
@@ -118,8 +123,6 @@ const ENGLISH: Record<string, string> = {
     'An application is asking to sign you out of this account.',
   'account.logoutConfirm.confirm': 'Sign out',
   'account.logoutConfirm.cancel': 'Stay signed in',
-  'account.logoutConfirm.invalid':
-    'This sign-out request has expired or belongs to another session. Sign out again from the application.',
   'account.logoutConfirm.backHome': 'Back to home',
   'account.logoutConfirm.loading': 'Checking the sign-out request...',
   'account.logoutConfirm.failed': 'The sign-out request could not be checked.',
