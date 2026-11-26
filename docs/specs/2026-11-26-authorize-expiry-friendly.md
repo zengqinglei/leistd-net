@@ -46,10 +46,10 @@
 2. **同一笔交易，两端的时限不一致，都是未经调整的默认值。** 依赖方的 correlation / state 是 15 分钟（ASP.NET Core `RemoteAuthenticationTimeout`），Identity 的 request token 是 1 小时（OpenIddict）。
 
 **依据：**
-- OAuth 2.0 for Browser-Based Apps（IETF BCP，BFF 模式）：BFF 负责续期；续不上就结束会话，由前端发起一次新的顶层授权。
+- OAuth 2.0 for Browser-Based Applications（RFC 10017，BFF 模式）：BFF 负责续期；续不上就结束会话，由前端发起一次新的顶层授权。
 - OIDC Core §3.1.2：Identity 会话满足要求时，授权会静默完成。
-- `RemoteAuthenticationTimeout` 与 `SetRequestTokenLifetime` 是官方提供的交易时限配置。
-- W3C Page Visibility：页面不可见时，不做需要用户参与的操作。
+- `RemoteAuthenticationTimeout` 与 `OpenIddictServerOptions.RequestTokenLifetime` 是官方提供的交易时限配置。
+- HTML Living Standard 的 Page Visibility API 提供可见状态与变更事件。模板据此延后需要用户参与的登录。
 
 **原则：** 授权交易只在用户在场时发起；整条链路使用同一个交互式登录时间窗；超出时间窗时只有一种兜底方式，即 R1～R4 的友好页。
 
@@ -57,7 +57,7 @@
 | --- | --- |
 | F1 会话有效 | 不变 |
 | F2 依赖方会话结束（401） | 页面可见：立即发起顶层登录，并带上 `returnUrl`（深链）。页面不可见：记下「待登录」，等页面恢复可见时再发起（R6）。Identity 会话有效时静默完成，回到深链；会话失效时登录（含 MFA）后回到深链。全程不出现中间页。 |
-| F3 交互式登录时间窗 | 依赖方的 `RemoteAuthenticationTimeout` 与 Identity 的 `SetRequestTokenLifetime` 使用同一个显式值，默认 1 小时（R7）。 |
+| F3 交互式登录时间窗 | 依赖方的 `RemoteAuthenticationTimeout` 与 Identity 的 `OpenIddictServerOptions.RequestTokenLifetime` 使用同一个显式值，默认 1 小时（R7）。 |
 | F4 超出时间窗（在登录页停留超过 1 小时） | Identity 侧显示 `login-expired` 友好页（R1、R2），依赖方侧显示 `expired` 友好页（R3），都只需点一次即可重新登录。深链不保留。 |
 | F5 退出请求过期 | `logout-expired` 友好页（R1、R2） |
 | F6 被拒绝 | 依赖方 `denied` 友好页（R3） |
@@ -82,10 +82,10 @@
 
 #### R7 两端交易时限对齐（服务端配置）
 
-- 依赖方 OIDC 处理器的 `RemoteAuthenticationTimeout`，与 Identity 的 `SetRequestTokenLifetime`（授权请求缓存，以及退出请求缓存若适用）显式设为同一个值，默认 1 小时。在代码里设定，注释写明两者必须一致、以及取值理由（留出改密码、绑定 MFA 等绕路的时间）。
+- 依赖方 OIDC 处理器的 `RemoteAuthenticationTimeout`，与 Identity 的 `OpenIddictServerOptions.RequestTokenLifetime`（授权请求缓存，以及退出请求缓存若适用）显式设为同一个值，默认 1 小时。在代码里设定，注释写明两者必须一致、以及取值理由（留出改密码、绑定 MFA 等绕路的时间）。依赖方的 nonce 寿命沿用同一值。
 - 不新增部署变量，按模板「默认值不进部署变量」的约定。确有需要时，项目可按官方选项自行覆盖。
 - **验收：**
-  - 用假时钟或缩短的配置验证：在时间窗内（例如 59 分钟）完成登录，直接回到深链；超出时间窗，分别落到 F4 的友好页。
+  - 用假时钟或缩短的配置验证：在时间窗内（例如 59 分钟）完成登录，直接回到深链；分别验证 Identity 请求过期和依赖方回调时 correlation Cookie 过期，各自落到 F4 的友好页。
   - correlation Cookie 的有效期随 `RemoteAuthenticationTimeout` 变化。
 
 #### R1 Identity 交互端点的本地协议错误（`OpenIddictServer`）
@@ -199,8 +199,26 @@
 | 3 | R3 依赖方 | 集成测试全量 |
 | 4 | R4 前端页面和词条 | 前端全量；`check-i18n`；两种形态 |
 | 4b | R6 页面可见时才发起登录；R7 两端时限对齐；先写修复前失败的用例 | 前端 spec；集成测试全量；R6、R7 验收 |
-| 5 | 端到端闭环 | 真实浏览器走 R5 第 2、5、6 条；完整 `verify.ps1`，Identity 和 Resource 各一种场景；`scripts/check-all.ps1`；`template-package/test-template-package.ps1` |
+| 5 | 端到端闭环 | 真实浏览器走 F2、F3、F4 和 R5 第 2、5、6 条；完整 `verify.ps1`，Identity 和 Resource 各一种场景；`scripts/check-all.ps1`；`template-package/test-template-package.ps1` |
 
 ## 4. 验证
 
-（实施后填写。）
+- 修复前的集成测试（`94ece4f3`）：Identity 在缓存授权过期时输出 `invalid_token / ID2019` 的协议原文。Resource 失败回调只设置 400，应用的 StatusCodePages 补成 `application/problem+json`，浏览器没有可操作页面。退出确认页的修复前前端全量用例有 2 条预期失败。
+- R6、R7 修复前（`93f0ab86`）：生成 Resource 后执行集成项目的 `dotnet test --logger trx` 和前端 `npm test -- --watch=false`。集成 241 通过、1 条预期失败，correlation Cookie 实际只保留 15 分钟。前端 1010 通过、1 条预期失败，隐藏页签收到两次登录请求后立即发出了两次导航。执行记录 `leistd-codex-test-visibility-window-a74032263477`。
+- 仓库闸门执行记录 `leistd-codex-check-authorize-expiry-ccd59b215666`。`pwsh scripts/check-all.ps1` 的 52 项全部通过，含 i18n。`pwsh template-package/test-template-package.ps1` 验证两个生成场景的包内容、隔离安装、来源标记和确定性重建，均通过。
+- 生成项目验证（`024402d0`，runner `leistd-codex-verify-visibility-window-6a95f52bd79b`）。本地化 Identity 和 Resource 分别执行完整 `pwsh scripts/verify.ps1`，均通过。Identity 为 351 后端单测、739 集成测试、1776 前端测试、7 条仓库 E2E。Resource 为 202 后端单测、245 集成测试、1077 前端测试。覆盖 Token JSON、UserInfo 质询与空响应体、合法授权回调的 error 和 state、两条退出过期入口，以及官方 OIDC 处理器的回调失败分类。
+- 单语言 Identity 和 Resource 分别执行 `npm run lint`、`npm test -- --watch=false`、`npm run build`，均通过，前端测试分别为 1710 和 1012 条。纯 Bearer Resource 的 `pwsh scripts/verify.ps1 -Fast` 通过，含 201 后端单测。
+- 纯 Bearer 的产物另检查前端目录、浏览器会话测试文件和 OIDC 浏览器回调配置均未生成。变异分别缩短 Identity 请求令牌或 Resource nonce 至 15 分钟，以及去掉依赖方回跳片段，三个对应断言均预期失败。执行记录 `leistd-codex-mutate-login-window-70df508f4c2c`。
+- F2 用隔离的有头 Chromium 和真实 Identity、Resource 验证，执行记录 `leistd-codex-browse-login-window-9d08e3a7d911`。采用 Playwright `connectOverCDP` 的 `noDefaults` 保留 Chromium 原生的可见状态。真实页签隐藏时收到 `/api/v1/auth/me` 的 401，导航次数为零。恢复可见后仅发起一次挑战。Identity 会话仍有效时静默完成，无会话时完成口令及 MFA。两条分支的真实 OIDC 回调 `Location` 和最终地址均为 `/workspace/dashboard?tab=roles&source=expiry#top`，未经过友好页。 [Playwright 的 noDefaults 选项](https://playwright.dev/docs/api/class-browsertype#browser-type-connect-over-cdp-option-no-defaults)
+- 有头 Chromium 通过 `npx playwright test --config=expiry-manual.config.ts` 验证 F3、F4 及兜底，执行记录 `leistd-codex-browse-login-window-8aae6b2f8305`。F3 将挑战和缓存请求拨到第 59 分钟，口令和 MFA 完成后直接回到 `/workspace/dashboard?tab=roles&source=expiry#top`，未经过友好页。F4 中依赖方 correlation Cookie 在 Chromium 自然到期，真实回调显示过期页，点一次重新登录即可建立新会话。退出确认重载和过期后提交均只有 Identity 首页按钮。连续两次授权拒绝均停在拒绝页，通用失败进入通用页。
+- F4 的 Identity 会话复核。早期夹具在点击登记的 `HomeUrl` 前显式清除了 Identity Cookie，造成第二次口令和 MFA。补测保留 Cookie，仅将 OIDC 请求时钟拨到第 61 分钟，Identity 会话时钟保持实际时间。第一次口令和 MFA 完成并显示过期页后，同一浏览器的 Identity `/api/v1/auth/me` 返回 200 和原用户。点击一次后静默完成新授权，直接到依赖方首页，期间未出现 Identity 登录页、MFA 或过期页。
+- 有头 Chromium 截图 18 张，中、英、中文暗色各 6 张。执行记录 `leistd-codex-browse-login-window-261fce339189`。逐板对照如下；组件间距、字体、主色与暗色来自 Spartan Empty 和模板令牌，原型地址栏和设计说明未进入页面。
+
+| 画板 | 实际截图对照 |
+| --- | --- |
+| IdentityExpired | 时钟、标题、说明和两个按钮的语义与顺序一致。应用名按测试登记显示为 Demo application。英文主次按钮按 Spartan 可用宽度换行。 |
+| IdentityUnknownClient | 时钟、标题、说明及唯一的 Identity 首页按钮一致。未知、缺少 ID、无 HomeUrl 的应用均只有站内链接。 |
+| IdentityLogoutExpired | 退出图标与标题一致。按 R2 截取真实流程的无应用版本，说明改用「原来的应用」，只保留 Identity 首页按钮。 |
+| RpExpired | 沙漏、超时文案、单个重新登录按钮一致。 |
+| RpDenied | 禁止图标、拒绝文案、重新登录与返回首页的顺序一致。 |
+| RpOther | 警告图标、通用文案和单个重新登录按钮一致。 |
