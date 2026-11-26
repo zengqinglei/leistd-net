@@ -364,8 +364,11 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         Assert.Contains("code=", completed.Headers.Location.Query);
         // 一次性：授权完成时 request token 已兑现，同一回跳地址不能再换出授权码
         using var replayed = await authenticated.GetAsync(returnUrl);
-        Assert.Equal(HttpStatusCode.Found, replayed.StatusCode);
-        Assert.Equal($"/auth/login-expired?client_id={id}", replayed.Headers.Location?.OriginalString);
+        Assert.Equal(HttpStatusCode.BadRequest, replayed.StatusCode);
+        Assert.Null(replayed.Headers.Location);
+        var replayError = await replayed.Content.ReadAsStringAsync();
+        Assert.Contains("error:invalid_token", replayError);
+        Assert.Contains("https://documentation.openiddict.com/errors/ID2013", replayError);
         Assert.Equal(HttpStatusCode.OK, (await authenticated.GetAsync("/api/v1/auth/me")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
     }
