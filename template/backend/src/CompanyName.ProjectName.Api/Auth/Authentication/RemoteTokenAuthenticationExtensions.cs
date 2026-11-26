@@ -126,6 +126,8 @@ internal static class RemoteTokenAuthenticationExtensions
             options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
             options.SignInScheme = AuthenticationSchemeNames.SessionCookie;
             options.ResponseType = "code";
+            // 与 Identity 的 SetRequestTokenLifetime 保持一致，为改密码、绑定 MFA 等登录步骤留出时间。
+            options.RemoteAuthenticationTimeout = TimeSpan.FromHours(1);
             options.SaveTokens = true;
             options.MapInboundClaims = false;
             // 会话主体只由 ValidateAccessTokenAsync 构建（登录在 OnTokenValidated，续期在 ResourceSessionRefresher），
