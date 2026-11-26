@@ -15,7 +15,7 @@
 - 列按优先级（`primary`/`secondary`/`tertiary`）裁剪：视口档位（`tableViewportSignal()`）给上限，带吸附操作列的表格外框挂 `[appTableFit]="tableViewport()" [appTableFitContent]="rows()"`，放不下再降一档（更新数据须换新数组）。被裁的列由 TanStack 行展开补偿（按 `getRowId` 的实体 id 记），不另建展开状态。主列用 `TITLE_COLUMN_META` 与 `TITLE_CONTENT_CLASS`：最窄档截断长名称。
 - 数据列登记 `detail: true`。展开按定义顺序列出 `hiddenDetailColumns(table)`，复用表头的 `columnLabelKeys` 和同一份 `ng-template[appColumnValue]`（`mode` 为 `cell`/`detail`），展示全文与完整时刻。非列补偿放末尾，避免重复主行。
 - 有上界的标量、枚举、短文本随行返回，展开即渲染。无上界的快照、正文、JSON、日志或嵌套集合，列表仅返摘要，展开或开抽屉时按 id 读取单资源。分页子数据按需取，按行记状态并丢弃迟到响应。值带按钮时 `dl` 用 `items-baseline`，`dd` 用不折行的 `flex items-center gap-1`，值（`min-w-0 break-all`）在前、按钮（`shrink-0`）在后，空值写「-」。
-- 长详情用右侧 Spartan Sheet，打开的 id 写入 query。顶部列全表格各列，补偿被裁列。
+- 抽屉需在刷新或分享后还原时，用查询参数记录打开状态；长详情用右侧 Spartan Sheet，查询参数取打开的实体 id。顶部列全表格各列，补偿被裁列。
 <!--#if (IncludeWebhooks)-->
 - 抽屉示例：Webhook 投递日志的投递详情。
 <!--#endif-->

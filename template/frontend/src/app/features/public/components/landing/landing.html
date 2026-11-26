@@ -210,7 +210,7 @@
                   @case ('otp') {
                     <div
                       aria-hidden="true"
-                      class="mt-auto flex flex-col gap-2 self-end rounded-lg border p-3 pb-4"
+                      class="mt-auto flex flex-col gap-2 self-end rounded-md border p-3 pb-4"
                     >
                       <span class="text-xs font-medium">{{ t('landing.features.otpLabel') }}</span>
                       <div class="flex gap-1.5">
@@ -230,12 +230,12 @@
                       只用语义令牌
                     -->
                     <div aria-hidden="true" class="mt-auto grid grid-cols-2 gap-3">
-                      <div class="bg-background flex flex-col gap-1.5 rounded-lg border p-3">
+                      <div class="bg-background flex flex-col gap-1.5 rounded-md border p-3">
                         <span class="bg-muted h-1.5 w-3/4 rounded-full"></span>
                         <span class="bg-muted h-1.5 w-1/2 rounded-full"></span>
                         <span class="bg-primary mt-1 h-2.5 w-8 rounded-full"></span>
                       </div>
-                      <div class="bg-foreground flex flex-col gap-1.5 rounded-lg border p-3">
+                      <div class="bg-foreground flex flex-col gap-1.5 rounded-md border p-3">
                         <span class="bg-background/20 h-1.5 w-3/4 rounded-full"></span>
                         <span class="bg-background/20 h-1.5 w-1/2 rounded-full"></span>
                         <span class="bg-primary mt-1 h-2.5 w-8 rounded-full"></span>
@@ -245,7 +245,7 @@
                   @case ('token') {
                     <pre
                       aria-hidden="true"
-                      class="bg-muted text-muted-foreground mt-auto overflow-x-auto rounded-lg p-3 font-mono text-xs leading-relaxed"
+                      class="bg-muted text-muted-foreground mt-auto overflow-x-auto rounded-md p-3 font-mono text-xs leading-relaxed"
                     ><span class="text-foreground">POST</span> /connect/token
 client_id=billing-sync
 grant_type=client_credentials  <span class="text-success">200</span></pre>
