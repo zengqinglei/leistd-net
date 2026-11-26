@@ -133,10 +133,10 @@ public sealed class OidcLogoutTests(ProjectWebApplicationFactory factory) : ICla
     public async Task An_open_confirmation_page_submits_an_expired_logout_to_the_friendly_page()
     {
         var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var (client, session) = await SignInAsync();
-        using var signedIn = session;
         using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             services.Configure<OpenIddictServerOptions>(options => options.TimeProvider = clock)));
+        var (client, signedIn) = await SignInAsync(host);
+        using var session = signedIn;
         using var browser = Browser(session.Cookie, host);
         var (requestUri, confirmation) = await ConfirmationPageAsync(browser, client);
         var page = await ConfirmationInfoAsync(browser, requestUri, confirmation);
@@ -243,7 +243,7 @@ public sealed class OidcLogoutTests(ProjectWebApplicationFactory factory) : ICla
     }
 
     // 登记一个会话绑定的浏览器客户端，并以新用户登录 Identity
-    private async Task<(string Client, SignedInUser Session)> SignInAsync()
+    private async Task<(string Client, SignedInUser Session)> SignInAsync(WebApplicationFactory<Program>? host = null)
     {
         var username = $"logout_{Guid.NewGuid():N}"[..30];
         using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
@@ -259,7 +259,8 @@ public sealed class OidcLogoutTests(ProjectWebApplicationFactory factory) : ICla
                    requirements = new[] { "ft:pkce" }
                }))
             Assert.True(registered.IsSuccessStatusCode, await registered.Content.ReadAsStringAsync());
-        return (client, new SignedInUser(username, await factory.LoginAsync(username, Password)));
+        var session = await ProjectWebApplicationFactory.LoginAsync(host ?? factory, username, Password);
+        return (client, new SignedInUser(username, session));
     }
 
     private async Task<string> IdentityTokenAsync(string client, string cookie)
