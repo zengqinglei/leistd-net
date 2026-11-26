@@ -5,6 +5,7 @@ using Leistd.Security.OneTimeCodes.VerificationCodes;
 using CompanyName.ProjectName.Api.Auth.Sessions;
 #if (!IncludeMultiTenancy)
 using CompanyName.ProjectName.Api.Middlewares;
+using Microsoft.Extensions.Options;
 #endif
 using Leistd.Security.AspNetCore;
 using CompanyName.ProjectName.Application.Auth.Sessions;
