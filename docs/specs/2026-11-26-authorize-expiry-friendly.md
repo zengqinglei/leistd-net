@@ -43,12 +43,15 @@
 - 启用 `UseAspNetCore().EnableErrorPassthrough()`。
 - 授权端点和退出端点的控制器，用 `HttpContext.GetOpenIddictServerResponse()` 读到错误后，按种类导向 Identity 前端的友好页。
 - 能合法回调依赖方的错误（`redirect_uri` 有效），照常由 OpenIddict 带着 OAuth 错误回调，不变。
-- 实施时要证明：`EnableErrorPassthrough` 只影响交互端点；`/connect/token`、`/connect/userinfo` 等机器端点的错误响应格式不变（JSON），现有测试保持通过。
+- 实施时要证明：`EnableErrorPassthrough` 只影响授权端点和退出端点。其他端点各自保持既有的协议约定：
+  - `/connect/token`：状态码和 JSON 错误体不变；
+  - `/connect/userinfo`：质询的状态码、`WWW-Authenticate` 标头，以及空响应体都不变；
+  - 能合法回调依赖方的授权错误：回调时带的错误码和 `state` 不变。
 
 | 种类 | 触发条件 | 原型图画板 |
 | --- | --- | --- |
 | `login-expired` | 授权端点：ID2019（request token 过期或无效），以及其他无法安全回调的浏览器协议错误 | `IdentityExpired`；无登记入口时为 `IdentityUnknownClient` |
-| `logout-expired` | 退出端点：退出请求缓存过期或无效 | `IdentityLogoutExpired` |
+| `logout-expired` | 退出端点：退出请求缓存过期或无效；以及退出确认页的确认凭据失效（`isValid: false`） | 通常为无应用版本（见 R2） |
 
 #### R2 「重新登录」与「返回」的目标
 
@@ -58,6 +61,10 @@
 - 查不到应用、应用没有 `HomeUrl`、或 `client_id` 缺失时：
   - 只显示「返回 Identity 首页」（指向 `/`）；
   - 不显示应用名，不产生任何外部跳转。
+- **退出流程的应用来源。** 真实的退出确认流程里，`/auth/logout-confirm` 只收到 `request_uri` 和受保护的 `confirmation`，确认表单发往 `/connect/logout` 时也不带 `client_id`。应用标识藏在确认凭据里，而确认凭据默认 10 分钟就会失效。所以：
+  - **确认页重载时凭据已失效：** 显示 `logout-expired` 的无应用版本，代替现在的无效确认页；
+  - **一直开着确认页，等 request token 过期后再提交：** 协议端点导向 `logout-expired`，同样是无应用版本；
+  - **有应用版本**（「返回 {应用名}」）只在请求本身带 `client_id` 时出现。不为此改动确认流程，也不在测试里人为补 `client_id`。
 - **目标地址由服务端从登记数据算出。** 前端只能拿到算好的结果（应用名和地址），不能接受请求参数里给的任何 URL。具体做法实施方可以选：
   - 前端友好页带 `client_id` 去调用一个匿名接口，接口只返回已登记应用的显示名和 `HomeUrl`；
   - 或者服务端导向前端时，只带一个可以再次查证的标识。
@@ -66,17 +73,23 @@
 
 #### R3 依赖方回调失败（`RemoteTokenAuth`）
 
-- `OnRemoteFailure` 和 `OnAccessDenied` 调用 `HandleResponse()`，然后重定向到依赖方前端的 `/auth/sign-in-failed?reason=…`。路径命名按模板路由规范，可以调整。原因分三类：
+- **生效条件：** 只在 `ResourceBrowserSession` 形态生效。回调钩子和 `/api/v1/auth/login` 都属于这一形态；`RemoteTokenAuth` 里的纯 Bearer Resource 不生成这部分服务端、前端和测试代码，生成验证要覆盖这种裁剪。
+- 保留官方的 `OnAccessDenied`。`OnRemoteFailure` 和 `OnAccessDenied` 都调用 `HandleResponse()`，然后重定向到依赖方前端的 `/auth/sign-in-failed?reason=…`。路径命名按模板路由规范，可以调整。原因分三类：
 
 | reason | 归类 | 原型图画板 | 按钮 |
 | --- | --- | --- | --- |
-| `expired` | correlation 失败、state 无效或过期、消息过期 | `RpExpired` | 「重新登录」 |
+| `expired` | correlation 失败、state 缺失或无法解保护 | `RpExpired` | 「重新登录」 |
 | `denied` | `access_denied` 等授权被拒或用户取消 | `RpDenied` | 「重新登录」+「返回首页」 |
 | `error` | 其他 | `RpOther` | 「重新登录」 |
 
 - **「重新登录」：** 指向依赖方自己的登录入口（模板现有的 `/api/v1/auth/login`），由用户点击后重新发起挑战。**不自动重新挑战。**
 - **「返回首页」：** 依赖方的公开首页 `/`。
-- 归类时只读异常的类型或错误码，不把异常消息带进查询参数，也不显示在页面上。
+- **归类方式：**
+  - 锁定的 ASP.NET Core OIDC 10.0.15，对 state 缺失、state 解保护失败、correlation 失败，都调用 `HandleRequestResult.Fail(string, …)`。这些情况包装成同一种 `AuthenticationFailureException`，没有稳定的错误码。
+  - 因此允许**只在服务端**按上游这几条特定的失败消息识别为 `expired`。消息常量写在一处，并用**真实的 OIDC 处理器**测试锁住：上游消息一旦变化，测试就会变红。
+  - 识别不出来的一律归为 `error`。
+  - 查询串只带固定的 reason 值，异常消息不进查询参数，也不显示在页面上。
+  - 不重写 state 或 correlation 的校验。
 
 #### R4 UI 与文案
 
@@ -105,11 +118,16 @@
 2. 点「重新登录 {应用名}」后，经登记的 `HomeUrl` 发起一次新的授权，并完整走完登录，包括 MFA。真实浏览器验证一次。
 3. `client_id` 未登记、应用缺少 `HomeUrl`、`client_id` 缺失：只回 Identity 首页，页面里不出现任何外部链接。
 4. 能合法回调的授权错误，照常带 OAuth 错误回调；`/connect/token` 的错误仍是 JSON。
-5. 依赖方：correlation 过期（时钟推进或篡改 correlation Cookie）、`access_denied`、其他异常，分别到达三种友好页。「重新登录」能完成新的登录；Identity 持续拒绝时停在友好页，不出现自动跳转循环。
+5. 依赖方：以下三种情况经真实的 OIDC 处理器，分别到达三种友好页：
+   - correlation 过期，或 correlation Cookie 缺失、被篡改；
+   - `access_denied`；
+   - 其他异常。
+   
+   退出确认页重载时凭据已失效、确认页开着直到 request token 过期后再提交，这两条入口也分别验收。「重新登录」能完成新的登录；Identity 持续拒绝时停在友好页，不出现自动跳转循环。
 6. UI 与原型图一致：
    - 实施后，在真实浏览器里对 6 个页面各截一张图，中英各一套，和原型图逐一对照，写进 §4；
    - 前端 spec 断言标题、说明、按钮的文字和链接目标，断言用户能看到的结果。
-7. 本地化与单语言两种形态都能构建，测试通过；`check-i18n` 通过。
+7. 本地化与单语言两种形态都能构建，测试通过；`check-i18n` 通过；纯 Bearer 的 Resource 形态不生成依赖方友好页相关的代码。
 
 ## 2. 方案
 
