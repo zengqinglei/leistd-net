@@ -11,10 +11,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
-using static OpenIddict.Abstractions.OpenIddictConstants;
 using static OpenIddict.Server.AspNetCore.OpenIddictServerAspNetCoreHandlerFilters;
 using static OpenIddict.Server.AspNetCore.OpenIddictServerAspNetCoreHandlers;
-using static OpenIddict.Server.OpenIddictServerEvents;
 
 namespace CompanyName.ProjectName.Api.Auth.OpenIddict;
 
@@ -122,8 +120,8 @@ public static class OpenIddictServerExtensions
                     .EnableTokenEndpointPassthrough()
                     .EnableUserInfoEndpointPassthrough()
                     .EnableEndSessionEndpointPassthrough();
-                AddRequestTokenErrorPassthrough<ApplyAuthorizationResponseContext>(options);
-                AddRequestTokenErrorPassthrough<ApplyEndSessionResponseContext>(options);
+                AddRequestTokenErrorPassthrough<OpenIddictServerEvents.ApplyAuthorizationResponseContext>(options);
+                AddRequestTokenErrorPassthrough<OpenIddictServerEvents.ApplyEndSessionResponseContext>(options);
                 if (oauthOpts.DisableHttpsRequirement)
                 {
                     aspNetCore.DisableTransportSecurityRequirement();
@@ -154,7 +152,7 @@ public static class OpenIddictServerExtensions
     }
 
     private static void AddRequestTokenErrorPassthrough<TContext>(OpenIddictServerBuilder options)
-        where TContext : BaseRequestContext
+        where TContext : OpenIddictServerEvents.BaseRequestContext
     {
         const string redeemedTokenErrorUri = "https://documentation.openiddict.com/errors/ID2013";
         const string expiredTokenErrorUri = "https://documentation.openiddict.com/errors/ID2019";
@@ -165,8 +163,8 @@ public static class OpenIddictServerExtensions
             .SetOrder(ProcessStatusCodePagesErrorResponse<TContext>.Descriptor.Order - 500)
             .UseInlineHandler(context =>
             {
-                if (context.Transaction.Response is { Error: Errors.InvalidToken, ErrorUri: redeemedTokenErrorUri or expiredTokenErrorUri }
-                    && context.Transaction.Request?.RequestUri?.StartsWith(RequestUris.Prefixes.Generic, StringComparison.OrdinalIgnoreCase) == true)
+                if (context.Transaction.Response is { Error: OpenIddictConstants.Errors.InvalidToken, ErrorUri: redeemedTokenErrorUri or expiredTokenErrorUri }
+                    && context.Transaction.Request?.RequestUri?.StartsWith(OpenIddictConstants.RequestUris.Prefixes.Generic, StringComparison.OrdinalIgnoreCase) == true)
                     context.SkipRequest();
 
                 return ValueTask.CompletedTask;
