@@ -246,11 +246,10 @@ public sealed class ConnectController(
                 ? request.GetScopes()
                 : result.Principal.GetScopes();
             // 用户与租户都取自授权码/刷新令牌的主体：本请求没有用户身份，解析链只能得出宿主
-            var principal = await principalFactory.CreateFromTokenAsync(result.Principal, scopes, cancellationToken);
+            var principal = await principalFactory.CreateFromTokenAsync(result.Principal, scopes, cancellationToken,
+                recordSessionActivity: request.IsRefreshTokenGrantType());
             if (principal == null)
-            {
-                return Forbid(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
-            }
+                return ProtocolError(Errors.InvalidGrant);
 
             return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }

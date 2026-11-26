@@ -77,6 +77,7 @@ internal sealed class AuthAppService(
     IDistributedCache distributedCache,
     IObjectMapper objectMapper,
     IUserRegistrationPolicyProvider registrationPolicy,
+    ILoginSecurityPolicyProvider loginSecurityPolicy,
 #if (Email)
     IOptions<VerificationCodeOptions> verificationCodeOptions,
 #endif
@@ -92,7 +93,8 @@ internal sealed class AuthAppService(
 {
     public async Task<SessionLoginResult> AuthenticateSessionAsync(
         LoginInputDto input,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        RememberedDevice? rememberedDevice = null)
     {
         var now = clock.Now;
         var result = await userDomainService.ValidateCredentialsAsync(
@@ -160,7 +162,8 @@ internal sealed class AuthAppService(
             throw new BusinessException(AuthErrorCodes.InvalidCredentials, "The username or password is incorrect.");
         }
 
-        var outcome = await sessionIssuer.StartAsync(user, SignInFirstStep.Password(user), cancellationToken: cancellationToken);
+        var outcome = await sessionIssuer.StartAsync(user, SignInFirstStep.Password(user),
+            cancellationToken: cancellationToken, keepSignedIn: input.KeepSignedIn, rememberedDevice: rememberedDevice);
         if (result.PasswordRehashNeeded)
         {
             userDomainService.RehashPassword(user, input.Password);
@@ -183,7 +186,7 @@ internal sealed class AuthAppService(
     /// <para>输错计入账号的登录失败次数：第二步的 10⁶ 空间只靠单个挑战的尝试上限挡不住——
     /// 知道密码的人可以反复走第一步领新挑战。</para>
     /// </remarks>
-    public async Task<ClaimsPrincipal> CompleteTwoFactorLoginAsync(
+    public async Task<(ClaimsPrincipal Principal, RememberedDevice? Device, int RememberDeviceDays)> CompleteTwoFactorLoginAsync(
         string? challengeToken,
         TwoFactorLoginInputDto input,
         CancellationToken cancellationToken = default)
@@ -306,7 +309,13 @@ internal sealed class AuthAppService(
         }
 
         await RecordLoginSucceededAsync(user, cancellationToken);
-        return await sessionIssuer.SignInAsync(user, cancellationToken: cancellationToken);
+        var principal = await sessionIssuer.SignInAsync(user, cancellationToken: cancellationToken,
+            keepSignedIn: challenge.KeepSignedIn);
+        var days = input.RememberDevice && usedMethod is (TwoFactorMethod.Authenticator or TwoFactorMethod.Passkey)
+            ? (await loginSecurityPolicy.GetAsync(cancellationToken)).RememberDeviceDays
+            : 0;
+        var device = days > 0 ? new RememberedDevice(user.Id, user.TenantId, user.SecurityStamp, now) : null;
+        return (principal, device, days);
     }
 
 #if (Email)
@@ -494,6 +503,7 @@ internal sealed class AuthAppService(
 
         return new TwoFactorLoginOutputDto
         {
+            RememberDeviceDays = (await loginSecurityPolicy.GetAsync(cancellationToken)).RememberDeviceDays,
             TwoFactorMethods = prompt.Methods,
             DefaultTwoFactorMethod = prompt.DefaultMethod,
             MaskedEmail = prompt.MaskedEmail
@@ -565,7 +575,7 @@ internal sealed class AuthAppService(
         user.ConfirmPasswordByIndependentFactor();
         await userRepository.UpdateAsync(user, cancellationToken);
         await RecordLoginSucceededAsync(user, cancellationToken);
-        var principal = await sessionIssuer.SignInAsync(user, cancellationToken: cancellationToken);
+        var principal = await sessionIssuer.SignInAsync(user, cancellationToken: cancellationToken, keepSignedIn: input.KeepSignedIn);
         await unit.CompleteAsync(cancellationToken);
         return principal;
     }
@@ -680,6 +690,7 @@ internal sealed class AuthAppService(
 
         return new SecurityConfigOutputDto
         {
+            AllowKeepSignedIn = (await loginSecurityPolicy.GetAsync(cancellationToken)).Sessions.AllowKeepSignedIn,
             RegistrationEnabled = policy.Enabled,
             PasskeysAvailable = passkeyProtocol.IsAvailable,
 #if (Email)

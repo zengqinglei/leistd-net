@@ -162,6 +162,19 @@
         </div>
       }
 
+      @if (allowKeepSignedIn()) {
+        <div hlmField orientation="horizontal">
+          <hlm-checkbox
+            inputId="login-keep-signed-in"
+            [checked]="keepSignedIn()"
+            [disabled]="isLoading() || passkeyBusy() || authBlocked()"
+            (checkedChange)="keepSignedIn.set($event)"
+          />
+          <label hlmFieldLabel for="login-keep-signed-in">{{
+            t('account.login.keepSignedIn')
+          }}</label>
+        </div>
+      }
       <button
         hlmBtn
         type="submit"
@@ -226,6 +239,7 @@
     <!-- 账号密码是主路径，外部登录作为替代放在表单之后 -->
     <app-external-login-buttons
       [returnUrl]="returnUrl"
+      [keepSignedIn]="wantsKeepSignedIn()"
       [blocked]="isLoading() || authBlocked()"
       [dividerLabel]="t('account.login.or')"
     />

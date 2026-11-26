@@ -206,15 +206,30 @@ public class SettingDefinitionProvider(IOptions<TelemetrySettingsOptions> teleme
             .IsVisibleToClients = true;
 #endif
 
-        // 会话空闲多久失效：租户各自的安全策略。基线取自部署的会话 Cookie 有效期；
-        // 调短后在途会话下一次实际校验（最多隔一个校验缓存周期）按新时长判定，调长后续发的 Cookie 跟上新时长
+        context.Add(
+            SettingConstant.Security.AllowKeepSignedIn,
+            defaultValue: "true",
+            scopes: SettingScopes.Tenant,
+            displayName: "Allow longer sign-in sessions",
+            group: SettingConstant.Groups.Security)
+            .AsBoolean()
+            .IsVisibleToClients = true;
         context.Add(
             SettingConstant.Security.SessionIdleTimeoutDays,
-            defaultValue: ((int)sessionOptions.Value.IdleTimeout.TotalDays).ToString(CultureInfo.InvariantCulture),
+            defaultValue: sessionOptions.Value.IdleDays.ToString(CultureInfo.InvariantCulture),
             scopes: SettingScopes.Tenant,
-            displayName: "Sign out after this many idle days",
+            displayName: "Idle days for longer sign-in sessions",
             group: SettingConstant.Groups.Security)
-            .AsInteger(1, 365)
+            .AsInteger(1, sessionOptions.Value.IdleDays)
+            .IsVisibleToClients = true;
+
+        context.Add(
+            SettingConstant.Security.RememberDeviceDays,
+            defaultValue: Math.Min(30, sessionOptions.Value.RememberDeviceMaxDays).ToString(CultureInfo.InvariantCulture),
+            scopes: SettingScopes.Tenant,
+            displayName: "Days to remember two-factor authentication",
+            group: SettingConstant.Groups.Security)
+            .AsInteger(0, sessionOptions.Value.RememberDeviceMaxDays)
             .IsVisibleToClients = true;
 
 #if (ExternalLogin)

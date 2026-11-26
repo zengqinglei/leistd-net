@@ -15,4 +15,7 @@ public sealed record PasskeySignInInputDto
     /// <summary><c>navigator.credentials.get()</c> 返回的凭据的 JSON 形式。</summary>
     [Required(ErrorMessage = "{0} is required.")]
     public JsonElement? Credential { get; init; }
+
+    /// <summary>请求使用可随活动续期的较长会话。</summary>
+    public bool KeepSignedIn { get; init; }
 }

@@ -96,7 +96,8 @@ public class AuthPrincipalFactory(
     public async Task<ClaimsPrincipal?> CreateFromTokenAsync(
         ClaimsPrincipal tokenPrincipal,
         IEnumerable<string>? scopes = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool recordSessionActivity = false)
     {
 #if (TenantWorkspace)
         if (tokenPrincipal.GetClaim(WorkspaceClaimTypes.HomeUserId) is { } homeSubject)
@@ -115,20 +116,37 @@ public class AuthPrincipalFactory(
 
         // 租户切换与工作单元在这里建立而不是放进辅助方法：AsyncLocal 在被 await 的方法里改，回不到调用方
         using (currentTenant.Change(tenant.Id, tenant.Name))
-        using (unitOfWorkManager.Begin(requiresNew: true))
+        using (var unitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
-            // 会话绑定的授权（签发时带了 sid）：会话已退出、撤销或空闲到期就不再续期。
-            // 只判定、不记活跃：后台续期不能替 Identity 会话续命；判定失败一律拒绝（fail closed）。
-            var sessionClaim = tokenPrincipal.GetClaim(CustomClaimTypes.SessionId);
-            if (sessionClaim is not null && !await IsSessionActiveAsync(sessionClaim, userId, cancellationToken))
-                return null;
-
             var principal = await CreateAsync(userId, scopes, cancellationToken);
             if (principal is null) return null;
             if (tokenPrincipal.GetClaim(Claims.AuthenticationTime) is { } authenticationTime)
                 principal.SetClaim(Claims.AuthenticationTime, long.Parse(authenticationTime, CultureInfo.InvariantCulture));
-            if (sessionClaim is not null)
+
+            if (tokenPrincipal.GetClaim(CustomClaimTypes.SessionId) is { } sessionClaim)
+            {
+                if (!Guid.TryParse(sessionClaim, out var sessionId) ||
+                    await userSessionRepository.GetByIdAsync(sessionId, cancellationToken) is not { } session ||
+                    session.UserId != userId)
+                    return null;
+
+                var policy = (await loginSecurityPolicy.GetAsync(cancellationToken)).Sessions;
+                var now = clock.Now;
+                if (session.IsExpired(now, policy))
+                    return null;
+
+                // 会话绑定的客户端按契约只在用户请求中刷新。
+                if (recordSessionActivity && session.Touch(now, session.IpAddress))
+                {
+                    await userSessionRepository.UpdateAsync(session, cancellationToken);
+                    await unitOfWork.CompleteAsync(cancellationToken);
+                }
+
                 principal.SetClaim(CustomClaimTypes.SessionId, sessionClaim);
+                var expiresAt = policy.AbsoluteExpiry(session.AuthenticatedAt, session.KeepSignedIn);
+                principal.SetExpirationDate(new DateTimeOffset(DateTime.SpecifyKind(expiresAt, DateTimeKind.Utc)));
+            }
+
             principal.SetDestinations(GetDestinations);
             return principal;
         }
@@ -274,13 +292,6 @@ public class AuthPrincipalFactory(
 #endif
 
     private sealed record TokenTenant(Guid? Id, string? Name);
-
-    // 在令牌所属租户的上下文与工作单元里调用：空闲时限按那个租户的策略
-    private async Task<bool> IsSessionActiveAsync(string sessionClaim, Guid userId, CancellationToken cancellationToken) =>
-        Guid.TryParse(sessionClaim, out var sessionId) &&
-        await userSessionRepository.GetByIdAsync(sessionId, cancellationToken) is { } session &&
-        session.UserId == userId &&
-        !session.IsExpired(clock.Now, (await loginSecurityPolicy.GetAsync(cancellationToken)).SessionIdleTimeout);
 
     private IEnumerable<string> GetDestinations(Claim claim)
     {

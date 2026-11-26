@@ -58,7 +58,7 @@ Identity 自身 API 的标识是 OAuth:Resource，同名登记为 scope，本服
 开放应用仅使用 implicit consent，不提供同意类型输入和同意页。按调用场景登记权限：
 
 <!--#if (OpenIddictServer || ResourceBrowserSession)-->
-- 为带浏览器会话的资源服务登记依赖方：web/confidential、开启会话绑定、authorization code、refresh token、退出端点（ept:end_session）、PKCE；只授予 openid/profile/email/roles/offline_access 与自己的 API scope，登记本服务对外源下完整的 /api/v1/auth/signin、/api/v1/auth/signout 回调，不申请下游 scope。第三方 public client 仍可单独登记。
+- 为带浏览器会话的资源服务登记依赖方：web/confidential、开启会话绑定、authorization code、refresh token、退出端点（ept:end_session）、PKCE；只授予 openid/profile/email/roles/offline_access 与自己的 API scope，登记本服务对外源下完整的 /api/v1/auth/signin、/api/v1/auth/signout 回调，不申请下游 scope。第三方 public client 仍可单独登记。会话绑定客户端只在用户请求中刷新，后台离线刷新使用未绑定的客户端。
 - 要出现在系统切换中，浏览器应用还须登记绝对 HTTPS 首页地址并勾选「显示在系统切换中」（开发环境允许 HTTP 回环地址）。两项分别存入 OpenIddict `Properties` 的 `home_uri`、`show_in_switcher`，名称沿用 `DisplayNames` 的当前语言值。首页地址仅补空的建议回调，登记后的回调仍显式保存。Identity 的 `GET /api/v1/systems` 对本人会话与持有 Identity 服务级 scope 的机器令牌开放，Identity 自身按 `OAuth:Issuer` 排第一。
 <!--#endif-->
 - 调用方为 service/confidential，client ID 是来源资源的 OwnerClientId（默认资源名，例如 orders-api），启用 Token Exchange grant、ept:token、aud:billing-api、scp:billing-api。subject 令牌必须面向 orders-api，但无需带 billing-api scope；目标权限取调用方应用的登记值。只接受单跳访问令牌，不支持 actor_token 和请求覆盖身份。

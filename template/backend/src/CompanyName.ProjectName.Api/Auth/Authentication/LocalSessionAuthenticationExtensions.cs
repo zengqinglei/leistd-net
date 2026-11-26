@@ -5,8 +5,8 @@ using Leistd.Security.OneTimeCodes.VerificationCodes;
 using CompanyName.ProjectName.Api.Auth.Sessions;
 #if (!IncludeMultiTenancy)
 using CompanyName.ProjectName.Api.Middlewares;
+using Microsoft.Extensions.Options;
 #endif
-using CompanyName.ProjectName.Api.Options;
 using Leistd.Security.AspNetCore;
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Application.Shared;
@@ -17,7 +17,6 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
 #if (OpenIddictServer)
 using OpenIddict.Validation.AspNetCore;
 #endif
@@ -31,12 +30,19 @@ internal static class LocalSessionAuthenticationExtensions
     {
         AddAccountOptions(builder.Services, builder.Configuration);
 
-        // 会话空闲时限的部署基线取自会话 Cookie 有效期；租户可在设置里各自调整（Security.SessionIdleTimeoutDays）
         builder.Services.AddOptions<UserSessionOptions>()
-            .Configure<IOptions<SessionCookieOptions>>((options, sessionCookie) => options.IdleTimeout = sessionCookie.Value.Lifetime);
+            .BindConfiguration(UserSessionOptions.SectionName)
+            .Validate(options => options.SessionHours is >= 1 and <= 8760
+                && options.KeepSignedInDays is >= 1 and <= 365
+                && options.IdleDays >= 1 && options.IdleDays <= options.KeepSignedInDays
+                && options.SessionHours <= options.KeepSignedInDays * 24
+                && options.RememberDeviceMaxDays is >= 1 and <= 365,
+                "SessionCookie lifetimes are out of range.")
+            .ValidateOnStart();
         builder.Services.AddRequestClientInfo();
         builder.Services.TryAddTransient<SessionCookieIssuer>();
         builder.Services.TryAddTransient<PendingSignInCookie>();
+        builder.Services.TryAddTransient<RememberedDeviceCookie>();
 
         builder.Services.AddAuthentication(options =>
         {
@@ -100,41 +106,18 @@ internal static class LocalSessionAuthenticationExtensions
                     return;
                 }
 
-                // 以下两步都只在会话确认有效之后发生，互不依赖：
-                // 受限与否只在这里写入本请求的会话状态，不写进 Cookie：策略或本人的两步验证状态一变，
-                // 下一个请求就按新的判定，不必重新登录或换发 Cookie
+                // 受限状态只写入本请求，账号或租户策略变更后无需换发票据。
                 services.GetRequiredService<ICurrentSessionState>().Set(sessionId, result.TwoFactorSetupRequired);
-
-                // 租户调整了会话空闲时限：把票据有效期收敛到新时长再续发（官方滑动续期按签发与到期之差续期）。
-                // 只在校验器这次实际查过会话时比对，用的是它按主体租户读到的值；缓存命中期间不收敛。
-                // 续发只改票据时序，sid 与认证时间不变，上面写入的会话状态照样对应这个 Cookie
-                if (result.IdleTimeout is { } idleTimeout
-                    && context.Properties.ExpiresUtc - context.Properties.IssuedUtc != idleTimeout)
-                {
-                    SetLifetime(context.Properties, idleTimeout, context.Options.TimeProvider ?? TimeProvider.System);
-                    context.ShouldRenew = true;
-                }
             };
 
-            // 会话 Cookie 的有效期取主体所在租户的空闲时限（模拟登录进出时环境租户与主体不同，按主体读）；
-            // 租户不可用时沿用部署基线 ExpireTimeSpan，交给租户会话自恢复处理
             options.Events.OnSigningIn = async context =>
             {
-                var reader = context.HttpContext.RequestServices.GetRequiredService<ISessionIdleTimeoutReader>();
+                var reader = context.HttpContext.RequestServices.GetRequiredService<ISessionExpiryReader>();
                 if (context.Principal is not null
-                    && await reader.ReadAsync(context.Principal, context.HttpContext.RequestAborted) is { } idleTimeout)
-                {
-                    SetLifetime(context.Properties, idleTimeout, context.Options.TimeProvider ?? TimeProvider.System);
-                }
+                    && await reader.ReadAsync(context.Principal, context.HttpContext.RequestAborted) is { } expiresAt)
+                    context.Properties.ExpiresUtc = new DateTimeOffset(DateTime.SpecifyKind(expiresAt, DateTimeKind.Utc));
+                context.Properties.AllowRefresh = false;
             };
-
-            // 只改票据时序，不动 auth_time 等认证时间声明
-            static void SetLifetime(AuthenticationProperties properties, TimeSpan idleTimeout, TimeProvider time)
-            {
-                var now = time.GetUtcNow();
-                properties.IssuedUtc = now;
-                properties.ExpiresUtc = now + idleTimeout;
-            }
 
             // API 拒绝必须返回 401/403，不能被 Cookie 重定向和 SPA 回退转换为 HTML 200。
             options.Events.OnRedirectToLogin = context => WriteStatusAsync(context, StatusCodes.Status401Unauthorized);
@@ -145,6 +128,17 @@ internal static class LocalSessionAuthenticationExtensions
                 context.Response.StatusCode = statusCode;
                 return Task.CompletedTask;
             }
+        })
+        .AddCookie(IdentityConstants.TwoFactorRememberMeScheme, options =>
+        {
+            var development = builder.Environment.IsDevelopment();
+            options.Cookie.Name = development ? "CompanyName.ProjectName.RememberDevice" : "__Host-Http-CompanyName.ProjectName.RememberDevice";
+            options.Cookie.Path = "/";
+            options.Cookie.HttpOnly = true;
+            options.Cookie.SecurePolicy = development ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+            options.Cookie.SameSite = SameSiteMode.Lax;
+            options.Cookie.IsEssential = true;
+            options.SlidingExpiration = false;
         })
         // 待完成登录（口令或外部登录已过、尚待第二步）的临时 Cookie：官方两步登录方案，见 PendingSignInCookie。
         // 不进默认方案与 Smart 选择器，它不是正式身份；名字与属性沿用会话 Cookie 的约定。

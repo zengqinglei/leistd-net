@@ -165,6 +165,7 @@ internal static class RemoteTokenAuthenticationExtensions
                 // tenant_id 等资源声明在签发方的访问令牌中，不能假定 ID token 也带这些字段。
                 context.Principal = await ResourceSessionRefresher.ValidateAccessTokenAsync(context.HttpContext,
                     context.TokenEndpointResponse!.AccessToken, context.HttpContext.RequestAborted);
+                context.Properties!.IsPersistent = false;
             };
             // 登录挑战用官方默认的 302（参数本可公开）；只有退出以自动提交的表单 POST 发往 Identity，
             // id_token_hint 不进地址栏、历史记录与 Referer

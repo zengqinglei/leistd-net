@@ -28,6 +28,7 @@ import {
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmCheckbox } from '@spartan-ng/helm/checkbox';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
 import {
@@ -89,6 +90,7 @@ import { AuthShell } from '../auth-shell/auth-shell';
     NgIcon,
     ...HlmAlertImports,
     HlmButton,
+    HlmCheckbox,
     HlmInput,
     HlmSkeleton,
     HlmSpinner,
@@ -127,6 +129,13 @@ export class Login implements OnInit {
   /** 租户关闭自助注册时不给注册入口。 */
   private readonly securityConfig = inject(SecurityConfigService);
   protected readonly registrationOpen = this.securityConfig.registrationOpen;
+  protected readonly allowKeepSignedIn = computed(
+    () => this.securityConfig.config()?.allowKeepSignedIn === true,
+  );
+  protected readonly keepSignedIn = signal(false);
+  protected readonly wantsKeepSignedIn = computed(
+    () => this.allowKeepSignedIn() && this.keepSignedIn(),
+  );
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private readonly returnUrls = inject(ReturnUrlService);
@@ -265,7 +274,11 @@ export class Login implements OnInit {
       try {
         const { usernameOrEmail, password } = this.model();
 
-        const loginInput = { usernameOrEmail, password };
+        const loginInput = {
+          usernameOrEmail,
+          password,
+          ...(this.wantsKeepSignedIn() ? { keepSignedIn: true } : {}),
+        };
         const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
 
         const result = await lastValueFrom(this.authService.login(loginInput));
@@ -436,7 +449,13 @@ export class Login implements OnInit {
     ceremony: string,
     credential: WebAuthnJson,
   ): Promise<boolean> {
-    await lastValueFrom(this.accountService.completePasskeySignIn({ ceremony, credential }));
+    await lastValueFrom(
+      this.accountService.completePasskeySignIn({
+        ceremony,
+        credential,
+        ...(this.wantsKeepSignedIn() ? { keepSignedIn: true } : {}),
+      }),
+    );
     return this.onSignedIn();
   }
 
@@ -587,6 +606,7 @@ const ENGLISH: Record<string, string> = {
   //#if (ExternalLogin)
   'account.login.or': 'Or continue with',
   //#endif
+  'account.login.keepSignedIn': 'Keep me signed in',
   'account.login.testAccount': 'Development test account',
   'account.login.tenantUnavailable':
     'The tenant this address points to is unavailable. Contact your administrator.',

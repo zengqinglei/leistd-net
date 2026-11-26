@@ -11,13 +11,14 @@ public interface IAuthAppService : IAppService
     /// <summary>验证本地账号：直接得到会话主体，或（有能用的第二步方式时）得到待完成的登录与可用方式。</summary>
     Task<SessionLoginResult> AuthenticateSessionAsync(
         LoginInputDto input,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        RememberedDevice? rememberedDevice = null);
 
     /// <summary>登录第二步：校验其中一种方式的凭证（通行密钥、身份验证器、邮箱或恢复码）并创建会话主体。</summary>
     /// <param name="challengeToken">临时 Cookie 里的挑战引用；没有时按已过期拒绝（<c>Auth:TwoFactorChallengeExpired</c>），下同。</param>
     /// <param name="input">这一步出示的凭证。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    Task<ClaimsPrincipal> CompleteTwoFactorLoginAsync(
+    Task<(ClaimsPrincipal Principal, RememberedDevice? Device, int RememberDeviceDays)> CompleteTwoFactorLoginAsync(
         string? challengeToken,
         TwoFactorLoginInputDto input,
         CancellationToken cancellationToken = default);

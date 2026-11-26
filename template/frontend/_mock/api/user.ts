@@ -314,6 +314,7 @@ export function resetTwoFactor(id: string, value: MockReauthenticationProof = {}
   user.recoveryCodes = [];
   user.emailTwoFactorEnabled = false;
   user.preferredTwoFactorMethod = undefined;
+  rotateSecurityVersion(user);
 }
 
 /**

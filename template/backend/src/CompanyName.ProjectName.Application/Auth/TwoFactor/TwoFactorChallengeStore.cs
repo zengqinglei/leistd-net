@@ -41,6 +41,7 @@ internal sealed class TwoFactorChallengeStore(
     /// <param name="tenantId">第一步所在的租户。</param>
     /// <param name="securityStamp">用户此刻的安全版本；第二步时不一致即作废。</param>
     /// <param name="firstStep">第一步是怎么通过的。</param>
+    /// <param name="keepSignedIn">第一步选择的会话档位。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>挑战引用与挑战记录。</returns>
     public async Task<(string Token, TwoFactorChallenge Challenge)> CreateAsync(
@@ -48,6 +49,7 @@ internal sealed class TwoFactorChallengeStore(
         Guid? tenantId,
         string securityStamp,
         SignInFirstStep firstStep,
+        bool keepSignedIn,
         CancellationToken cancellationToken)
     {
         var token = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
@@ -56,7 +58,7 @@ internal sealed class TwoFactorChallengeStore(
             userId, tenantId, securityStamp, now + await LifetimeAsync(cancellationToken), 0,
             FirstFactorViaEmail: firstStep.ViaEmail,
             ExternalConnectionId: firstStep.ExternalConnectionId,
-            IssuedAt: now);
+            IssuedAt: now, KeepSignedIn: keepSignedIn);
         await SaveAsync(token, challenge, cancellationToken);
         return (token, challenge);
     }
@@ -147,6 +149,7 @@ internal sealed class TwoFactorChallengeStore(
 /// <param name="ExternalConnectionId">第一步经外部登录时用到的连接；口令登录为 null。</param>
 /// <param name="PasskeyState">最近一次给出的通行密钥断言选项的仪式状态；没给过为 null。</param>
 /// <param name="IssuedAt">签发时刻（UTC，完整精度）；授权端点据此判断它是否晚于重新认证证明。</param>
+/// <param name="KeepSignedIn">第一步选择的会话档位。</param>
 internal sealed record TwoFactorChallenge(
     Guid UserId,
     Guid? TenantId,
@@ -157,5 +160,6 @@ internal sealed record TwoFactorChallenge(
     bool FirstFactorViaEmail = false,
     Guid? ExternalConnectionId = null,
     string? PasskeyState = null,
-    DateTime IssuedAt = default);
+    DateTime IssuedAt = default,
+    bool KeepSignedIn = false);
 #endif

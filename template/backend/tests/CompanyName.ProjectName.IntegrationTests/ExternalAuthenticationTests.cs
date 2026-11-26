@@ -30,6 +30,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.Net.Http.Headers;
 using CompanyName.ProjectName.Application.Shared;
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;
@@ -162,6 +163,27 @@ public sealed class ExternalAuthenticationTests
         Assert.Equal("privateuser", me.GetProperty("username").GetString());
         // 邮箱接口不可用：拿不到这个不公开的地址，账号只有系统占位邮箱。
         Assert.NotEqual("privateuser@elsewhere.test", me.TryGetProperty("email", out var email) ? email.GetString() : null);
+    }
+
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(true, 30)]
+    public async Task External_sign_in_keeps_the_selected_lifetime_through_the_challenge(bool keepSignedIn, int days)
+    {
+        using var factory = new ProjectWebApplicationFactory();
+        using var backchannel = new ExternalOAuthBackchannel();
+        using var host = backchannel.CreateHost(factory);
+        using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+        var flow = await ExternalOAuthBackchannel.StartAsync(client, keepSignedIn: keepSignedIn);
+        client.DefaultRequestHeaders.Add("Cookie", flow.Cookie);
+
+        using var complete = await client.PostAsJsonAsync("/api/v1/external-auth/github/complete", new { });
+
+        Assert.Equal(HttpStatusCode.OK, complete.StatusCode);
+        var cookie = SetCookieHeaderValue.ParseList(complete.Headers.GetValues("Set-Cookie").ToList())
+            .Single(header => header.Name.Value!.EndsWith(".Auth", StringComparison.Ordinal));
+        var expected = DateTimeOffset.UtcNow.AddDays(days);
+        Assert.InRange(cookie.Expires!.Value, expected.AddMinutes(-1), expected);
     }
 
     [Fact]

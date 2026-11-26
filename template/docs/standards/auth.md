@@ -105,9 +105,10 @@
 
 会话 Cookie 在部署环境名为 `__Host-Http-CompanyName.ProjectName.Auth`，Secure、HttpOnly、`Path=/`、不带 Domain；浏览器只接受经 HTTPS 写入的这个名字，因此对外源必须是 HTTPS，站点不能挂在子路径下。Development 环境为了支持 HTTP 同源调试，名字不带前缀，Secure 跟随请求协议。
 
-`SessionCookie:ExpireDays` 是会话时长（天，1–365，启动期校验），会话 Cookie 的滑动过期取它。
 <!--#if (LocalIdentity)-->
-本地身份下它只是部署基线：会话空闲时限是租户策略（`Security.SessionIdleTimeoutDays`，登录与会话分组），服务端会话（登录设备、令牌续期、过期清理）与会话 Cookie 都按会话所属租户的值。签发时在 `OnSigningIn` 按待签发主体的租户写入有效期（进出模拟登录时环境租户与主体不同）；策略变更后，校验器实际查会话的那次请求把票据跨度收敛到新时长并续发，因此最迟一个校验缓存周期（1 分钟）跟上。调短后，空闲已超过新时长的会话下一次实际校验即失效。租户不存在或已停用时不读它的策略，交给租户会话自恢复。
+两档都签发持久 Cookie。默认档从原认证起固定 24 小时。选择保持登录后，默认空闲 7 天、绝对上限 30 天。Cookie 取绝对截止，空闲由服务端会话按当前租户策略判定。换发模拟会话继承原认证时刻。两步验证使用身份验证器或通行密钥时可记住此设备，默认 30 天。记忆按用户、租户、安全戳和当前时长校验，只用于常规登录第二步。
+<!--#else-->
+资源服务的本地票据默认 30 天，浏览器 Cookie 在关闭浏览器时结束。重新访问受保护页面会经授权端点恢复仍有效的 Identity 会话。
 <!--#endif-->
 
 页签回到前台只重查 `GET /auth/me`（用户与偏好）。401 清会话并登录。权限与设置在刷新或重新登录时更新，权限拦截在服务端。
@@ -257,7 +258,7 @@ Google 使用微软官方 AddGoogle（UserInfo v3）；GitHub 使用 aspnet-cont
 
 后端是 OIDC 机密客户端，使用 code、PKCE、SaveTokens 与服务端票据。配置 `Authentication:Issuer`、`Audience`、`ClientId`、`ClientSecret`，缺键启动失败；`Scope` 可省略，默认与 Audience 同名。密钥只放后端机密配置。
 
-本服务须在 Identity 登记为开启会话绑定的浏览器依赖方，登记项见 [服务间调用](service-invocation.md#identity-与资源服务对接)；会话绑定使 Identity 退出后本服务的会话在访问令牌到期时收敛，而不是靠刷新令牌继续存活。
+本服务须在 Identity 登记为开启会话绑定的浏览器依赖方，绑定的刷新只在用户请求中发生，记录为 Identity 活动。刷新令牌以会话绝对到期为上限，续期时校验空闲与撤销。登记项见[服务间调用](service-invocation.md#identity-与资源服务对接)。
 
 登录入口 `GET /api/v1/auth/login?returnUrl=...` 仅接受站内路径。后台 401 等页签可见再登录，保留深链。挑战 302，授权码经查询串回到 `/api/v1/auth/signin`。两端登录时限及 nonce 均为 1 小时。回调失败到 `/auth/sign-in-failed`，由用户重试。`POST /api/v1/auth/logout` 先删本服务端票据（旧 Cookie 立即失效），再以表单携带 `id_token_hint` 发往 Identity，hint 不进地址栏；会话标识匹配时免确认退出，否则先确认。退出回调按官方默认回应用根 `/`，根路径须可匿名显示（模板为公开首页）。项目若把根设为受保护入口，应由守卫直接发起登录、不先渲染 `/auth/login`，或自行设置 `SignedOutRedirectUri`。`/auth/login` 仅作手动入口与 Mock 退出落点。退出表单依赖一段内联脚本自动提交（禁用脚本时显示提交按钮）；宿主若加内容安全策略，要放行这段脚本或接受手动提交。
 

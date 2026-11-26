@@ -13,7 +13,9 @@ public interface IExternalAuthAppService : IAppService
     Task<SessionLoginResult> AuthenticateExternalUserAsync(
         string provider,
         ExternalUserInfo externalUserInfo,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool keepSignedIn = false,
+        RememberedDevice? rememberedDevice = null);
 
     /// <summary>本人的外部账号绑定情况。</summary>
     Task<ExternalLoginsOutputDto> GetCurrentUserExternalLoginsAsync(IEnumerable<string> availableProviders, CancellationToken cancellationToken = default);

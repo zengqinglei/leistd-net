@@ -1,5 +1,6 @@
 #if (LocalIdentity)
 using System.Security.Claims;
+using System.Text.Json;
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Application.Auth.Policies;
 using CompanyName.ProjectName.Domain.Users.Entities;
@@ -38,6 +39,8 @@ internal sealed class UserSessionValidator(
     IOptions<ClaimTypeOptions> claimTypes,
     IClock clock) : IUserSessionValidator
 {
+    private sealed record CachedSession(Guid UserId, DateTime AuthenticatedAt, bool KeepSignedIn, DateTime LastSeenTime);
+
     private const string CacheKeyPrefix = "auth:session:";
 
     /// <inheritdoc />
@@ -77,9 +80,10 @@ internal sealed class UserSessionValidator(
         restrictable = principal.FindFirst(CustomClaimTypes.ImpersonatorUserId) is null;
 #endif
         var cacheKey = CacheKey(sessionId);
-        var cached = await distributedCache.GetStringAsync(cacheKey, cancellationToken) is not null;
+        var cachedValue = await distributedCache.GetStringAsync(cacheKey, cancellationToken);
+        var cached = cachedValue is null or "1" ? null : JsonSerializer.Deserialize<CachedSession>(cachedValue);
+        CachedSession? updated = null;
         bool restricted;
-        TimeSpan? idleTimeout = null;
 
         // 认证发生在多租户中间件之前，环境租户还没设：按主体的租户进到它的库里查
         using (currentTenant.Change(tenantId, tenantName))
@@ -90,20 +94,22 @@ internal sealed class UserSessionValidator(
             // 不会让同一请求里随后按用户读的设置落空，所以直接用请求作用域里的策略读取，不必另开作用域
             var policy = await loginSecurityPolicy.GetAsync(cancellationToken);
 
-            if (cached)
+            var now = clock.Now;
+            if (cached is not null && now - cached.LastSeenTime < UserSession.TouchInterval)
             {
-                // 缓存只说明会话有效；受限与否每次重新判定，开关与两步验证状态都不跟着缓存。
-                // 空闲时限不在这里收敛：缓存命中不查会话，过期仍按上次实际校验的结论
+                if (cached.UserId != userId || now >= policy.Sessions.Expiry(cached.AuthenticatedAt, cached.KeepSignedIn, cached.LastSeenTime))
+                    return SessionValidationResult.Invalid;
+
+                // 命中缓存也按当前策略判定会话时限与受限状态。
                 restricted = restrictable &&
                     policy.RequireTwoFactor &&
                     await userRepository.GetByIdAsync(userId, cancellationToken) is { HasIndependentFactor: false };
             }
             else
             {
-                var now = clock.Now;
                 var session = await userSessionRepository.GetByIdAsync(sessionId, cancellationToken);
                 // 空闲时限按主体所在租户的策略：调短后，空闲已超过新时长的会话在下一次实际校验时失效
-                if (session is null || session.UserId != userId || session.IsExpired(now, policy.SessionIdleTimeout))
+                if (session is null || session.UserId != userId || session.IsExpired(now, policy.Sessions))
                     return SessionValidationResult.Invalid;
 
                 // 经应用停用、删除账号时会话已被撤销；这里兜住绕过应用直接改库的情形，最迟在缓存到期后生效
@@ -112,28 +118,29 @@ internal sealed class UserSessionValidator(
                     return SessionValidationResult.Invalid;
 
                 restricted = restrictable && policy.RequireTwoFactor && !user.HasIndependentFactor;
-                idleTimeout = policy.SessionIdleTimeout;
 
                 if (session.Touch(now, clientInfo.IpAddress))
                 {
                     await userSessionRepository.UpdateAsync(session, cancellationToken);
                 }
+
+                updated = new CachedSession(session.UserId, session.AuthenticatedAt, session.KeepSignedIn, session.LastSeenTime);
             }
 
             await unitOfWork.CompleteAsync(cancellationToken);
         }
 
-        if (!cached)
+        if (updated is not null)
         {
-            // 缓存时长即最近活跃的更新间隔：缓存命中期间不查会话、不写库。只缓存"有效"，不缓存受限与否
+            // 缓存时长即最近活跃的更新间隔，命中期间不查会话、不写库。
             await distributedCache.SetStringAsync(
                 cacheKey,
-                "1",
+                JsonSerializer.Serialize(updated),
                 new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = UserSession.TouchInterval },
                 cancellationToken);
         }
 
-        return SessionValidationResult.Valid(restricted, idleTimeout);
+        return SessionValidationResult.Valid(restricted);
     }
 
     // 校验结果的缓存键；会话撤销时按同一个键作废

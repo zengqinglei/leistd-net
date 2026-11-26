@@ -5,6 +5,7 @@ using CompanyName.ProjectName.Domain.Auth.Errors;
 #endif
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
 using CompanyName.ProjectName.Domain.Auth.Entities;
+using CompanyName.ProjectName.Domain.Auth.Policies;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth.Policies;
@@ -75,12 +76,16 @@ internal sealed class SessionIssuer(
     /// <param name="user">第一步已认出的用户。</param>
     /// <param name="firstStep">第一步是怎么通过的，记进第二步挑战。</param>
     /// <param name="roleNames">同 <see cref="SignInAsync"/>。</param>
+    /// <param name="keepSignedIn">第一步选择的会话档位。</param>
+    /// <param name="rememberedDevice">浏览器提供的第二步记忆。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     public async Task<SessionLoginResult> StartAsync(
         User user,
         SignInFirstStep firstStep,
         List<string>? roleNames = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool keepSignedIn = false,
+        RememberedDevice? rememberedDevice = null)
     {
         EnsureAllowed(user, clock.Now);
 
@@ -107,17 +112,29 @@ internal sealed class SessionIssuer(
 #endif
         }
 
-        if (methods.DefaultMethod is { } defaultMethod)
+        if (methods.DefaultMethod is { } defaultMethod &&
+            !await CanRememberedDeviceSignInAsync(user, firstStep, rememberedDevice, cancellationToken))
         {
             var (token, challenge) = await twoFactorChallengeStore.CreateAsync(
-                user.Id, user.TenantId, user.SecurityStamp, firstStep, cancellationToken);
+                user.Id, user.TenantId, user.SecurityStamp, firstStep, keepSignedIn, cancellationToken);
             return SessionLoginResult.TwoFactorRequired(new TwoFactorPrompt(
                 token, methods.Methods, defaultMethod, methods.MaskedEmail,
                 challenge.TenantId, challenge.IssuedAt, challenge.ExpiresAt));
         }
 
         return SessionLoginResult.SignedIn(
-            await SignInAsync(user, roleNames, cancellationToken: cancellationToken));
+            await SignInAsync(user, roleNames, cancellationToken: cancellationToken, keepSignedIn: keepSignedIn));
+    }
+
+    private async Task<bool> CanRememberedDeviceSignInAsync(
+        User user, SignInFirstStep firstStep, RememberedDevice? device, CancellationToken cancellationToken)
+    {
+        if (firstStep.ViaEmail || device is null || device.UserId != user.Id ||
+            device.TenantId != user.TenantId || !user.HasSecurityStamp(device.SecurityStamp))
+            return false;
+
+        var days = (await loginSecurityPolicy.GetAsync(cancellationToken)).RememberDeviceDays;
+        return days > 0 && clock.Now < device.IssuedAt.AddDays(days);
     }
 
     /// <param name="user">登录用户。</param>
@@ -137,6 +154,8 @@ internal sealed class SessionIssuer(
     /// 读不出时传 <see cref="DateTimeOffset.UnixEpoch"/>——宁可让依赖它的判据（近期认证、OIDC <c>max_age</c>）要求重新认证，
     /// 也不能把一次会话切换当成刚认证过。
     /// </param>
+    /// <param name="keepSignedIn">是否选择较长的会话档位。</param>
+    /// <param name="sessionAuthenticatedAt">换发会话时，从原会话行读取的认证时刻。</param>
     /// <remarks>
     /// 模拟登录复用本方法，因此 <c>RecordLoginSuccess</c> 也会记在被模拟的账号上：
     /// 换来的是访问校验（禁用、锁定）只有一条实现，不会出现"正常登录拒绝、模拟登录放行"的偏差。
@@ -149,7 +168,9 @@ internal sealed class SessionIssuer(
         List<string>? roleNames = null,
         IEnumerable<Claim>? additionalClaims = null,
         CancellationToken cancellationToken = default,
-        DateTimeOffset? authenticatedAt = null)
+        DateTimeOffset? authenticatedAt = null,
+        bool keepSignedIn = false,
+        DateTime? sessionAuthenticatedAt = null)
     {
         var now = clock.Now;
         EnsureAllowed(user, now);
@@ -161,10 +182,12 @@ internal sealed class SessionIssuer(
         var extraClaims = additionalClaims?.ToList() ?? [];
         var impersonatorName = ReadImpersonatorName(extraClaims);
         // 空闲时限按会话所在的租户（模拟登录时是目标租户）
-        var idleTimeout = (await loginSecurityPolicy.GetAsync(cancellationToken)).SessionIdleTimeout;
-        var newDevice = await IsNewDeviceAsync(user.Id, previousIp, impersonatorName, idleTimeout, cancellationToken);
+        var sessionPolicy = (await loginSecurityPolicy.GetAsync(cancellationToken)).Sessions;
+        var newDevice = await IsNewDeviceAsync(user.Id, previousIp, impersonatorName, sessionPolicy, cancellationToken);
         var session = await userSessionDomainService.StartAsync(
-            user.Id, clientInfo.IpAddress, clientInfo.UserAgent, impersonatorName, idleTimeout, cancellationToken);
+            user.Id, clientInfo.IpAddress, clientInfo.UserAgent, impersonatorName, sessionPolicy,
+            keepSignedIn && (sessionAuthenticatedAt is not null || sessionPolicy.AllowKeepSignedIn),
+            sessionAuthenticatedAt ?? now, cancellationToken);
         if (newDevice)
         {
             await securityAlerts.PublishAsync(
@@ -229,7 +252,7 @@ internal sealed class SessionIssuer(
         Guid userId,
         string? previousIp,
         string? impersonatorName,
-        TimeSpan idleTimeout,
+        UserSessionPolicy sessionPolicy,
         CancellationToken cancellationToken)
     {
         if (impersonatorName is not null || previousIp is null || previousIp == clientInfo.IpAddress)
@@ -238,7 +261,7 @@ internal sealed class SessionIssuer(
         return !await asyncExecuter.AnyAsync(
             (await userSessionRepository.GetQueryableAsync(cancellationToken))
                 .Where(s => s.UserId == userId && s.UserAgent == clientInfo.UserAgent)
-                .Where(UserSession.ActiveAt(clock.Now, idleTimeout)),
+                .Where(UserSession.ActiveAt(clock.Now, sessionPolicy)),
             cancellationToken);
     }
 

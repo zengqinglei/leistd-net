@@ -141,7 +141,6 @@ internal sealed class ResourceSessionRefresher(
                 }
             }
             // 并发请求可能在等待锁时已经完成刷新；复制最新票据，不能再用旧 refresh_token。
-            context.ShouldRenew = context.Properties.GetTokenValue("access_token") != ticket.Properties.GetTokenValue("access_token");
             context.ReplacePrincipal(ticket.Principal);
             context.Properties.StoreTokens(ticket.Properties.GetTokens());
         }

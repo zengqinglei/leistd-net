@@ -201,7 +201,7 @@ function sessionLogin(
           'This way of signing in needs a passkey, your authenticator app or a recovery code. Sign in with your password instead, or unlink and link the external account again in settings.',
       });
     }
-    if (options.defaultMethod) {
+    if (options.defaultMethod && (firstFactorViaEmail || !isRememberedDevice(user, tenantKey))) {
       return beginTwoFactorChallenge(user, tenantKey, firstFactorViaEmail);
     }
     endPendingSignIn();
@@ -489,6 +489,31 @@ interface TwoFactorChallenge {
  * 与后端一样，新的待完成登录先结束旧的，完成、放弃、退出与单步登录时一并清掉。
  */
 const pendingSignInStorage = new StoredMap('mock_pending_sign_in');
+const rememberedDeviceStorage = new StoredMap('mock_remembered_device');
+
+function rememberDeviceDays(tenantKey: string): number {
+  return Number(TENANT_SETTING_VALUES.get(`${tenantKey}:Security.RememberDeviceDays`) ?? 30);
+}
+
+function isRememberedDevice(user: MockUser, tenantKey: string): boolean {
+  const value = rememberedDeviceStorage.get('device');
+  if (!value) return false;
+  const device = JSON.parse(value) as {
+    userId: string;
+    tenantKey: string;
+    securityVersion: number;
+    issuedAt: number;
+  };
+  const days = rememberDeviceDays(tenantKey);
+  return (
+    days > 0 &&
+    device.userId === user.id &&
+    device.tenantKey === tenantKey &&
+    device.securityVersion === (user.securityVersion ?? 0) &&
+    Date.now() < device.issuedAt + days * 86_400_000
+  );
+}
+
 const PENDING_TOKEN = 'token';
 const PENDING_CHALLENGE = 'challenge';
 //#if (Email)
@@ -588,6 +613,7 @@ function getTwoFactorLogin(req: MockRequest): TwoFactorLoginOutputDto {
     throw twoFactorChallengeExpired();
   }
   return {
+    rememberDeviceDays: rememberDeviceDays(challenge.tenantKey),
     twoFactorMethods: options.methods,
     defaultTwoFactorMethod: options.defaultMethod,
     maskedEmail: options.maskedEmail,
@@ -864,6 +890,22 @@ function completeTwoFactorLogin(req: MockRequest): 'ok' {
     user.passwordSetByEmailRecovery = false;
   }
   //#endif
+  if (
+    body.rememberDevice &&
+    (passkey || body.code?.trim()) &&
+    rememberDeviceDays(challenge.tenantKey) > 0
+  ) {
+    rememberedDeviceStorage.set(
+      'device',
+      JSON.stringify({
+        userId: user.id,
+        tenantKey: challenge.tenantKey,
+        securityVersion: user.securityVersion ?? 0,
+        issuedAt: Date.now(),
+      }),
+    );
+  }
+
   // 与后端一致：先删临时 Cookie 再下发会话
   endPendingSignIn();
   setMockSessionUserId(user.id);
@@ -1155,6 +1197,7 @@ function enableTwoFactor(req: MockRequest): TwoFactorRecoveryCodesOutputDto {
   const replacing = user.twoFactorEnabled === true;
   const firstFactor = !hasIndependentFactor(user);
   user.twoFactorEnabled = true;
+  rotateSecurityVersion(user);
   return { recoveryCodes: replacing || firstFactor ? issueRecoveryCodes(user) : [] };
 }
 
@@ -1191,6 +1234,7 @@ function disableTwoFactor(req: MockRequest): 'ok' {
   }
   ensureMockTwoFactorCode(body.code);
   user.twoFactorEnabled = false;
+  rotateSecurityVersion(user);
   if (user.preferredTwoFactorMethod === 'authenticator') {
     user.preferredTwoFactorMethod = undefined;
   }
@@ -1632,6 +1676,8 @@ function ensureRegistrationOpen(req: MockRequest): void {
 
 function getSecurityConfig(req: MockRequest): SecurityConfigOutputDto {
   return {
+    allowKeepSignedIn:
+      TENANT_SETTING_VALUES.get(`${getRequestScope(req)}:Security.AllowKeepSignedIn`) !== 'false',
     registrationEnabled: isRegistrationOpen(req),
     passkeysAvailable: MOCK_PASSKEYS_AVAILABLE,
     //#if (Email)
@@ -1957,12 +2003,13 @@ function externalLoginCallback(req: MockRequest): SessionLoginOutputDto {
   const user =
     (req.params.provider === 'google' ? USERS.find((u) => u.id === 'user_octo') : undefined) ??
     USERS[0];
-  if (twoFactorOptions(user, getRequestScope(req)).defaultMethod) {
-    return beginTwoFactorChallenge(user, getRequestScope(req));
+  const tenantKey = getRequestScope(req);
+  if (twoFactorOptions(user, tenantKey).defaultMethod && !isRememberedDevice(user, tenantKey)) {
+    return beginTwoFactorChallenge(user, tenantKey);
   }
   endPendingSignIn();
   setMockSessionUserId(user.id);
-  setMockSessionTenantKey(getRequestScope(req));
+  setMockSessionTenantKey(tenantKey);
   return {};
 }
 

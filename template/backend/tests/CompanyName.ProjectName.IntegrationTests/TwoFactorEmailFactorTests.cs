@@ -264,7 +264,8 @@ public sealed class TwoFactorEmailFactorTests(ProjectWebApplicationFactory facto
                 Assert.Equal(HttpStatusCode.OK, reuse.StatusCode);
             }
 
-            using var signedIn = await SecondStepAsync(host, again.Token, new { EmailCode = code });
+            using var signedIn = await SecondStepAsync(host, again.Token, new { EmailCode = code, RememberDevice = true });
+            Assert.DoesNotContain("RememberDevice", string.Join("; ", signedIn.DefaultRequestHeaders.GetValues("Cookie")), StringComparison.Ordinal);
             Assert.Equal(HttpStatusCode.OK, (await signedIn.GetAsync("/api/v1/auth/me")).StatusCode);
         }
         finally

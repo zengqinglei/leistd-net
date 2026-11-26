@@ -93,8 +93,8 @@ internal sealed class ExpiredUserSessionCleanupJob(
         using (currentTenant.Change(tenantId))
         using (var unitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
-            var idleTimeout = (await loginSecurityPolicy.GetAsync(cancellationToken)).SessionIdleTimeout;
-            await userSessionRepository.DeleteManyAsync(UserSession.ExpiredAt(now, idleTimeout), cancellationToken);
+            var sessionPolicy = (await loginSecurityPolicy.GetAsync(cancellationToken)).Sessions;
+            await userSessionRepository.DeleteManyAsync(UserSession.ExpiredAt(now, sessionPolicy), cancellationToken);
             await unitOfWork.CompleteAsync(cancellationToken);
         }
     }

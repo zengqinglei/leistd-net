@@ -22,6 +22,11 @@ public interface IUserSessionAppService : IAppService
     /// <remarks>认证时间声明只到秒，判断"某一时刻之后是否发生过新的登录"要用它。</remarks>
     Task<DateTime?> GetCurrentSessionStartTimeAsync(CancellationToken cancellationToken = default);
 
+#if (Impersonation)
+    /// <summary>读取模拟登录换发需要沿用的档位和原认证时刻。</summary>
+    Task<(bool KeepSignedIn, DateTime AuthenticatedAt)> GetCurrentSessionForReissueAsync(CancellationToken cancellationToken = default);
+#endif
+
     /// <summary>结束当前会话（退出登录时调用；未登录或会话已不存在时什么也不做）。</summary>
     Task EndCurrentSessionAsync(CancellationToken cancellationToken = default);
 }

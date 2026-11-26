@@ -19,6 +19,7 @@ using Microsoft.Extensions.Options;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 using CompanyName.ProjectName.Application.OpenApplications;
 using OpenIddict.Abstractions;
+using OpenIddict.EntityFrameworkCore.Models;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -154,7 +155,7 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
         using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         var client = await CreateClientAsync(admin.Client, sessionBound: true);
         using var mine = await factory.LoginAsync(username, Password);
-        using var other = await factory.LoginAsync(username, Password);
+        using var other = await factory.LoginAsync(username, Password, keepSignedIn: true);
         var sessionId = await CurrentSessionIdAsync(other.Client);
 
         var tokens = await AuthorizeAsync(client, other.Cookie);
@@ -188,18 +189,50 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
     }
 
     [Fact]
-    public async Task Renewal_checks_do_not_extend_the_identity_session()
+    public async Task Bound_refresh_records_activity_but_keeps_the_original_expiry()
     {
         var username = await CreateUserAsync();
         using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         var client = await CreateClientAsync(admin.Client, sessionBound: true);
-        using var session = await factory.LoginAsync(username, Password);
+        using var session = await factory.LoginAsync(username, Password, keepSignedIn: true);
         var sessionId = await CurrentSessionIdAsync(session.Client);
         var tokens = await AuthorizeAsync(client, session.Cookie);
         var aged = await AgeSessionAsync(sessionId, TimeSpan.FromHours(1));
 
-        Assert.Equal(HttpStatusCode.OK, (await RefreshAsync(client, tokens.RefreshToken)).Status);
-        Assert.Equal(aged, await LastSeenTimeAsync(sessionId));
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+        var authenticatedAt = await db.UserSessions.Where(row => row.Id == sessionId)
+            .Select(row => row.AuthenticatedAt).SingleAsync();
+        var renewed = await RefreshAsync(client, tokens.RefreshToken);
+        Assert.Equal(HttpStatusCode.OK, renewed.Status);
+        Assert.True(await LastSeenTimeAsync(sessionId) > aged);
+
+        var tokenDb = scope.ServiceProvider.GetRequiredService<OpenIddictDbContext>();
+        var refreshExpirations = await tokenDb.Set<OpenIddictEntityFrameworkCoreToken>()
+            .Where(token => token.Type == TokenTypeIdentifiers.RefreshToken && token.Subject == Claim(tokens.IdentityToken, "sub"))
+            .Select(token => token.ExpirationDate).ToListAsync();
+        Assert.Equal(2, refreshExpirations.Count);
+        var expiry = new DateTimeOffset(authenticatedAt).AddDays(30).ToUnixTimeSeconds();
+        Assert.All(refreshExpirations, expiration =>
+            Assert.Equal(expiry, new DateTimeOffset(expiration!.Value).ToUnixTimeSeconds()));
+    }
+
+    [Fact]
+    public async Task Bound_authorization_code_exchange_does_not_advance_activity()
+    {
+        var username = await CreateUserAsync();
+        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var client = await CreateClientAsync(admin.Client, sessionBound: true);
+        using var session = await factory.LoginAsync(username, Password, keepSignedIn: true);
+        var sessionId = await CurrentSessionIdAsync(session.Client);
+        var beforeExchange = default(DateTime);
+
+        await AuthorizeAsync(client, session.Cookie, beforeExchange: async () =>
+        {
+            beforeExchange = await AgeSessionAsync(sessionId, TimeSpan.FromHours(1));
+        });
+
+        Assert.Equal(beforeExchange, await LastSeenTimeAsync(sessionId));
     }
 
     [Fact]
@@ -383,7 +416,8 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
         return client;
     }
 
-    private async Task<(string AccessToken, string IdentityToken, string RefreshToken)> AuthorizeAsync(string clientId, string cookie, string? clientSecret = null)
+    private async Task<(string AccessToken, string IdentityToken, string RefreshToken)> AuthorizeAsync(
+        string clientId, string cookie, string? clientSecret = null, Func<Task>? beforeExchange = null)
     {
         using var browser = Browser(cookie);
         var challenge = Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(Verifier)));
@@ -394,6 +428,9 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
         Assert.StartsWith(Callback, authorize.Headers.Location!.AbsoluteUri);
         var code = authorize.Headers.Location.Query.TrimStart('?').Split('&')
             .Single(part => part.StartsWith("code=", StringComparison.Ordinal))[5..];
+
+        if (beforeExchange is not null)
+            await beforeExchange();
 
         var result = await TokenAsync(new Dictionary<string, string>
         {

@@ -55,9 +55,9 @@ public static class AuthenticationExtensions
             options => options.KeyPrefix = "CompanyName.ProjectName:AuthTicket:");
         builder.Services.AddOptions<SessionCookieOptions>()
             .BindConfiguration(SessionCookieOptions.SectionName)
+#if (RemoteTokenAuth)
             .Validate(options => options.ExpireDays is >= 1 and <= 365,
                 $"{SessionCookieOptions.SectionName}:ExpireDays must be between 1 and 365.")
-#if (RemoteTokenAuth)
             .Validate(options => options.RefreshGracePeriod >= TimeSpan.Zero,
                 $"{SessionCookieOptions.SectionName}:RefreshGracePeriod must be non-negative.")
 #endif
@@ -65,10 +65,10 @@ public static class AuthenticationExtensions
         builder.Services.AddOptions<CookieAuthenticationOptions>(AuthenticationSchemeNames.SessionCookie)
             .Configure<IOptions<SessionCookieOptions>>((cookie, sessionCookie) =>
             {
-                // 滑动过期取会话时长。本地身份签发时改按租户的会话空闲时限（见 LocalSessionAuthenticationExtensions），
-                // 这里是部署基线与资源服务形态的值
+#if (RemoteTokenAuth)
                 cookie.ExpireTimeSpan = sessionCookie.Value.Lifetime;
-                cookie.SlidingExpiration = true;
+#endif
+                cookie.SlidingExpiration = false;
                 // 默认 Lax；放宽前先看部署文档的 SameSite 说明（协议端点的跨站进入不需要放宽）。
                 // 只作用于应用会话 Cookie，不覆盖协议 correlation/nonce Cookie
                 cookie.Cookie.SameSite = sessionCookie.Value.SameSite ?? SameSiteMode.Lax;

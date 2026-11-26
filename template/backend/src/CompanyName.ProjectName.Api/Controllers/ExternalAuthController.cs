@@ -36,6 +36,7 @@ public sealed class ExternalAuthController(
     ITicketStore ticketStore,
     IDistributedLock distributedLock,
     SessionCookieIssuer sessionCookieIssuer,
+    RememberedDeviceCookie rememberedDeviceCookie,
 #if (IncludeMultiTenancy)
     ITenantStore tenantStore,
     IOptions<MultiTenancyOptions> multiTenancyOptions,
@@ -44,13 +45,14 @@ public sealed class ExternalAuthController(
 {
     [AllowAnonymous]
     [HttpGet("{provider}/challenge")]
-    public Task<IActionResult> StartAsync(string provider, string? returnUrl = null) => StartCoreAsync(provider, "login", returnUrl);
+    public Task<IActionResult> StartAsync(string provider, string? returnUrl = null, bool keepSignedIn = false)
+        => StartCoreAsync(provider, "login", returnUrl, keepSignedIn);
 
     [Authorize]
     [HttpGet("{provider}/link/challenge")]
-    public Task<IActionResult> StartLinkAsync(string provider) => StartCoreAsync(provider, "link", null);
+    public Task<IActionResult> StartLinkAsync(string provider) => StartCoreAsync(provider, "link", null, keepSignedIn: false);
 
-    private async Task<IActionResult> StartCoreAsync(string provider, string intent, string? returnUrl)
+    private async Task<IActionResult> StartCoreAsync(string provider, string intent, string? returnUrl, bool keepSignedIn)
     {
         provider = provider.ToLowerInvariant();
         var scheme = (await ExternalSchemesAsync()).SingleOrDefault(scheme =>
@@ -66,6 +68,7 @@ public sealed class ExternalAuthController(
             ExpiresUtc = new DateTimeOffset(DateTime.SpecifyKind(clock.Now, DateTimeKind.Utc)).AddMinutes(5)
         };
         properties.Items["external.returnUrl"] = returnUrl;
+        properties.Items["external.keepSignedIn"] = keepSignedIn ? "true" : null;
         properties.Items["external.provider"] = provider;
         properties.Items["external.intent"] = intent;
         properties.Items["external.initiator"] = intent == "link" ? claimTypes.Value.FindUserId(User) : null;
@@ -78,9 +81,10 @@ public sealed class ExternalAuthController(
     [AllowAnonymous]
     [HttpPost("{provider}/complete")]
     public Task<SessionLoginOutputDto> CompleteAsync(string provider, CancellationToken cancellationToken) =>
-        ConsumeTicketAsync(provider, "login", async (user, returnUrl, operationToken) =>
+        ConsumeTicketAsync(provider, "login", async (user, returnUrl, keepSignedIn, operationToken) =>
         {
-            var result = await externalAuthAppService.AuthenticateExternalUserAsync(provider, user, operationToken);
+            var result = await externalAuthAppService.AuthenticateExternalUserAsync(provider, user, operationToken,
+                keepSignedIn, await rememberedDeviceCookie.ReadAsync(HttpContext));
             var session = await sessionCookieIssuer.CompleteLoginAsync(HttpContext, result, operationToken);
             return session with { ReturnUrl = returnUrl };
         }, cancellationToken);
@@ -97,7 +101,7 @@ public sealed class ExternalAuthController(
         CancellationToken cancellationToken)
     {
         await externalAuthAppService.EnsureLinkAllowedAsync(input, cancellationToken);
-        await ConsumeTicketAsync(provider, "link", async (user, _, operationToken) =>
+        await ConsumeTicketAsync(provider, "link", async (user, _, _, operationToken) =>
         {
             await externalAuthAppService.LinkCurrentUserAsync(provider, user, operationToken);
             return true;
@@ -108,7 +112,7 @@ public sealed class ExternalAuthController(
     private async Task<TResult> ConsumeTicketAsync<TResult>(
         string provider,
         string intent,
-        Func<ExternalUserInfo, string?, CancellationToken, Task<TResult>> completeAsync,
+        Func<ExternalUserInfo, string?, bool, CancellationToken, Task<TResult>> completeAsync,
         CancellationToken cancellationToken)
     {
         var ticket = await HttpContext.AuthenticateAsync(AuthenticationSchemeNames.ExternalCookie);
@@ -137,7 +141,7 @@ public sealed class ExternalAuthController(
         using var operation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, handle.LockLost);
         using var tenantChange = currentTenant.Change(tenantId, Read("external.tenant.name"));
         var user = JsonSerializer.Deserialize<ExternalUserInfo>(items[ExternalAuthenticationExtensions.UserInfoKey]!) ?? throw InvalidIntent();
-        return await completeAsync(user, Read("external.returnUrl"), operation.Token);
+        return await completeAsync(user, Read("external.returnUrl"), Read("external.keepSignedIn") == "true", operation.Token);
     }
 
     /// <summary>登录页据此渲染入口；与 challenge、links 读同一份已登记的提供商目录。</summary>

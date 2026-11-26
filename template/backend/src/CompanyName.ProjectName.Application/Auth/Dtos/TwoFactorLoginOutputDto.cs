@@ -5,6 +5,9 @@ namespace CompanyName.ProjectName.Application.Auth.Dtos;
 /// <summary>待完成的登录（第一步已通过、尚待第二步）：第二步页刷新或经授权端点进入时据此继续。</summary>
 public sealed record TwoFactorLoginOutputDto
 {
+    /// <summary>可记住设备的天数，0 表示不可用。</summary>
+    public int RememberDeviceDays { get; init; }
+
     /// <summary>本人此刻能用的方式，按系统顺序，恢复码在最后。</summary>
     public required IReadOnlyList<TwoFactorMethod> TwoFactorMethods { get; init; }
 

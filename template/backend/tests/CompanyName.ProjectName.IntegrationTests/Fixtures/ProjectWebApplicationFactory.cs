@@ -309,19 +309,21 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
     public Task<AuthenticatedSession> LoginAsync(
         string username,
         string password,
-        CancellationToken cancellationToken = default)
-        => LoginAsync(this, username, password, cancellationToken);
+        CancellationToken cancellationToken = default,
+        bool keepSignedIn = false)
+        => LoginAsync(this, username, password, cancellationToken, keepSignedIn);
 
     public static async Task<AuthenticatedSession> LoginAsync(
         WebApplicationFactory<Program> host,
         string username,
         string password,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool keepSignedIn = false)
     {
         var client = CreateProjectClient(host);
         var response = await client.PostAsJsonAsync(
             "/api/v1/auth/session-login",
-            new { UsernameOrEmail = username, Password = password },
+            new { UsernameOrEmail = username, Password = password, KeepSignedIn = keepSignedIn },
             cancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

@@ -354,11 +354,11 @@ function Read-Query([string]$Url) {
     return $values
 }
 
-function Login([string]$Username = "admin", [string]$Tenant, [string]$Password = $adminPassword, [string]$Service = "idp") {
+function Login([string]$Username = "admin", [string]$Tenant, [string]$Password = $adminPassword, [string]$Service = "idp", [switch]$KeepSignedIn) {
     $session = New-HttpSession -Cookies
     $headers = if ($Tenant) { @{ "X-Tenant" = $Tenant } } else { @{} }
     Assert-Http "session-login-$Username" 200 ($urls[$Service] + "/api/v1/auth/session-login") -Method POST `
-        -Body @{ usernameOrEmail = $Username; password = $Password } -Headers $headers -Session $session | Out-Null
+        -Body @{ usernameOrEmail = $Username; password = $Password; keepSignedIn = [bool]$KeepSignedIn } -Headers $headers -Session $session | Out-Null
     return $session
 }
 
@@ -888,6 +888,25 @@ function Test-Workspace {
     Assert-Http "workspace-rejects-missing" 403 ($urls.orders + "/api/e2e/natural") -Headers @{ Cookie = $cookie; "X-Workspace" = "missing" } | Out-Null
 }
 
+function Test-WorkspaceSessionRefresh {
+    $script:sharedSession = Login -KeepSignedIn
+    $sessions = (Assert-Http "workspace-refresh-identity-session" 200 ($urls.idp + "/api/v1/auth/me/sessions") -Session $sharedSession).Data
+    $sessionId = [guid](@($sessions | Where-Object { $_.isCurrent })[0].id)
+    $cookie = New-ResourceBrowserCookie
+    $initial = (Assert-Http "workspace-refresh-warm" 200 ($urls.orders + "/api/e2e/natural") -Headers @{ Cookie = $cookie }).Data
+    $headers = @{ Cookie = $cookie; "X-Workspace" = $sharedTenant.name }
+
+    # 模拟已经空闲六天。之后只访问资源服务，等访问令牌进入刷新窗口。
+    $age = 'UPDATE "e2e-idp"."UserSessions" SET "LastSeenTime" = now() - interval ''6 days'' WHERE "Id" = ''{0}'';' -f $sessionId
+    Invoke-Sql "oidc_shared" $age | Out-Null
+    $renewAt = [long]$initial.expiresAt - 55
+    while ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() -lt $renewAt) { Start-Sleep -Milliseconds 250 }
+
+    Assert-Http "workspace-refresh-user-request" 200 ($urls.orders + "/api/e2e/natural") -Headers $headers | Out-Null
+    $activity = 'SELECT "LastSeenTime" > now() - interval ''1 minute'' FROM "e2e-idp"."UserSessions" WHERE "Id" = ''{0}'';' -f $sessionId
+    Assert-Value "workspace-refresh-identity-activity" "t" (Invoke-Sql "oidc_shared" $activity)
+}
+
 function Test-S2 {
     $script:hostToken = Get-CodeToken $admin "openid profile email roles e2e-idp-api orders-api billing-api"
     $claims = Read-TokenClaims $hostToken
@@ -1303,6 +1322,9 @@ try {
     Initialize-Environment
     if ($Workspace) {
         Invoke-Scenario "workspace" { Test-Workspace }
+        if ($IncludeExpiryWait) {
+            Invoke-Scenario "workspace-session-refresh" { Test-WorkspaceSessionRefresh }
+        }
     } else {
     Invoke-Scenario "S2" { Test-S2 }
     Invoke-Scenario 'pure-api-realtime' { Test-PureApiRealtime }

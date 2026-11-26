@@ -8,6 +8,9 @@ namespace CompanyName.ProjectName.Application.Auth.Dtos;
 /// <remarks>待完成的登录取自临时 Cookie，不在请求体里。多给一种是校验错误：按优先级挑一个会悄悄用掉本人没打算用的恢复码，也让判定依赖字段顺序。</remarks>
 public sealed record TwoFactorLoginInputDto : IValidatableObject
 {
+    /// <summary>独立因子验证后记住此设备。</summary>
+    public bool RememberDevice { get; init; }
+
     /// <summary>身份验证器应用上的 6 位验证码。</summary>
     [Display(Name = "Verification code")]
     [RegularExpression(@"^\s*\d{3}\s?\d{3}\s*$", ErrorMessage = "The verification code must contain exactly 6 digits.")]

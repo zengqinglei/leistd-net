@@ -1,6 +1,7 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.BackgroundJobs;
 using CompanyName.ProjectName.Domain.Auth.Entities;
+using CompanyName.ProjectName.Domain.Auth.Policies;
 using Leistd.BackgroundJobs.Recurring;
 using Leistd.Data.Connections;
 using Leistd.MultiTenancy.ConnectionStrings;
@@ -56,12 +57,13 @@ public sealed class ExpiredUserSessionCleanupTests
     {
         var idle = TimeSpan.FromMinutes(30);
         var lastSeen = new DateTime(2026, 1, 1, 8, 0, 0, DateTimeKind.Utc);
-        var session = new UserSession(Guid.NewGuid(), lastSeen, ipAddress: null, userAgent: null);
+        var policy = new UserSessionPolicy(true, TimeSpan.FromDays(1), TimeSpan.FromDays(30), idle);
+        var session = new UserSession(Guid.NewGuid(), lastSeen, ipAddress: null, userAgent: null, keepSignedIn: true);
         var now = lastSeen + idle + TimeSpan.FromTicks(offsetTicks);
 
-        Assert.Equal(expired, session.IsExpired(now, idle));
-        Assert.Equal(expired, UserSession.ExpiredAt(now, idle).Compile()(session));
-        Assert.Equal(!expired, UserSession.ActiveAt(now, idle).Compile()(session));
+        Assert.Equal(expired, session.IsExpired(now, policy));
+        Assert.Equal(expired, UserSession.ExpiredAt(now, policy).Compile()(session));
+        Assert.Equal(!expired, UserSession.ActiveAt(now, policy).Compile()(session));
     }
 
     private static ExpiredUserSessionCleanupJob CreateJob(ITenantDatabaseRunner runner)

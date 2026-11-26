@@ -15,8 +15,6 @@ public interface IUserSessionValidator
     /// 其他实例在未共享缓存（未配 Redis）时最多滞后一个间隔。</para>
     /// <para>受限判定不进缓存，命中缓存时也照做：每次按主体的租户读取"要求两步验证"，开启时再按主键读本人是否已启用。
     /// 策略与两步验证状态的变更在提交之后的新请求里即可见，不依赖缓存，多实例同样成立。</para>
-    /// <para>会话空闲时限按主体所在租户的策略判定过期；只有实际查过会话的那次才在结果里给出该时限，
-    /// 供会话 Cookie 收敛票据有效期。</para>
     /// </remarks>
     Task<SessionValidationResult> ValidateAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default);
 }

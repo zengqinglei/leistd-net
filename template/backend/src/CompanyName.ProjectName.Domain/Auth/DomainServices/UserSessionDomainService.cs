@@ -1,6 +1,7 @@
 #if (LocalIdentity)
 using Leistd.Data.Querying;
 using CompanyName.ProjectName.Domain.Auth.Entities;
+using CompanyName.ProjectName.Domain.Auth.Policies;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Timing;
 
@@ -24,19 +25,21 @@ public class UserSessionDomainService(
         string? ipAddress,
         string? userAgent,
         string? impersonatorName,
-        TimeSpan idleTimeout,
+        UserSessionPolicy policy,
+        bool keepSignedIn,
+        DateTime authenticatedAt,
         CancellationToken cancellationToken = default)
     {
         var now = clock.Now;
         var expired = await asyncExecuter.ToListAsync(
             (await userSessionRepository.GetQueryableAsync(cancellationToken))
                 .Where(s => s.UserId == userId)
-                .Where(UserSession.ExpiredAt(now, idleTimeout)),
+                .Where(UserSession.ExpiredAt(now, policy)),
             cancellationToken);
         await userSessionRepository.DeleteManyAsync(expired, cancellationToken);
 
         return await userSessionRepository.InsertAsync(
-            new UserSession(userId, now, ipAddress, userAgent, impersonatorName),
+            new UserSession(userId, now, ipAddress, userAgent, impersonatorName, keepSignedIn, authenticatedAt),
             cancellationToken);
     }
 

@@ -47,7 +47,9 @@ internal sealed class ExternalAuthAppService(
     public async Task<SessionLoginResult> AuthenticateExternalUserAsync(
         string provider,
         ExternalUserInfo externalUserInfo,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool keepSignedIn = false,
+        RememberedDevice? rememberedDevice = null)
     {
         Guid? existingUserId;
         using (var lookup = unitOfWorkManager.Begin(requiresNew: true))
@@ -67,7 +69,7 @@ internal sealed class ExternalAuthAppService(
                 user.AssignRoles(defaultRoles.Select(role => role.Id));
                 await userRepository.UpdateAsync(user, cancellationToken);
                 var started = await sessionIssuer.StartAsync(
-                    user, FirstStepOf(connection), [.. defaultRoles.Select(role => role.Name)], cancellationToken);
+                    user, FirstStepOf(connection), [.. defaultRoles.Select(role => role.Name)], cancellationToken, keepSignedIn);
                 await unit.CompleteAsync(cancellationToken);
                 return started;
             }
@@ -88,7 +90,8 @@ internal sealed class ExternalAuthAppService(
             throw new BusinessException(ExternalAuthErrorCodes.InvalidState, "Invalid or expired external authentication intent.");
         }
 
-        var result = await sessionIssuer.StartAsync(current, FirstStepOf(currentConnection), cancellationToken: cancellationToken);
+        var result = await sessionIssuer.StartAsync(current, FirstStepOf(currentConnection),
+            cancellationToken: cancellationToken, keepSignedIn: keepSignedIn, rememberedDevice: rememberedDevice);
         await locked.CompleteAsync(cancellationToken);
         return result;
     }

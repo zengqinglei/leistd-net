@@ -93,11 +93,14 @@ internal sealed class ExternalOAuthBackchannel : HttpMessageHandler
         ? string.Join("; ", values.Where(value => !value.Contains("expires=Thu, 01 Jan 1970", StringComparison.OrdinalIgnoreCase))
             .Select(value => value.Split(';', 2)[0])) : "";
 
-    public static async Task<(string State, string Cookie)> StartAsync(HttpClient client, string provider = "github", string intent = "login", string? returnUrl = null)
+    public static async Task<(string State, string Cookie)> StartAsync(HttpClient client, string provider = "github", string intent = "login", string? returnUrl = null, bool keepSignedIn = false)
     {
         var path = intent == "link" ? "link/challenge" : "challenge";
-        using var challenge = await client.GetAsync($"/api/v1/external-auth/{provider}/{path}" +
-            (returnUrl is null ? "" : "?returnUrl=" + Uri.EscapeDataString(returnUrl)));
+        var query = new List<string>();
+        if (returnUrl is not null) query.Add("returnUrl=" + Uri.EscapeDataString(returnUrl));
+        if (keepSignedIn) query.Add("keepSignedIn=true");
+        var suffix = query.Count == 0 ? "" : "?" + string.Join('&', query);
+        using var challenge = await client.GetAsync($"/api/v1/external-auth/{provider}/{path}" + suffix);
         Assert.Equal(HttpStatusCode.Found, challenge.StatusCode);
         var parameters = QueryHelpers.ParseQuery(challenge.Headers.Location!.Query);
         Assert.Equal("S256", parameters["code_challenge_method"].ToString());

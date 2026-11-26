@@ -8,6 +8,7 @@ import { AccountPreferencesDto } from './account-preferences.dto';
 export interface LoginInputDto {
   usernameOrEmail: string;
   password: string;
+  keepSignedIn?: boolean;
 }
 
 /**
