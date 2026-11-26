@@ -196,6 +196,25 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         Assert.Equal("OpenApp:UpdateFailed", error.GetProperty("code").GetString());
     }
 
+    [Fact]
+    public async Task A_missing_pkce_challenge_returns_the_local_protocol_error()
+    {
+        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var client = await CreatePublicClientAsync(admin.Client);
+        using var browser = Browser();
+        using var response = await browser.GetAsync(
+            $"/connect/authorize?client_id={client}&redirect_uri={Uri.EscapeDataString(Callback)}" +
+            $"&response_type=code&scope=openid%20{new OAuthResourceOptions().Resource}");
+
+        Assert.True(response.StatusCode == HttpStatusCode.BadRequest,
+            $"Expected a local protocol error. Got {response.StatusCode} with Location {response.Headers.Location}.");
+        Assert.Null(response.Headers.Location);
+        Assert.Equal("text/plain", response.Content.Headers.ContentType?.MediaType);
+        var error = await response.Content.ReadAsStringAsync();
+        Assert.Contains("error:invalid_request", error);
+        Assert.Contains("code_challenge", error);
+    }
+
     [Theory]
     [InlineData(59, false)]
     [InlineData(61, true)]

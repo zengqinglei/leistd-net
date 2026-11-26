@@ -130,6 +130,24 @@ public sealed class OidcLogoutTests(ProjectWebApplicationFactory factory) : ICla
     }
 
     [Fact]
+    public async Task An_unregistered_logout_callback_returns_the_local_protocol_error()
+    {
+        var (client, signedIn) = await SignInAsync();
+        using var session = signedIn;
+        using var browser = Browser(session.Cookie);
+        using var response = await browser.GetAsync(
+            $"/connect/logout?client_id={client}&post_logout_redirect_uri={Uri.EscapeDataString("https://rp.example.test/unregistered")}");
+
+        Assert.True(response.StatusCode == HttpStatusCode.BadRequest,
+            $"Expected a local protocol error. Got {response.StatusCode} with Location {response.Headers.Location}.");
+        Assert.Null(response.Headers.Location);
+        Assert.Equal("text/plain", response.Content.Headers.ContentType?.MediaType);
+        var error = await response.Content.ReadAsStringAsync();
+        Assert.Contains("error:invalid_request", error);
+        Assert.Contains("post_logout_redirect_uri", error);
+    }
+
+    [Fact]
     public async Task An_open_confirmation_page_submits_an_expired_logout_to_the_friendly_page()
     {
         var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
