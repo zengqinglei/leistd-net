@@ -13,6 +13,8 @@ Angular（Signals、zoneless、Signal Forms `@angular/forms/signals`）、TypeSc
 
 按需建目录。`core/` 放应用级服务、守卫、拦截器与通用错误处理，`features/<x>/` 放业务路由、页面、该功能的服务和契约，`layout/` 放布局及导航，`shared/` 放无状态组件、工具和跨功能契约。`frontend/libs/ui/` 持有 Helm 组件，`frontend/public/` 映射到站点根。
 
+功能目录按 `components/<page>/widgets`、`services`、`dtos`、`models`、`guards` 组织，页面内复用的组件放在该页的 `widgets/`，多个功能共用的有状态实现下沉到 `core`，无状态实现下沉到 `shared`。
+
 `frontend/eslint.config.mjs` 校验依赖方向。`shared` 只依赖自身，`core` 另可依赖 `shared`，`layout` 与功能另可依赖 `core` 和自身。功能间仅允许路由文件通过 `loadComponent` 或 `loadChildren` 懒加载。应用装配文件（`app.*.ts`）与测试可以引用 `_mock`；各目录可读 `environment`。导入路径用字符串字面量。
 
 - 业务代码判断请求是否走 Mock 时注入 `frontend/src/app/core/mock/mocked-url.ts` 的 `MOCKED_URL`（默认 `false`，Mock 构建由 `provideMock` 提供），不调用 `_mock` 中的函数。
