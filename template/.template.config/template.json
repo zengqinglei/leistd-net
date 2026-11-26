@@ -816,6 +816,7 @@
             "backend/src/CompanyName.ProjectName.Api/Controllers/OpenApplicationController.cs",
             "backend/src/CompanyName.ProjectName.Api/Auth/OpenIddict/**",
             "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/LogoutConfirmationOutputDto.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/InteractionApplicationOutputDto.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/SubjectClaims.cs",
             "backend/src/CompanyName.ProjectName.Application/OpenApplications/**",
             "backend/src/CompanyName.ProjectName.Application/Auth/Options/OAuthResourceOptions.cs",

@@ -35,12 +35,14 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
 {
     private const string Callback = "https://localhost/oidc-test";
 
-    private async Task<string> CreatePublicClientAsync(HttpClient admin)
+    private async Task<string> CreatePublicClientAsync(HttpClient admin, string? homeUrl = null)
     {
         var id = $"prompt-{Guid.NewGuid():N}";
         var response = await admin.PostAsJsonAsync("/api/v1/open-applications", new
         {
             sessionBound = false,
+            displayName = "Example application",
+            homeUrl,
             clientId = id, applicationType = "web", clientType = "public", redirectUris = new[] { Callback },
             permissions = new[] { "ept:authorization", "ept:token", "gt:authorization_code", "gt:refresh_token", "rst:code", "scp:openid", "scp:email", $"scp:{new OAuthResourceOptions().Resource}" },
             requirements = new[] { "ft:pkce" }
@@ -211,6 +213,63 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
 
         Assert.True(expired.StatusCode == HttpStatusCode.Found, await expired.Content.ReadAsStringAsync());
         Assert.Equal($"/auth/login-expired?client_id={clientId}", expired.Headers.Location?.OriginalString);
+    }
+
+    [Theory]
+    [InlineData("registered", "https://app.example.test/home")]
+    [InlineData("registered", null)]
+    [InlineData("unknown", null)]
+    [InlineData(null, null)]
+    public async Task Recovery_returns_only_a_registered_application_destination(string? registration, string? homeUrl)
+    {
+        string? clientId = registration;
+        if (registration == "registered")
+        {
+            using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+            clientId = await CreatePublicClientAsync(admin.Client, homeUrl);
+        }
+
+        using var browser = Browser();
+        var path = "/api/v1/auth/interaction-application";
+        if (clientId is not null)
+            path = QueryHelpers.AddQueryString(path, "clientId", clientId);
+
+        using var response = await browser.GetAsync(path);
+        if (homeUrl is null)
+        {
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+            Assert.Empty(await response.Content.ReadAsStringAsync());
+            return;
+        }
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Example application", result.GetProperty("displayName").GetString());
+        Assert.Equal(homeUrl, result.GetProperty("homeUrl").GetString());
+    }
+
+    [Fact]
+    public async Task An_unsupported_grant_returns_the_oauth_json_error()
+    {
+        using var browser = Browser();
+        using var response = await browser.PostAsync("/connect/token", new FormUrlEncodedContent(
+            new Dictionary<string, string> { ["grant_type"] = "unsupported" }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        var error = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(Errors.UnsupportedGrantType, error.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task Userinfo_without_a_token_returns_a_bearer_challenge_without_a_body()
+    {
+        using var browser = Browser();
+        using var response = await browser.GetAsync("/connect/userinfo");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("Bearer", Assert.Single(response.Headers.WwwAuthenticate).Scheme);
+        Assert.Empty(await response.Content.ReadAsStringAsync());
     }
 
     [Fact]

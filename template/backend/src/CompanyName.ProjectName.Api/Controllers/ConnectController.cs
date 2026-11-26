@@ -56,6 +56,9 @@ public sealed class ConnectController(
     [IgnoreAntiforgeryToken]
     public async Task<IActionResult> AuthorizeAsync(CancellationToken cancellationToken)
     {
+        if (HttpContext.GetOpenIddictServerResponse()?.Error is not null)
+            return RedirectToExpiredPage("/auth/login-expired");
+
         var request = HttpContext.GetOpenIddictServerRequest()
             ?? throw new InvalidOperationException(
                 "The OpenID Connect authorization request is unavailable. "
@@ -160,6 +163,9 @@ public sealed class ConnectController(
     [IgnoreAntiforgeryToken]
     public async Task<IActionResult> LogoutAsync(CancellationToken cancellationToken)
     {
+        if (HttpContext.GetOpenIddictServerResponse()?.Error is not null)
+            return RedirectToExpiredPage("/auth/logout-expired");
+
         var request = HttpContext.GetOpenIddictServerRequest()
             ?? throw new InvalidOperationException(
                 "The OpenID Connect end session request is unavailable. "
@@ -342,6 +348,14 @@ public sealed class ConnectController(
             [Parameters.RequestUri] = CachedRequestUri(request),
             [ConnectInteractionProtector.ReauthenticationParameter] = reauthenticationProof
         }.Where(parameter => parameter.Value is not null));
+
+    private RedirectResult RedirectToExpiredPage(string path)
+    {
+        var clientId = HttpContext.GetOpenIddictServerRequest()?.ClientId;
+        return Redirect(string.IsNullOrEmpty(clientId)
+            ? path
+            : path + QueryString.Create(Parameters.ClientId, clientId));
+    }
 
     private static string CachedRequestUri(OpenIddictRequest request) => request.RequestUri ?? throw new InvalidOperationException(
         "The authorization request has no request_uri. This means authorization request caching is not enabled.");

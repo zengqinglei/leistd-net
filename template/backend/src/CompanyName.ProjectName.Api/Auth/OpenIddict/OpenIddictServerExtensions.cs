@@ -115,7 +115,8 @@ public static class OpenIddictServerExtensions
                     .EnableAuthorizationEndpointPassthrough()
                     .EnableTokenEndpointPassthrough()
                     .EnableUserInfoEndpointPassthrough()
-                    .EnableEndSessionEndpointPassthrough();
+                    .EnableEndSessionEndpointPassthrough()
+                    .EnableErrorPassthrough();
                 if (oauthOpts.DisableHttpsRequirement)
                 {
                     aspNetCore.DisableTransportSecurityRequirement();
