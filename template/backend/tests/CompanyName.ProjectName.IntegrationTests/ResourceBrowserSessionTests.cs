@@ -627,10 +627,12 @@ public sealed class ResourceBrowserSessionTests
     }
 
     [Theory]
-    [InlineData("state")]
-    [InlineData("correlation")]
-    [InlineData("token")]
-    public async Task Production_remote_failure_rejects_invalid_protocol_messages(string failure)
+    [InlineData("state", "expired")]
+    [InlineData("missing-state", "expired")]
+    [InlineData("correlation", "expired")]
+    [InlineData("denied", "denied")]
+    [InlineData("token", "error")]
+    public async Task Production_remote_failure_redirects_to_the_matching_page(string failure, string reason)
     {
         using var factory = new ProjectWebApplicationFactory { UseProductionAuthentication = true };
         using var issuer = new Issuer { RejectCode = failure == "token" };
@@ -639,12 +641,23 @@ public sealed class ResourceBrowserSessionTests
         using var challenge = await browser.GetAsync("/api/v1/auth/login");
         var query = AuthorizationRequest(challenge);
         issuer.Nonce = query["nonce"];
-        using var request = new HttpRequestMessage(HttpMethod.Get, SignInCallback(failure == "state" ? "invalid" : query["state"]));
-        var cookies = ExternalCookies(challenge);
-        request.Headers.Add("Cookie", failure == "correlation" ? cookies.Replace("=N", "=wrong", StringComparison.Ordinal) : cookies);
+        var callback = failure switch
+        {
+            "denied" => QueryHelpers.AddQueryString("/api/v1/auth/signin?error=access_denied", "state", query["state"].ToString()),
+            "missing-state" => "/api/v1/auth/signin?code=test-code",
+            "state" => SignInCallback("invalid"),
+            _ => SignInCallback(query["state"])
+        };
+        using var request = new HttpRequestMessage(HttpMethod.Get, callback);
+        if (failure != "correlation")
+        {
+            request.Headers.Add("Cookie", ExternalCookies(challenge));
+        }
         using var response = await browser.SendAsync(request);
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+
+        Assert.True(response.StatusCode == HttpStatusCode.Found,
+            $"{(int)response.StatusCode} {response.Content.Headers.ContentType}: {await response.Content.ReadAsStringAsync()}");
+        Assert.Equal($"/auth/sign-in-failed?reason={reason}", response.Headers.Location?.OriginalString);
         Assert.False(response.Headers.TryGetValues("Set-Cookie", out var issued) && issued.Any(value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=")));
     }
 

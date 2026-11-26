@@ -25,6 +25,7 @@ using Microsoft.Extensions.Time.Testing;
 using OpenIddict.Abstractions;
 using Leistd.Security.OpenIddict.Server.Pruning;
 using OpenIddict.Core;
+using OpenIddict.Server;
 using OpenIddict.EntityFrameworkCore;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
@@ -194,6 +195,25 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
     }
 
     [Fact]
+    public async Task An_expired_authorization_request_returns_to_a_friendly_page_for_its_client()
+    {
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var clientId = await CreatePublicClientAsync(admin.Client);
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.Configure<OpenIddictServerOptions>(options => options.TimeProvider = clock)));
+        using var browser = Browser(host);
+        using var cached = await browser.GetAsync(AuthorizationUrl(clientId, ""));
+        var returnUrl = OidcRequestCaching.CachedLocation(browser, cached, "/connect/authorize");
+
+        clock.Advance(TimeSpan.FromHours(2));
+        using var expired = await browser.GetAsync(returnUrl);
+
+        Assert.True(expired.StatusCode == HttpStatusCode.Found, await expired.Content.ReadAsStringAsync());
+        Assert.Equal($"/auth/login-expired?client_id={clientId}", expired.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
     public async Task Prompt_none_without_a_session_returns_login_required_to_the_protocol_callback()
     {
         using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
@@ -261,8 +281,8 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         Assert.Contains("code=", completed.Headers.Location.Query);
         // 一次性：授权完成时 request token 已兑现，同一回跳地址不能再换出授权码
         using var replayed = await authenticated.GetAsync(returnUrl);
-        Assert.Equal(HttpStatusCode.BadRequest, replayed.StatusCode);
-        Assert.Null(replayed.Headers.Location);
+        Assert.Equal(HttpStatusCode.Found, replayed.StatusCode);
+        Assert.Equal($"/auth/login-expired?client_id={id}", replayed.Headers.Location?.OriginalString);
         Assert.Equal(HttpStatusCode.OK, (await authenticated.GetAsync("/api/v1/auth/me")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
     }

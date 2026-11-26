@@ -6,7 +6,12 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.Auth.Options;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
+using OpenIddict.Server;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace CompanyName.ProjectName.IntegrationTests;
@@ -125,6 +130,26 @@ public sealed class OidcLogoutTests(ProjectWebApplicationFactory factory) : ICla
     }
 
     [Fact]
+    public async Task An_open_confirmation_page_submits_an_expired_logout_to_the_friendly_page()
+    {
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var (client, session) = await SignInAsync();
+        using var signedIn = session;
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.Configure<OpenIddictServerOptions>(options => options.TimeProvider = clock)));
+        using var browser = Browser(session.Cookie, host);
+        var (requestUri, confirmation) = await ConfirmationPageAsync(browser, client);
+        var page = await ConfirmationInfoAsync(browser, requestUri, confirmation);
+
+        clock.Advance(TimeSpan.FromHours(2));
+        using var expired = await ConfirmAsync(session.Cookie, page, requestUri, confirmation, host);
+
+        Assert.True(expired.StatusCode == HttpStatusCode.Found, await expired.Content.ReadAsStringAsync());
+        Assert.Equal("/auth/logout-expired", expired.Headers.Location?.OriginalString);
+        Assert.Equal(HttpStatusCode.OK, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
+    [Fact]
     public async Task A_confirmed_logout_request_cannot_be_replayed()
     {
         var (client, session) = await SignInAsync();
@@ -137,8 +162,8 @@ public sealed class OidcLogoutTests(ProjectWebApplicationFactory factory) : ICla
         using var replayed = await ConfirmAsync(session.Cookie, page, requestUri, confirmation);
 
         // 退出完成时 request token 已兑现：OpenIddict 直接拒绝这个 request_uri，不再回到依赖方
-        Assert.Equal(HttpStatusCode.BadRequest, replayed.StatusCode);
-        Assert.Null(replayed.Headers.Location);
+        Assert.Equal(HttpStatusCode.Found, replayed.StatusCode);
+        Assert.Equal("/auth/logout-expired", replayed.Headers.Location?.OriginalString);
     }
 
     [Fact]
@@ -192,18 +217,19 @@ public sealed class OidcLogoutTests(ProjectWebApplicationFactory factory) : ICla
     }
 
     // 确认页的表单 POST：本源、带会话与防伪 Cookie、防伪字段、request_uri 与确认凭据
-    private async Task<HttpResponseMessage> ConfirmAsync(string sessionCookie, ConfirmationPage page, string requestUri, string confirmation)
+    private async Task<HttpResponseMessage> ConfirmAsync(string sessionCookie, ConfirmationPage page, string requestUri, string confirmation,
+        WebApplicationFactory<Program>? host = null)
     {
-        using var browser = Browser(string.Join("; ", new[] { sessionCookie, page.AntiforgeryCookie }.Where(value => value.Length > 0)));
+        using var browser = Browser(string.Join("; ", new[] { sessionCookie, page.AntiforgeryCookie }.Where(value => value.Length > 0)), host);
         browser.DefaultRequestHeaders.Add("Origin", "https://localhost");
         var form = new Dictionary<string, string> { ["request_uri"] = requestUri, ["confirmation"] = confirmation };
         if (page.FieldName.Length > 0) form[page.FieldName] = page.Token;
         return await browser.PostAsync("/connect/logout", new FormUrlEncodedContent(form));
     }
 
-    private HttpClient Browser(string? cookie = null)
+    private HttpClient Browser(string? cookie = null, WebApplicationFactory<Program>? host = null)
     {
-        var client = factory.CreateProjectClient();
+        var client = ProjectWebApplicationFactory.CreateProjectClient(host ?? factory);
         client.BaseAddress = new Uri("https://localhost");
         if (cookie is not null) client.DefaultRequestHeaders.Add("Cookie", cookie);
         return client;
