@@ -196,8 +196,10 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         Assert.Equal("OpenApp:UpdateFailed", error.GetProperty("code").GetString());
     }
 
-    [Fact]
-    public async Task An_expired_authorization_request_returns_to_a_friendly_page_for_its_client()
+    [Theory]
+    [InlineData(59, false)]
+    [InlineData(61, true)]
+    public async Task The_authorization_request_remains_usable_for_one_hour(int minutes, bool expired)
     {
         var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
         using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
@@ -208,11 +210,14 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         using var cached = await browser.GetAsync(AuthorizationUrl(clientId, ""));
         var returnUrl = OidcRequestCaching.CachedLocation(browser, cached, "/connect/authorize");
 
-        clock.Advance(TimeSpan.FromHours(2));
-        using var expired = await browser.GetAsync(returnUrl);
+        clock.Advance(TimeSpan.FromMinutes(minutes));
+        using var result = await browser.GetAsync(returnUrl);
 
-        Assert.True(expired.StatusCode == HttpStatusCode.Found, await expired.Content.ReadAsStringAsync());
-        Assert.Equal($"/auth/login-expired?client_id={clientId}", expired.Headers.Location?.OriginalString);
+        Assert.True(result.StatusCode == HttpStatusCode.Found, await result.Content.ReadAsStringAsync());
+        if (expired)
+            Assert.Equal($"/auth/login-expired?client_id={clientId}", result.Headers.Location?.OriginalString);
+        else
+            Assert.StartsWith("/auth/login?", result.Headers.Location?.OriginalString);
     }
 
     [Theory]

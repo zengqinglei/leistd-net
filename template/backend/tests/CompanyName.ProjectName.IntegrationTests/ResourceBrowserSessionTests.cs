@@ -542,8 +542,10 @@ public sealed class ResourceBrowserSessionTests
         Assert.Equal(cancelRequest ? 2 : 1, issuer.RefreshCount);
     }
 
-    [Fact]
-    public async Task Login_challenge_issues_a_correlation_cookie_valid_for_one_hour()
+    [Theory]
+    [InlineData(".AspNetCore.Correlation.")]
+    [InlineData(".AspNetCore.OpenIdConnect.Nonce.")]
+    public async Task Login_challenge_issues_cookies_valid_for_one_hour(string cookiePrefix)
     {
         using var factory = new ProjectWebApplicationFactory { UseProductionAuthentication = true };
         using var issuer = new Issuer();
@@ -553,9 +555,9 @@ public sealed class ResourceBrowserSessionTests
         using var challenge = await browser.GetAsync("/api/v1/auth/login");
         AuthorizationRequest(challenge);
 
-        var correlation = Assert.Single(challenge.Headers.GetValues("Set-Cookie"),
-            value => value.StartsWith(".AspNetCore.Correlation.", StringComparison.Ordinal));
-        var cookie = Microsoft.Net.Http.Headers.SetCookieHeaderValue.Parse(correlation);
+        var header = Assert.Single(challenge.Headers.GetValues("Set-Cookie"),
+            value => value.StartsWith(cookiePrefix, StringComparison.Ordinal));
+        var cookie = Microsoft.Net.Http.Headers.SetCookieHeaderValue.Parse(header);
         Assert.NotNull(cookie.Expires);
         Assert.InRange(cookie.Expires.Value, started.AddHours(1).AddSeconds(-1), DateTimeOffset.UtcNow.AddHours(1));
     }
