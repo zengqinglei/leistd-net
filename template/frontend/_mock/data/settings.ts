@@ -186,14 +186,33 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
   //#endif
   //#if (LocalIdentity)
   {
+    name: 'Security.AllowKeepSignedIn',
+    displayName: 'Allow longer sign-in sessions',
+    group: 'Security',
+    defaultValue: 'true',
+    allowsTenantScope: true,
+    allowsUserScope: false,
+    isBoolean: true,
+  },
+  {
+    name: 'Security.RememberDeviceDays',
+    displayName: 'Days to remember two-factor authentication',
+    group: 'Security',
+    defaultValue: '30',
+    allowsTenantScope: true,
+    allowsUserScope: false,
+    minimum: 0,
+    maximum: 90,
+  },
+  {
     name: 'Security.SessionIdleTimeoutDays',
-    displayName: 'Sign out after this many idle days',
+    displayName: 'Idle days for longer sign-in sessions',
     group: 'Security',
     defaultValue: '7',
     allowsTenantScope: true,
     allowsUserScope: false,
     minimum: 1,
-    maximum: 365,
+    maximum: 7,
   },
   //#endif
   //#if (ExternalLogin)
@@ -506,7 +525,9 @@ export const SETTING_TEXTS_ZH_CN: Readonly<Record<string, string>> = {
   'Setting:Security.AllowEmailTwoFactor': '允许用邮箱验证码作为登录第二步',
   //#endif
   //#if (LocalIdentity)
-  'Setting:Security.SessionIdleTimeoutDays': '会话空闲多少天后退出',
+  'Setting:Security.SessionIdleTimeoutDays': '保持登录档的空闲天数',
+  'Setting:Security.AllowKeepSignedIn': '允许保持登录',
+  'Setting:Security.RememberDeviceDays': '记住两步验证的天数',
   //#endif
   //#if (Email)
   'Setting:Email.SmtpHost': 'SMTP 主机',

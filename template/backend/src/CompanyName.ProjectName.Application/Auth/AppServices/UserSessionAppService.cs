@@ -38,11 +38,11 @@ internal sealed class UserSessionAppService(
     {
         var userId = currentUser.Id!.Value;
         var currentSessionId = currentUser.GetSessionId();
-        var idleTimeout = (await loginSecurityPolicy.GetAsync(cancellationToken)).SessionIdleTimeout;
+        var sessionPolicy = (await loginSecurityPolicy.GetAsync(cancellationToken)).Sessions;
         var sessions = await asyncExecuter.ToListAsync(
             (await userSessionRepository.GetQueryableAsync(cancellationToken))
                 .Where(s => s.UserId == userId)
-                .Where(UserSession.ActiveAt(clock.Now, idleTimeout)),
+                .Where(UserSession.ActiveAt(clock.Now, sessionPolicy)),
             cancellationToken);
 
         var context = new Dictionary<string, object>();
@@ -80,14 +80,14 @@ internal sealed class UserSessionAppService(
     /// <inheritdoc />
     public async Task<int> RevokeOtherCurrentUserSessionsAsync(CancellationToken cancellationToken = default)
     {
-        var idleTimeout = (await loginSecurityPolicy.GetAsync(cancellationToken)).SessionIdleTimeout;
+        var sessionPolicy = (await loginSecurityPolicy.GetAsync(cancellationToken)).Sessions;
         var revoked = await userSessionDomainService.RevokeAllAsync(
             currentUser.Id!.Value,
             currentUser.GetSessionId(),
             cancellationToken);
         // 只数仍有效的设备：与设备列表同一条规则，已过期的会话顺手删掉但不算"退出了几台"
         var now = clock.Now;
-        var count = revoked.Count(session => !session.IsExpired(now, idleTimeout));
+        var count = revoked.Count(session => !session.IsExpired(now, sessionPolicy));
 
         if (count > 0)
         {
@@ -106,7 +106,20 @@ internal sealed class UserSessionAppService(
     /// 新开工作单元：调用处可能刚在别的租户上下文里写过库，请求作用域里的上下文未必绑着当前租户的库。
     /// 租户上下文沿用环境值——多租户中间件已按会话主体的租户声明设好。
     /// </remarks>
-    public async Task<DateTime?> GetCurrentSessionStartTimeAsync(CancellationToken cancellationToken = default)
+    public async Task<DateTime?> GetCurrentSessionStartTimeAsync(CancellationToken cancellationToken = default) =>
+        (await FindCurrentSessionAsync(cancellationToken))?.CreationTime;
+
+#if (Impersonation)
+    /// <inheritdoc />
+    public async Task<(bool KeepSignedIn, DateTime AuthenticatedAt)> GetCurrentSessionForReissueAsync(CancellationToken cancellationToken = default)
+    {
+        var session = await FindCurrentSessionAsync(cancellationToken)
+            ?? throw new AuthenticationRequiredException();
+        return (session.KeepSignedIn, session.AuthenticatedAt);
+    }
+#endif
+
+    private async Task<UserSession?> FindCurrentSessionAsync(CancellationToken cancellationToken)
     {
         if (currentUser.Id is not { } userId || currentUser.GetSessionId() is not { } sessionId)
             return null;
@@ -114,7 +127,7 @@ internal sealed class UserSessionAppService(
         using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
         var session = await userSessionRepository.GetByIdAsync(sessionId, cancellationToken);
         await unitOfWork.CompleteAsync(cancellationToken);
-        return session?.UserId == userId ? session.CreationTime : null;
+        return session?.UserId == userId ? session : null;
     }
 
     /// <inheritdoc />

@@ -17,7 +17,12 @@ Kubernetes：非机密放 ConfigMap，机密放 Secret，以 `Section__Key` 环�
 | --- | --- |
 | `RequestLogging:Enabled` | 是否记录正常完成的请求，默认 `true`；关闭后 5xx 仍记录，可在系统设置的「运维」面板覆盖（见[日志](#日志)） |
 <!--#if (SpaFrontend)-->
-| `SessionCookie:SameSite`、`ExpireDays` | 浏览器会话策略默认 `Lax`，滑动过期默认 7 天；安全边界见 [浏览器认证](../standards/auth.md#浏览器认证) |
+| `SessionCookie:SameSite` | 浏览器会话策略默认 `Lax`。安全边界见 [浏览器认证](../standards/auth.md#浏览器认证) |
+<!--#if (LocalIdentity)-->
+| `SessionCookie:SessionHours`、`KeepSignedInDays`、`IdleDays`、`RememberDeviceMaxDays` | 默认分别为 24 小时、30 天、7 天、90 天。记住设备默认 30 天。升级时把旧 `ExpireDays` 的租户空闲部署基线迁到 `IdleDays`。 |
+<!--#else-->
+| `SessionCookie:ExpireDays` | 本地票据固定时长默认 30 天。升级时调整已有覆盖值，默认与 Identity 的保持登录绝对上限对齐。 |
+<!--#endif-->
 <!--#endif-->
 <!--#if (IncludeLocalization)-->
 | `DisplayDefaults:Language`、`TimeZone` | 界面语言与展示时区（IANA 名）的部署基线；默认空，浏览器跟随设备，服务端回落请求文化与 UTC；组织与个人可覆盖，非法值启动失败，修改基线需重启各实例 |

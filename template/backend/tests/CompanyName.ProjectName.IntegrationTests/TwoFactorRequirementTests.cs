@@ -20,6 +20,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
+using Microsoft.Net.Http.Headers;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -391,6 +392,64 @@ public sealed class TwoFactorRequirementTests(ProjectWebApplicationFactory facto
         return client;
     }
 #endif
+
+    [Fact]
+    public async Task Remembering_an_authenticator_preserves_the_selected_tier_and_respects_current_policy()
+    {
+        var (host, clock) = CreateHost();
+        using var lifetime = host;
+        var username = await CreateUserAsync(host, "req_remember");
+        using var session = await ProjectWebApplicationFactory.LoginAsync(host, username, Password);
+        var setup = await BeginSetupAsync(session.Client);
+        using var enabled = await session.Client.PostAsJsonAsync("/api/v1/auth/me/two-factor/enable",
+            new { setup.SetupId, Code = Code(setup.Secret, clock) });
+        Assert.Equal(HttpStatusCode.OK, enabled.StatusCode);
+        clock.Advance(TimeSpan.FromMinutes(1));
+
+        using var secondStep = ProjectWebApplicationFactory.CreateProjectClient(host);
+        using var first = await secondStep.PostAsJsonAsync("/api/v1/auth/session-login",
+            new { UsernameOrEmail = username, Password, KeepSignedIn = true });
+        Assert.True((await first.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("requiresTwoFactor").GetBoolean());
+        secondStep.DefaultRequestHeaders.Add("Cookie",
+            string.Join("; ", first.Headers.GetValues("Set-Cookie").Select(value => value.Split(';', 2)[0])));
+
+        using var completed = await secondStep.PostAsJsonAsync("/api/v1/auth/two-factor",
+            new { Code = Code(setup.Secret, clock), RememberDevice = true });
+        Assert.Equal(HttpStatusCode.OK, completed.StatusCode);
+        var cookies = SetCookieHeaderValue.ParseList(
+            completed.Headers.GetValues("Set-Cookie").ToList());
+        var auth = cookies.Single(cookie => cookie.Name.Value!.EndsWith(".Auth", StringComparison.Ordinal));
+        Assert.InRange(auth.Expires!.Value, clock.GetUtcNow().AddDays(30).AddSeconds(-1), clock.GetUtcNow().AddDays(30));
+        var device = cookies.Single(cookie => cookie.Name.Value!.EndsWith(".RememberDevice", StringComparison.Ordinal));
+        Assert.InRange(device.Expires!.Value, clock.GetUtcNow().AddDays(30).AddSeconds(-1), clock.GetUtcNow().AddDays(30));
+
+        using var returning = ProjectWebApplicationFactory.CreateProjectClient(host);
+        returning.DefaultRequestHeaders.Add("Cookie", $"{device.Name}={device.Value}");
+        using var remembered = await returning.PostAsJsonAsync("/api/v1/auth/session-login",
+            new { UsernameOrEmail = username, Password });
+        Assert.False((await remembered.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("requiresTwoFactor").GetBoolean());
+
+        await ProjectWebApplicationFactory.SetTenantSettingAsync(host, SettingConstant.Security.RememberDeviceDays, "0");
+        try
+        {
+            using var required = await returning.PostAsJsonAsync("/api/v1/auth/session-login",
+                new { UsernameOrEmail = username, Password });
+            Assert.True((await required.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("requiresTwoFactor").GetBoolean());
+        }
+        finally
+        {
+            await ProjectWebApplicationFactory.SetTenantSettingAsync(host, SettingConstant.Security.RememberDeviceDays, null);
+        }
+
+        using var signedIn = ProjectWebApplicationFactory.CreateProjectClient(host);
+        signedIn.DefaultRequestHeaders.Add("Cookie", $"{auth.Name}={auth.Value}");
+        using var changed = await signedIn.PostAsJsonAsync("/api/v1/auth/change-password",
+            new { CurrentPassword = Password, NewPassword = Password + "2", ConfirmPassword = Password + "2" });
+        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+        using var afterChange = await returning.PostAsJsonAsync("/api/v1/auth/session-login",
+            new { UsernameOrEmail = username, Password = Password + "2" });
+        Assert.True((await afterChange.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("requiresTwoFactor").GetBoolean());
+    }
 
     private (WebApplicationFactory<Program> Host, FakeTimeProvider Clock) CreateHost(Action<IServiceCollection>? configure = null)
     {

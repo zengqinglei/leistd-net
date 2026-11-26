@@ -60,8 +60,15 @@ test(
     });
     await page.context().clearCookies();
     await page.goto('/auth/login');
+    const keepSignedIn = page.getByRole('checkbox', { name: 'Keep me signed in' });
+    await keepSignedIn.click();
+    await expect(keepSignedIn).toBeChecked();
     await page.getByRole('button', { name: 'Sign in with a passkey' }).click();
     await expect(page).not.toHaveURL(/\/auth\//);
+    const session = (await page.context().cookies()).find((cookie) =>
+      cookie.name.endsWith('.Auth'),
+    );
+    expect(session!.expires - Date.now() / 1_000).toBeGreaterThan(30 * 86_400 - 60);
 
     // 口令登录后第二步默认就是通行密钥
     await page.context().clearCookies();
@@ -69,7 +76,17 @@ test(
     await page.getByLabel('Username or Email').fill(username);
     await page.getByLabel('Password', { exact: true }).fill(password);
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    const rememberDevice = page.getByRole('checkbox', { name: /Skip two-step verification/ });
+    await rememberDevice.click();
+    await expect(rememberDevice).toBeChecked();
     await page.getByRole('button', { name: 'Use passkey' }).click();
+    await expect(page).not.toHaveURL(/\/auth\//);
+
+    await page.request.post('/api/v1/auth/logout');
+    await page.goto('/auth/login');
+    await page.getByLabel('Username or Email').fill(username);
+    await page.getByLabel('Password', { exact: true }).fill(password);
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(page).not.toHaveURL(/\/auth\//);
   },
 );

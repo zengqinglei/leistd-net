@@ -3,6 +3,9 @@ namespace CompanyName.ProjectName.Application.Auth.Dtos;
 /// <summary>当前租户的注册摘要，匿名可读：登录页、注册页、首页据此决定是否给出注册入口与验证方式。</summary>
 public record SecurityConfigOutputDto
 {
+    /// <summary>租户是否提供较长的会话档位。</summary>
+    public bool AllowKeepSignedIn { get; init; }
+
     /// <summary>是否开放自助注册。</summary>
     public bool RegistrationEnabled { get; init; }
 

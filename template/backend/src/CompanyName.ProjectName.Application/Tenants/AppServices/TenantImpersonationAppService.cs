@@ -71,6 +71,7 @@ internal sealed class TenantImpersonationAppService(
             throw new BusinessException(MultiTenancyErrorCodes.NotActive, $"Tenant '{tenant.Name}' is deactivated.");
         }
 
+        var originalSession = await userSessionAppService.GetCurrentSessionForReissueAsync(cancellationToken);
         ClaimsPrincipal principal;
 
         // 进入目标租户上下文后，用户、角色与成员关系都按 TenantId 分区。
@@ -114,7 +115,8 @@ internal sealed class TenantImpersonationAppService(
             // 模拟不是一次认证：模拟会话沿用发起人的认证时刻，退出时再原样带回（见 SessionIssuer.SignInAsync）
             principal = await sessionIssuer.SignInAsync(
                 admin, roleNames: null, additionalClaims: claims, cancellationToken: cancellationToken,
-                authenticatedAt: CurrentAuthenticationTime());
+                authenticatedAt: CurrentAuthenticationTime(),
+                keepSignedIn: originalSession.KeepSignedIn, sessionAuthenticatedAt: originalSession.AuthenticatedAt);
 
             logger.LogWarning(
                 "Impersonation started: user {ImpersonatorId} is now acting as {Username} in tenant {TenantName} ({TenantId})",
@@ -182,6 +184,7 @@ internal sealed class TenantImpersonationAppService(
             }
         }
 
+        var originalSession = await userSessionAppService.GetCurrentSessionForReissueAsync(cancellationToken);
         ClaimsPrincipal principal;
 
         // 回到发起人所在的上下文再查人：发起人是宿主时为 null，正好落回宿主行。
@@ -200,7 +203,8 @@ internal sealed class TenantImpersonationAppService(
 
             // 换回发起人也不是一次认证：沿用模拟会话里带着的、发起人原来的认证时刻
             principal = await sessionIssuer.SignInAsync(
-                impersonator, cancellationToken: cancellationToken, authenticatedAt: CurrentAuthenticationTime());
+                impersonator, cancellationToken: cancellationToken, authenticatedAt: CurrentAuthenticationTime(),
+                keepSignedIn: originalSession.KeepSignedIn, sessionAuthenticatedAt: originalSession.AuthenticatedAt);
 
             logger.LogWarning(
                 "Impersonation ended: session returned to user {ImpersonatorId}", impersonatorId);

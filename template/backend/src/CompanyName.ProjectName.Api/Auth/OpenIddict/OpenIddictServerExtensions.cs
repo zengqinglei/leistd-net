@@ -8,6 +8,7 @@ using Leistd.BackgroundJobs.Recurring;
 using Leistd.Security.OpenIddict.Server;
 using Leistd.Security.OpenIddict.Server.Pruning;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Leistd.Security.Claims;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
@@ -80,6 +81,18 @@ public static class OpenIddictServerExtensions
                 options.EnableAuthorizationRequestCaching()
                     .EnableEndSessionRequestCaching();
                 options.AllowRefreshTokenFlow();
+                options.AddEventHandler<OpenIddictServerEvents.ProcessSignInContext>(handler => handler
+                    .SetOrder(OpenIddictServerHandlers.PrepareRefreshTokenPrincipal.Descriptor.Order + 1)
+                    .UseInlineHandler(context =>
+                    {
+                        // 官方处理器已准备刷新令牌主体，在生成令牌前写入服务端会话的绝对截止。
+                        if (context.RefreshTokenPrincipal is { } refreshToken &&
+                            context.Principal?.GetClaim(CustomClaimTypes.SessionId) is not null &&
+                            context.Principal.GetExpirationDate() is { } expiresAt)
+                            refreshToken.SetExpirationDate(expiresAt);
+
+                        return ValueTask.CompletedTask;
+                    }));
                 options.AllowClientCredentialsFlow();
                 options.AllowTokenExchangeFlow();
                 options.Configure(server =>

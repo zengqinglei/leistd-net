@@ -41,7 +41,8 @@ public sealed class AuthController(
     ITwoFactorAppService twoFactorAppService,
     IPasskeyAppService passkeyAppService,
     SessionCookieIssuer sessionCookieIssuer,
-    PendingSignInCookie pendingSignIn) : BaseController
+    PendingSignInCookie pendingSignIn,
+    RememberedDeviceCookie rememberedDeviceCookie) : BaseController
 {
     /// <summary>账号密码登录。还要第二步时不下发会话，只写待完成登录的临时 Cookie 并返回可用方式。</summary>
     [AllowAnonymous]
@@ -49,7 +50,7 @@ public sealed class AuthController(
     [IgnoreAntiforgeryToken]
     public async Task<SessionLoginOutputDto> SessionLoginAsync([FromBody] LoginInputDto input, CancellationToken cancellationToken)
     {
-        var result = await authService.AuthenticateSessionAsync(input, cancellationToken);
+        var result = await authService.AuthenticateSessionAsync(input, cancellationToken, await rememberedDeviceCookie.ReadAsync(HttpContext));
         return await sessionCookieIssuer.CompleteLoginAsync(HttpContext, result, cancellationToken);
     }
 
@@ -91,9 +92,11 @@ public sealed class AuthController(
     [IgnoreAntiforgeryToken]
     public async Task TwoFactorLoginAsync([FromBody] TwoFactorLoginInputDto input, CancellationToken cancellationToken)
     {
-        var principal = await pendingSignIn.RunAsync(
+        var result = await pendingSignIn.RunAsync(
             HttpContext, token => authService.CompleteTwoFactorLoginAsync(token, input, cancellationToken));
-        await sessionCookieIssuer.SignInNewSessionAsync(HttpContext, principal, cancellationToken);
+        await sessionCookieIssuer.SignInNewSessionAsync(HttpContext, result.Principal, cancellationToken);
+        if (result.Device is not null)
+            await rememberedDeviceCookie.SignInAsync(HttpContext, result.Device, result.RememberDeviceDays);
     }
 
     /// <summary>放弃待完成的登录（换账号、返回登录页）：作废挑战并删临时 Cookie。幂等。</summary>

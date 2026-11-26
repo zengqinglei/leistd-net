@@ -26,6 +26,7 @@ import {
   lucideSmartphone,
 } from '@ng-icons/lucide';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmCheckbox } from '@spartan-ng/helm/checkbox';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
@@ -59,6 +60,7 @@ import { resendCountdown } from '../../utils/resend-countdown';
  * 页面脚本拿不到、也不需要它。
  */
 export interface TwoFactorPrompt {
+  rememberDeviceDays?: number;
   /** 能用的方式，按系统顺序，恢复码在最后。 */
   methods: TwoFactorMethod[];
   /** 直接给出的方式。 */
@@ -76,6 +78,7 @@ export function twoFactorPromptOf(context: TwoFactorLoginOutputDto): TwoFactorPr
     methods,
     defaultMethod: context.defaultTwoFactorMethod ?? methods[0],
     maskedEmail: context.maskedEmail ?? null,
+    rememberDeviceDays: context.rememberDeviceDays,
   };
 }
 
@@ -129,6 +132,7 @@ const METHOD_ICONS: Record<TwoFactorMethod, string> = {
   imports: [FormField,
     NgIcon,
     HlmButton,
+    HlmCheckbox,
     ...HlmFieldImports,
     HlmInput,
     HlmSpinner,
@@ -174,6 +178,16 @@ export class TwoFactorChallenge {
 
   /** 当前用的方式；换了一次第二步时回到它的默认方式。 */
   protected readonly method = linkedSignal(() => this.prompt().defaultMethod);
+  protected readonly rememberDevice = signal(false);
+  protected readonly rememberDeviceDays = computed(() => {
+    const method = this.method();
+    return method === 'authenticator' || method === 'passkey'
+      ? (this.prompt().rememberDeviceDays ?? 0)
+      : 0;
+  });
+  private readonly rememberDeviceInput = computed(() =>
+    this.rememberDeviceDays() > 0 && this.rememberDevice() ? { rememberDevice: true } : {},
+  );
   /** 其余能换的方式，按系统顺序。 */
   protected readonly alternatives = computed(() =>
     this.prompt().methods.filter((method) => method !== this.method()),
@@ -367,7 +381,9 @@ export class TwoFactorChallenge {
     try {
       const { options } = await lastValueFrom(this.accountService.beginTwoFactorPasskey());
       const passkey = await getPasskey(options);
-      await lastValueFrom(this.accountService.completeTwoFactorLogin({ passkey }));
+      await lastValueFrom(
+        this.accountService.completeTwoFactorLogin({ passkey, ...this.rememberDeviceInput() }),
+      );
       this.completed.emit();
     } catch (error) {
       const code = error instanceof ApplicationHttpError ? error.code : undefined;
@@ -397,7 +413,7 @@ export class TwoFactorChallenge {
         return { emailCode: value.replace(/\s/g, '') };
       //#endif
       default:
-        return { code: value.replace(/\s/g, '') };
+        return { code: value.replace(/\s/g, ''), ...this.rememberDeviceInput() };
     }
   }
 
@@ -439,6 +455,8 @@ const ENGLISH: Record<string, string> = {
   'account.twoFactorLogin.recoveryHint': 'Enter one of the recovery codes you saved.',
   'account.twoFactorLogin.codeLabel': 'Verification code',
   'account.twoFactorLogin.recoveryLabel': 'Recovery code',
+  'account.twoFactorLogin.rememberDevice':
+    'Skip two-step verification on this device for {{days}} days',
   'account.twoFactorLogin.submit': 'Verify',
   'account.twoFactorLogin.useRecovery': 'Use a recovery code',
   'account.twoFactorLogin.useCode': 'Use authenticator app',

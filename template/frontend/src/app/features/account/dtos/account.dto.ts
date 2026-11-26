@@ -15,6 +15,7 @@ export interface RegisterInputDto {
 
 /** 待完成的登录（第一步已通过、尚待第二步）：第二步页凭临时 Cookie 读取，刷新后据此继续。 */
 export interface TwoFactorLoginOutputDto {
+  rememberDeviceDays?: number;
   /** 能用的方式，按系统顺序，恢复码在最后。 */
   twoFactorMethods: TwoFactorMethod[];
   /** 直接给出的方式（本人首选，否则按系统顺序）。 */
@@ -25,6 +26,7 @@ export interface TwoFactorLoginOutputDto {
 
 /** 登录第二步：提交其中一种方式的码；待完成的登录由临时 Cookie 表明，不在请求体里。 */
 export interface TwoFactorLoginInputDto {
+  rememberDevice?: boolean;
   /** 身份验证器上的验证码。 */
   code?: string;
   //#if (Email)
@@ -38,6 +40,7 @@ export interface TwoFactorLoginInputDto {
 
 /** 免口令登录：取选项时拿到的仪式凭据与浏览器交回的断言。 */
 export interface PasskeySignInInputDto {
+  keepSignedIn?: boolean;
   ceremony: string;
   credential: WebAuthnJson;
 }

@@ -356,7 +356,11 @@ export class AccountService {
       .pipe(map(() => undefined));
   }
 
-  getExternalLoginUrl(provider: 'github' | 'google', returnUrl?: string | null): string {
+  getExternalLoginUrl(
+    provider: 'github' | 'google',
+    returnUrl?: string | null,
+    keepSignedIn = false,
+  ): string {
     //#if (IncludeMultiTenancy)
     const tenant = this.tenantContext.current()?.key;
     //#endif
@@ -365,6 +369,7 @@ export class AccountService {
     if (tenant) query.set('tenant', tenant);
     //#endif
     if (returnUrl) query.set('returnUrl', returnUrl);
+    if (keepSignedIn) query.set('keepSignedIn', 'true');
     return `/api/v1/external-auth/${provider}/challenge${query.size ? `?${query}` : ''}`;
   }
 

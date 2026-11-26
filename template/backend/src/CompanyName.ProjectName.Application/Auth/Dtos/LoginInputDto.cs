@@ -16,4 +16,7 @@ public record LoginInputDto
     [Required(ErrorMessage = "{0} is required.")]
     [StringLength(100, MinimumLength = 6, ErrorMessage = "{0} must be between {2} and {1} characters.")]
     public string Password { get; init; } = null!;
+
+    /// <summary>请求使用可随活动续期的较长会话。</summary>
+    public bool KeepSignedIn { get; init; }
 }

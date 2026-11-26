@@ -202,6 +202,43 @@ describe('Login', () => {
   afterEach(() => localStorage.clear());
   //#endif
 
+  it('sends the longer session selection only after the checkbox is checked', async () => {
+    await setUp();
+    TestBed.tick();
+    TestBed.inject(HttpTestingController)
+      .match('/api/v1/auth/security-config')
+      .forEach((request) => request.flush({ allowKeepSignedIn: true }));
+    fixture.detectChanges();
+
+    const checkbox = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+      'button#login-keep-signed-in',
+    )!;
+    expect(checkbox.getAttribute('aria-checked')).toBe('false');
+    checkbox.click();
+    fixture.detectChanges();
+    fillValidCredentials();
+    await component.onSubmit();
+
+    expect(authService.login).toHaveBeenCalledWith({
+      usernameOrEmail: 'admin',
+      password: 'Admin@123456',
+      keepSignedIn: true,
+    });
+  });
+
+  it('hides the longer session choice when the tenant disables it', async () => {
+    await setUp();
+    TestBed.tick();
+    TestBed.inject(HttpTestingController)
+      .match('/api/v1/auth/security-config')
+      .forEach((request) => request.flush({ allowKeepSignedIn: false }));
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('#login-keep-signed-in'),
+    ).toBeNull();
+  });
+
   // 每次进入登录页都取当前注册策略：管理员可能在上次读取之后重新开放了注册
   it('reads the registration policy again each time the page is entered', async () => {
     await setUp();
@@ -1207,7 +1244,9 @@ describe('Login', () => {
     let completePasskeySignIn: Mock;
 
     async function setUpPasskeys(
-      config: { passkeysAvailable: boolean } = { passkeysAvailable: true },
+      config: { passkeysAvailable: boolean; allowKeepSignedIn?: boolean } = {
+        passkeysAvailable: true,
+      },
     ): Promise<void> {
       await setUp();
       beginPasskeySignIn = vi
@@ -1478,7 +1517,7 @@ describe('Login', () => {
         signal = request?.signal ?? undefined;
         return new Promise((resolve) => (pick = resolve));
       });
-      await setUpPasskeys();
+      await setUpPasskeys({ passkeysAvailable: true, allowKeepSignedIn: true });
       await fixture.whenStable();
 
       expect(navigator.credentials.get).toHaveBeenCalledWith(
@@ -1486,6 +1525,10 @@ describe('Login', () => {
       );
       expect(signal?.aborted).toBe(false);
 
+      (fixture.nativeElement as HTMLElement)
+        .querySelector<HTMLElement>('button#login-keep-signed-in')!
+        .click();
+      fixture.detectChanges();
       pick(fakeAssertion('cred-auto'));
       // 选中之后的提交是一串微任务（转换断言、提交、收尾），等它们落定
       await new Promise((resolve) => setTimeout(resolve));
@@ -1493,6 +1536,7 @@ describe('Login', () => {
 
       expect(completePasskeySignIn).toHaveBeenCalledExactlyOnceWith({
         ceremony: 'ceremony-1',
+        keepSignedIn: true,
         credential: expect.objectContaining({ id: 'cred-auto' }),
       });
 

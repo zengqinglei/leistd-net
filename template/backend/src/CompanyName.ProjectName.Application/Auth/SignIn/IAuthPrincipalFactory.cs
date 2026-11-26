@@ -28,15 +28,17 @@ public interface IAuthPrincipalFactory
     /// <remarks>
     /// 令牌端点的请求不带用户身份，解析链只能得出宿主；用户与租户都取自令牌主体，在其租户内加载用户。
     /// 令牌主体带会话标识（会话绑定客户端签发时写入）时，会话必须仍然有效，否则返回 <see langword="null"/>；
-    /// 判定不记活跃，续期不会延长 Identity 会话。
+    /// 只有会话绑定的刷新授权记录活动。
     /// </remarks>
     /// <param name="tokenPrincipal">授权码或刷新令牌的主体。</param>
     /// <param name="scopes">本次签发的 scope。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="recordSessionActivity">是否由会话绑定的刷新授权推进活动。</param>
     Task<ClaimsPrincipal?> CreateFromTokenAsync(
         ClaimsPrincipal tokenPrincipal,
         IEnumerable<string>? scopes = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool recordSessionActivity = false);
 
     /// <summary>装配 userinfo 端点的 claim 集合；主体、租户或用户无效时返回 <see langword="null"/>。</summary>
     /// <param name="tokenPrincipal">本次请求的令牌主体：用户与租户取自它，也决定按哪些 scope 投影、角色取自哪里。</param>

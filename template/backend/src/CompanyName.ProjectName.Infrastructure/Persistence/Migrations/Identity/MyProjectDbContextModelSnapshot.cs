@@ -199,6 +199,9 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime>("AuthenticatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp with time zone");
 
@@ -213,6 +216,9 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     b.Property<string>("IpAddress")
                         .HasMaxLength(45)
                         .HasColumnType("character varying(45)");
+
+                    b.Property<bool>("KeepSignedIn")
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime>("LastSeenTime")
                         .HasColumnType("timestamp with time zone");

@@ -4,6 +4,7 @@ import { TwoFactorMethod } from './auth.dto';
 
 /** 当前租户的注册摘要（匿名可读）。 */
 export interface SecurityConfigOutputDto {
+  allowKeepSignedIn?: boolean;
   /** 是否开放自助注册；关闭时隐藏注册入口，注册页给出说明。 */
   registrationEnabled: boolean;
   /** 部署配置了通行密钥的依赖方：为 false 时登录页不给"用通行密钥登录"与条件式自动填充。 */

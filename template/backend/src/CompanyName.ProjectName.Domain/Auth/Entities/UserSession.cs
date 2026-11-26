@@ -1,5 +1,6 @@
 #if (LocalIdentity)
 using System.Linq.Expressions;
+using CompanyName.ProjectName.Domain.Auth.Policies;
 using CompanyName.ProjectName.Domain.Auth.Events;
 using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Domain.Entities.Auditing;
@@ -35,6 +36,12 @@ public class UserSession : CreationAuditedEntity<Guid>, IAggregateRoot<Guid>, IM
     /// <summary>会话所属用户。</summary>
     public Guid UserId { get; private set; }
 
+    /// <summary>本次原始登录是否选择保持登录。</summary>
+    public bool KeepSignedIn { get; private set; }
+
+    /// <summary>本次原始认证时刻，模拟登录换发时沿用。</summary>
+    public DateTime AuthenticatedAt { get; private set; }
+
     /// <summary>最近一次经校验的请求时间（按 <see cref="TouchInterval"/> 节流）。</summary>
     public DateTime LastSeenTime { get; private set; }
 
@@ -52,10 +59,13 @@ public class UserSession : CreationAuditedEntity<Guid>, IAggregateRoot<Guid>, IM
     {
     }
 
-    public UserSession(Guid userId, DateTime now, string? ipAddress, string? userAgent, string? impersonatorName = null)
+    public UserSession(Guid userId, DateTime now, string? ipAddress, string? userAgent, string? impersonatorName = null,
+        bool keepSignedIn = false, DateTime? authenticatedAt = null)
     {
         Id = Guid.CreateVersion7();
         UserId = userId;
+        AuthenticatedAt = authenticatedAt ?? now;
+        KeepSignedIn = keepSignedIn;
         LastSeenTime = now;
         IpAddress = Truncate(ipAddress, IpAddressMaxLength);
         UserAgent = Truncate(userAgent, UserAgentMaxLength);
@@ -66,26 +76,28 @@ public class UserSession : CreationAuditedEntity<Guid>, IAggregateRoot<Guid>, IM
     /// <param name="now">撤销时刻。</param>
     public void Revoke(DateTime now) => AddLocalEvent(new UserSessionRevokedEvent(Id, now));
 
-    /// <summary>空闲超过 <paramref name="idleTimeout"/> 即视为已结束（与会话 Cookie 的滑动过期同一口径）。</summary>
-    /// <remarks>与 <see cref="ActiveAt"/>、<see cref="ExpiredAt"/> 共用同一个截止时刻，内存判定与查询不会分叉。</remarks>
-    public bool IsExpired(DateTime now, TimeSpan idleTimeout) => LastSeenTime <= ActiveCutoff(now, idleTimeout);
+    /// <summary>按当前策略判定会话是否已过期。</summary>
+    public bool IsExpired(DateTime now, UserSessionPolicy policy) =>
+        now >= policy.Expiry(AuthenticatedAt, KeepSignedIn, LastSeenTime);
 
-    /// <summary>在 <paramref name="now"/> 时刻仍有效的会话（<see cref="IsExpired"/> 的反面），可翻译成 SQL。</summary>
-    public static Expression<Func<UserSession, bool>> ActiveAt(DateTime now, TimeSpan idleTimeout)
+    /// <summary>仍有效的会话，可翻译成 SQL。</summary>
+    public static Expression<Func<UserSession, bool>> ActiveAt(DateTime now, UserSessionPolicy policy)
     {
-        var cutoff = ActiveCutoff(now, idleTimeout);
-        return session => session.LastSeenTime > cutoff;
+        var standardCutoff = now - policy.SessionLifetime;
+        var keepSignedInCutoff = now - policy.KeepSignedInLifetime;
+        var idleCutoff = now - policy.IdleTimeout;
+        var allowKeepSignedIn = policy.AllowKeepSignedIn;
+        return session => allowKeepSignedIn && session.KeepSignedIn
+            ? session.AuthenticatedAt > keepSignedInCutoff && session.LastSeenTime > idleCutoff
+            : session.AuthenticatedAt > standardCutoff;
     }
 
-    /// <summary>在 <paramref name="now"/> 时刻已结束的会话（与 <see cref="IsExpired"/> 同一判据），可翻译成 SQL。</summary>
-    public static Expression<Func<UserSession, bool>> ExpiredAt(DateTime now, TimeSpan idleTimeout)
+    /// <summary>已结束的会话，与有效会话条件互补。</summary>
+    public static Expression<Func<UserSession, bool>> ExpiredAt(DateTime now, UserSessionPolicy policy)
     {
-        var cutoff = ActiveCutoff(now, idleTimeout);
-        return session => session.LastSeenTime <= cutoff;
+        var active = ActiveAt(now, policy);
+        return Expression.Lambda<Func<UserSession, bool>>(Expression.Not(active.Body), active.Parameters);
     }
-
-    // 最近活跃晚于这一刻的会话才算有效：恰好落在这一刻（空闲刚好满时长）即已结束
-    private static DateTime ActiveCutoff(DateTime now, TimeSpan idleTimeout) => now - idleTimeout;
 
     /// <summary>记一次活跃。距上次记录不足 <see cref="TouchInterval"/> 时不改动，返回 false，调用方据此省掉写库。</summary>
     public bool Touch(DateTime now, string? ipAddress)

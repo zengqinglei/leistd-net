@@ -128,7 +128,7 @@ public static class DependencyInjection
 #endif
         services.TryAddTransient<SessionIssuer>();
         services.TryAddTransient<IUserSessionValidator, UserSessionValidator>();
-        services.TryAddTransient<ISessionIdleTimeoutReader, SessionIdleTimeoutReader>();
+        services.TryAddTransient<ISessionExpiryReader, SessionExpiryReader>();
         // 本次请求里已校验的会话与它是否受限：认证事件写入，中间件、协议端点与"当前用户"同读这一份
         services.TryAddScoped<ICurrentSessionState, CurrentSessionState>();
         services.AddUserSessionCacheEviction();

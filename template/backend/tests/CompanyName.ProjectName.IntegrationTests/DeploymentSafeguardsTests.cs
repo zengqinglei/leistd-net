@@ -4,9 +4,6 @@ using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.AspNetCore.Hosting;
 #if (SpaFrontend)
 using CompanyName.ProjectName.Application.Shared;
-#if (LocalIdentity)
-using CompanyName.ProjectName.Domain.Auth.Options;
-#endif
 using Microsoft.AspNetCore.Authentication.Cookies;
 #endif
 #if (RemoteTokenAuth)
@@ -93,32 +90,28 @@ public sealed class DeploymentSafeguardsTests
     }
 #if (SpaFrontend)
 
-    // 会话时长不足 1 天时 Cookie 一签发即过期、服务端会话一建即判空闲：启动期校验拒绝，并指明键名
     [Fact]
-    public void Session_lifetime_below_one_day_fails_at_startup()
+    public void Invalid_session_lifetime_fails_at_startup()
     {
         using var factory = new ProjectWebApplicationFactory();
 
+#if (LocalIdentity)
+        var exception = StartupFailure(factory, builder => builder.UseSetting("SessionCookie:SessionHours", "0"));
+        Assert.Contains("SessionCookie lifetimes", exception.ToString(), StringComparison.Ordinal);
+#else
         var exception = StartupFailure(factory, builder => builder.UseSetting("SessionCookie:ExpireDays", "0"));
-
         Assert.Contains("SessionCookie:ExpireDays", exception.ToString(), StringComparison.Ordinal);
+#endif
     }
 
-    // 会话 Cookie 的滑动过期与服务端会话的空闲时限从同一个设置派生：两者不一致时，
-    // Cookie 还有效会话却已判过期，或设备列表里留着早已失效的会话
     [Fact]
-    public void Cookie_lifetime_and_server_idle_timeout_follow_one_session_setting()
+    public void The_application_cookie_does_not_use_sliding_expiration()
     {
         using var factory = new ProjectWebApplicationFactory();
-        using var host = factory.WithWebHostBuilder(builder => builder.UseSetting("SessionCookie:ExpireDays", "3"));
 
-        var cookie = host.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
+        var cookie = factory.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
             .Get(AuthenticationSchemeNames.SessionCookie);
-        Assert.Equal(TimeSpan.FromDays(3), cookie.ExpireTimeSpan);
-        Assert.True(cookie.SlidingExpiration);
-#if (LocalIdentity)
-        Assert.Equal(TimeSpan.FromDays(3), host.Services.GetRequiredService<IOptions<UserSessionOptions>>().Value.IdleTimeout);
-#endif
+        Assert.False(cookie.SlidingExpiration);
     }
 #endif
 #if (OpenIddictServer)

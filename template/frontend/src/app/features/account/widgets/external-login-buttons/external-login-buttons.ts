@@ -60,6 +60,7 @@ export class ExternalLoginButtons {
 
   /** 外部登录完成后回到的地址（OIDC 授权回跳等），由父页面从查询参数取。 */
   readonly returnUrl = input<string | null>(null);
+  readonly keepSignedIn = input(false);
   /** 父页面不接受认证（租户上下文未定案、正在提交）时为 true。 */
   readonly blocked = input(false);
   /** 表单与下方入口之间分隔线上的文字，如"或使用以下方式登录""或使用以下方式注册"。 */
@@ -113,7 +114,10 @@ export class ExternalLoginButtons {
       // 整页离开再回来，内存里的租户会丢：提供商那一侧的结果回不到这里，只能在离开前记住
       this.tenantContext.remember();
       //#endif
-      this.fullPage.assign(this.accountService.getExternalLoginUrl(provider, this.returnUrl()));
+      const url = this.keepSignedIn()
+        ? this.accountService.getExternalLoginUrl(provider, this.returnUrl(), true)
+        : this.accountService.getExternalLoginUrl(provider, this.returnUrl());
+      this.fullPage.assign(url);
     } catch (error) {
       console.error(`${label} login failed`, error);
       //#if (IncludeLocalization)

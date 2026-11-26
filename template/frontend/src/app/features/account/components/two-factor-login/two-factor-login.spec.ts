@@ -168,6 +168,42 @@ describe('TwoFactorLogin', () => {
     expect(challenge()?.getAttribute('data-method')).toBe('authenticator');
   });
 
+  it('submits a checked remember-device option with an authenticator code', async () => {
+    await setUp(of({ ...CONTEXT, rememberDeviceDays: 30 }));
+
+    const checkbox = host().querySelector<HTMLElement>('button#two-factor-remember-device')!;
+    expect(checkbox.getAttribute('aria-checked')).toBe('false');
+    checkbox.click();
+    fixture.detectChanges();
+    await submitCode();
+
+    expect(account.completeTwoFactorLogin).toHaveBeenCalledWith({
+      code: '123456',
+      rememberDevice: true,
+    });
+  });
+
+  it('hides the remember-device choice when the tenant disables it', async () => {
+    await setUp(of({ ...CONTEXT, rememberDeviceDays: 0 }));
+
+    expect(host().querySelector('#two-factor-remember-device')).toBeNull();
+  });
+
+  //#if (Email)
+  it('does not offer remembered sign-in for an email code', async () => {
+    await setUp(
+      of({
+        ...CONTEXT,
+        rememberDeviceDays: 30,
+        twoFactorMethods: ['email'],
+        defaultTwoFactorMethod: 'email',
+      }),
+    );
+
+    expect(host().querySelector('#two-factor-remember-device')).toBeNull();
+  });
+  //#endif
+
   it('shows a placeholder while the pending sign-in is being read', async () => {
     await setUp(new Subject<never>());
 

@@ -37,6 +37,20 @@
       </p>
     </div>
 
+    @if (rememberDeviceDays(); as days) {
+      <div hlmField orientation="horizontal">
+        <hlm-checkbox
+          inputId="two-factor-remember-device"
+          [checked]="rememberDevice()"
+          [disabled]="busy()"
+          (checkedChange)="rememberDevice.set($event)"
+        />
+        <label hlmFieldLabel for="two-factor-remember-device">{{
+          t('account.twoFactorLogin.rememberDevice', { days })
+        }}</label>
+      </div>
+    }
+
     @if (method() === 'passkey') {
       <!-- 只有一个按钮：本人点了才调起浏览器，不自动弹出 -->
       <div class="flex flex-col gap-3" data-testid="two-factor-passkey">

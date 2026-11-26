@@ -210,6 +210,8 @@ public static class SettingConstant
 
         /// <summary>会话空闲多少天后失效。</summary>
         public const string SessionIdleTimeoutDays = "Security.SessionIdleTimeoutDays";
+        public const string AllowKeepSignedIn = "Security.AllowKeepSignedIn";
+        public const string RememberDeviceDays = "Security.RememberDeviceDays";
 
         /// <summary>连续失败次数的默认阈值。</summary>
         public const int DefaultLockoutMaxFailedAttempts = 5;
