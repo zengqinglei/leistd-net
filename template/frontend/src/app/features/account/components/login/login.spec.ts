@@ -210,9 +210,11 @@ describe('Login', () => {
       .forEach((request) => request.flush({ allowKeepSignedIn: true }));
     fixture.detectChanges();
 
-    const checkbox = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
-      'button#login-keep-signed-in',
-    )!;
+    const host = fixture.nativeElement as HTMLElement;
+    const checkbox = host.querySelector<HTMLElement>('button#login-keep-signed-in')!;
+    const forgotLink = host.querySelector('[data-testid="forgot-password"]')!;
+    const checkboxField = checkbox.closest('[data-slot="field"]')!;
+    expect(checkboxField.nextElementSibling).toBe(forgotLink);
     expect(checkbox.getAttribute('aria-checked')).toBe('false');
     checkbox.click();
     fixture.detectChanges();
