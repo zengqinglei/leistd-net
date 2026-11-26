@@ -1,10 +1,10 @@
 {
   "loginTitle": "This sign-in request has expired",
-  "loginDescription": "You stayed on the page for a while and this sign-in request is no longer valid. Go back to {{app}} and sign in again to start a new sign-in.",
+  "loginDescription": "You stayed on this page too long, so this sign-in request is no longer valid. Go back to {{app}} and sign in again.",
   "loginDescriptionUnknown": "This sign-in request is no longer valid. Go back to the app you were using and sign in again.",
   "logoutTitle": "This sign-out request has expired",
-  "logoutDescription": "This sign-out request has expired and you may already be signed out. If you are still signed in, go back to {{app}} and sign out again.",
-  "logoutDescriptionUnknown": "This sign-out request has expired and you may already be signed out. If you are still signed in, go back to the app you were using and sign out again.",
+  "logoutDescription": "You may already be signed out. If you are still signed in, go back to {{app}} and sign out again.",
+  "logoutDescriptionUnknown": "You may already be signed out. If you are still signed in, go back to the app you were using and sign out again.",
   "signInAgain": "Sign in to {{app}} again",
   "backToApp": "Back to {{app}}",
   "backHome": "Back to Identity home"
