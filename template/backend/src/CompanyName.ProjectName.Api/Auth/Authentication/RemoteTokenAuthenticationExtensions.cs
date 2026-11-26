@@ -8,6 +8,7 @@ using Leistd.ServiceClient.AspNetCore;
 using Leistd.Security.OpenIddict.Validation;
 #if (ResourceBrowserSession)
 using System.Text;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 #endif
@@ -138,8 +139,21 @@ internal static class RemoteTokenAuthenticationExtensions
             options.SignedOutCallbackPath = "/api/v1/auth/signout";
             options.Events.OnRemoteFailure = context =>
             {
+                // ASP.NET Core OIDC 以同一种异常报告这些失败，未提供可区分的错误码。
+                var reason = context.Failure is AuthenticationFailureException
+                {
+                    Message: "OpenIdConnectAuthenticationHandler: message.State is null or empty."
+                        or "Unable to unprotect the message.State."
+                        or "Correlation failed."
+                } ? "expired" : "error";
                 context.HandleResponse();
-                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                context.Response.Redirect("/auth/sign-in-failed?reason=" + reason);
+                return Task.CompletedTask;
+            };
+            options.Events.OnAccessDenied = context =>
+            {
+                context.HandleResponse();
+                context.Response.Redirect("/auth/sign-in-failed?reason=denied");
                 return Task.CompletedTask;
             };
             options.Events.OnTokenValidated = async context =>
