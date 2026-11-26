@@ -15,6 +15,8 @@ export class SettingContextService {
   private readonly settings = signal<readonly SettingOutputDto[]>([]);
   /** 每次载入与清空都换一代：只有最新一代的响应能写快照，晚到的旧响应与清空前发出的请求一律作废。 */
   private generation = 0;
+  private loadedKey: string | undefined;
+  private entryRead: { key: string; promise: Promise<readonly SettingOutputDto[]> } | undefined;
 
   /** 当前快照（只读）。 */
   readonly snapshot = this.settings.asReadonly();
@@ -22,12 +24,36 @@ export class SettingContextService {
   /**
    * 建立范围时静默读取，失败则使用默认值。保存后的刷新保留有效快照，失败交给调用方。
    */
-  async load(mode: 'entry' | 'refresh' = 'refresh'): Promise<readonly SettingOutputDto[]> {
+  load(mode: 'entry' | 'refresh' = 'refresh', key = ''): Promise<readonly SettingOutputDto[]> {
     const generation = ++this.generation;
     const entering = mode === 'entry';
+    if (entering) this.loadedKey = undefined;
+    const promise = this.read(entering, key, generation);
+    this.entryRead = entering ? { key, promise } : undefined;
+    return promise;
+  }
+
+  /** 页面首读取同范围、同语言的快照，启动读取失败时由页面补读。 */
+  async ensureLoaded(key: string): Promise<readonly SettingOutputDto[]> {
+    if (this.entryRead?.key === key) {
+      const generation = this.generation;
+      await this.entryRead.promise;
+      if (generation !== this.generation) return this.settings();
+    }
+    return this.loadedKey === key ? this.settings() : this.load('refresh', key);
+  }
+
+  private async read(
+    entering: boolean,
+    key: string,
+    generation: number,
+  ): Promise<readonly SettingOutputDto[]> {
     try {
       const settings = await firstValueFrom(this.settingService.getSettings(entering));
-      if (generation === this.generation) this.settings.set(settings);
+      if (generation === this.generation) {
+        this.loadedKey = key;
+        this.settings.set(settings);
+      }
     } catch (error) {
       if (!entering) throw error;
       if (generation === this.generation) this.settings.set([]);
@@ -37,6 +63,8 @@ export class SettingContextService {
 
   clear(): void {
     this.generation++;
+    this.entryRead = undefined;
+    this.loadedKey = undefined;
     this.settings.set([]);
   }
 

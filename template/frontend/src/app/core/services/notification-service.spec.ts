@@ -42,20 +42,44 @@ describe('NotificationService', () => {
 
   afterEach(() => httpMock.verify());
 
-  it('does not open a second connection when initialized twice', async () => {
+  it('shares the history request in flight and across shell remounts', async () => {
     const first = service.init();
-    httpMock.expectOne((req) => req.url === '/api/v1/notifications').flush(page());
-    await first;
-
     const second = service.init();
     httpMock.expectOne((req) => req.url === '/api/v1/notifications').flush(page());
-    await second;
+    await Promise.all([first, second]);
 
-    // 幂等由 SignalRService.connect() 自身保证；这里锁住的是"调用方没有绕过它"，
-    // 例如自己缓存一个 initialized 标志、或改成直接建连接。
-    expect(signalR.connect).toHaveBeenCalledTimes(2);
+    const remount = service.init();
+    httpMock.expectNone((req) => req.url === '/api/v1/notifications');
+    await remount;
     expect(signalR.connect).toHaveBeenCalledWith();
   });
+
+  it('reads the history for a new subject after a successful initialization', async () => {
+    const first = service.init();
+    httpMock.expectOne('/api/v1/notifications?limit=50').flush(page());
+    await first;
+
+    await signalR.reset();
+    const next = service.init();
+    httpMock
+      .expectOne('/api/v1/notifications?limit=50')
+      .flush(page(notification('new-subject', '2026-01-01T00:00:00Z')));
+    await next;
+    expect(service.notifications().map((item) => item.id)).toEqual(['new-subject']);
+  });
+  //#if (TenantWorkspace)
+
+  it('reads the history again when a workspace switch resets the active list', async () => {
+    const first = service.init();
+    httpMock.expectOne('/api/v1/notifications?limit=50').flush(page());
+    await first;
+
+    await signalR.setWorkspace('acme', true);
+    const next = service.init();
+    httpMock.expectOne('/api/v1/notifications?limit=50').flush(page());
+    await next;
+  });
+  //#endif
 
   // 后端按 offset/limit 分页、越界返回 400：只传 limit，拿到的是分页结果而不是数组
   it('requests the newest page by limit and reads its items', async () => {
@@ -147,6 +171,11 @@ describe('NotificationService', () => {
     expect(service.notifications().map((item) => item.id)).toEqual(['pushed']);
     // 失败要能被界面看到，否则空列表与"没有通知"无从区分。
     expect(service.loadFailed()).toBe(true);
+
+    const remount = service.init();
+    httpMock.expectOne('/api/v1/notifications?limit=50').flush(page());
+    await remount;
+    expect(service.loadFailed()).toBe(false);
   });
 
   it('clears the failure once a retry succeeds', async () => {
@@ -167,6 +196,10 @@ describe('NotificationService', () => {
 
     expect(service.loadFailed()).toBe(false);
     expect(service.notifications().map((item) => item.id)).toEqual(['n-1']);
+
+    const remount = service.init();
+    httpMock.expectNone('/api/v1/notifications?limit=50');
+    await remount;
   });
 
   it('keeps a stale failure off the new subject on a mid-request switch', async () => {

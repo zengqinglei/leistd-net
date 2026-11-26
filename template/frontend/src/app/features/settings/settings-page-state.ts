@@ -187,7 +187,7 @@ export class SettingsPageState {
   private readonly waiters: RefreshWaiter[] = [];
 
   constructor() {
-    this.load();
+    this.load('initial');
     //#if (IncludeLocalization)
 
     // 显示名由后端按请求语言本地化，切换语言须重取。langChanges$ 订阅时先发出当前语言，
@@ -205,7 +205,7 @@ export class SettingsPageState {
   }
 
   /** 读取并更新页面状态；失败按有无快照分别显示错误态或提示。 */
-  load(): void {
+  load(mode: 'initial' | 'refresh' = 'refresh'): void {
     if (!this.loadEnabled) {
       this.loaded.set(true);
       return;
@@ -213,7 +213,7 @@ export class SettingsPageState {
 
     // 登记为待完成任务：应用稳定（测试的 whenStable、服务端渲染）要等到结果落到页面状态上
     this.pendingTasks.run(() =>
-      this.refresh().catch((error: unknown) => {
+      this.refresh(mode).catch((error: unknown) => {
         if (this.destroyRef.destroyed) {
           return;
         }
@@ -232,7 +232,7 @@ export class SettingsPageState {
    * 重取快照，落定后返回；失败时抛出并保留上一份快照。写入成功后经它重取：快照到手才算写入落定。
    * 期间又发起了读取时，结果以最新那次为准。
    */
-  refresh(): Promise<void> {
+  refresh(mode: 'initial' | 'refresh' = 'refresh'): Promise<void> {
     if (!this.loadEnabled) {
       return Promise.resolve();
     }
@@ -247,7 +247,7 @@ export class SettingsPageState {
       //#if (TenantWorkspace)
       this.homeScope ? firstValueFrom(this.settingService.getForCurrentUser()) :
       //#endif
-      this.sessionContext.refreshSettings();
+      this.sessionContext.refreshSettings(mode);
     read.then(
       (settings) => {
         if (sequence !== this.sequence) {

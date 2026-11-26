@@ -188,8 +188,8 @@ describe('TwoFactorLogin', () => {
 
     expect(host().querySelector('#two-factor-remember-device')).toBeNull();
   });
-
   //#if (Email)
+
   it('does not offer remembered sign-in for an email code', async () => {
     await setUp(
       of({

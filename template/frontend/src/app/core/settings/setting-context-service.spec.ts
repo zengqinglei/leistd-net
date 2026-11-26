@@ -38,6 +38,18 @@ describe('SettingContextService', () => {
 
   afterEach(() => http.verify());
 
+  it('shares the in-flight entry and reuses its successful empty snapshot', async () => {
+    const entry = service.load('entry', 'scope');
+    const initial = service.ensureLoaded('scope');
+
+    http.expectOne('/api/v1/settings').flush([]);
+    expect(await initial).toBe(await entry);
+
+    const later = service.ensureLoaded('scope');
+    http.expectNone('/api/v1/settings');
+    expect(await later).toEqual([]);
+  });
+
   it('resolves values by user → tenant → default', async () => {
     const load = service.load();
     http

@@ -28,6 +28,7 @@ const TYPE_ICONS: Readonly<Record<string, NotificationIcon>> = {
 };
 
 const FALLBACK_ICON: NotificationIcon = { lucideInfo };
+const DEFAULT_HISTORY_LIMIT = 50;
 
 /**
  * `getIcon` 可能返回的全部图标，由上面的映射与兜底派生。显示通知图标的组件在自己的
@@ -44,6 +45,8 @@ export const NOTIFICATION_ICONS: NotificationIcon = Object.assign(
 export class NotificationService {
   private readonly http = inject(HttpClient);
   private readonly signalR = inject(SignalRService);
+  private loadedGeneration: number | undefined;
+  private historyRead: { generation: number; promise: Promise<void> } | undefined;
 
   /** 通知列表（与 SignalR 推送共享同一信号）。 */
   readonly notifications = this.signalR.notifications;
@@ -62,7 +65,9 @@ export class NotificationService {
   async init(): Promise<void> {
     const generation = this.signalR.authGeneration;
 
-    await this.loadNotifications();
+    if (this.loadedGeneration !== generation) {
+      await this.loadNotifications();
+    }
 
     // 加载期间主体已切换：这一轮属于上一个用户，不再建连，否则连接会以上一个人的身份被复用。
     if (!this.signalR.isCurrentGeneration(generation)) {
@@ -73,11 +78,21 @@ export class NotificationService {
   }
 
   /** 加载最近的历史通知；`limit` 取值 1–100（后端越界返回 400），默认 50。 */
-  async loadNotifications(limit = 50): Promise<void> {
+  loadNotifications(limit = DEFAULT_HISTORY_LIMIT): Promise<void> {
     // 记下发起请求时的认证代际：请求在途时登出/换人登录，响应回来仍会写同一个
     // 共享 signal——那就是把上一个用户的历史通知落到下一个人的界面上。
     const generation = this.signalR.authGeneration;
+    if (limit !== DEFAULT_HISTORY_LIMIT) return this.readHistory(limit, generation);
+    if (this.historyRead?.generation === generation) return this.historyRead.promise;
 
+    const promise = this.readHistory(limit, generation).finally(() => {
+      if (this.historyRead?.promise === promise) this.historyRead = undefined;
+    });
+    this.historyRead = { generation, promise };
+    return promise;
+  }
+
+  private async readHistory(limit: number, generation: number): Promise<void> {
     this.loading.set(true);
     this.loadFailed.set(false);
     try {
@@ -105,6 +120,7 @@ export class NotificationService {
       }
 
       this.signalR.notifications.set(merged);
+      if (limit === DEFAULT_HISTORY_LIMIT) this.loadedGeneration = generation;
     } catch (err) {
       console.error('[NotificationService] Load failed:', err);
       // 主体已切换：这次失败属于上一个用户，不能标到下一个人的界面上。

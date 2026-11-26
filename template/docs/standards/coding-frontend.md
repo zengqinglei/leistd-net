@@ -11,25 +11,12 @@ Angular（Signals、zoneless、Signal Forms `@angular/forms/signals`）、TypeSc
 
 ## 2. 目录与依赖方向
 
-目录按职责划分，按需建子目录，不预建空层级。
+按需建目录。`core/` 放应用级服务、守卫、拦截器与通用错误处理，`features/<x>/` 放业务路由、页面、该功能的服务和契约，`layout/` 放布局及导航，`shared/` 放无状态组件、工具和跨功能契约。`frontend/libs/ui/` 持有 Helm 组件，`frontend/public/` 映射到站点根。
 
-```text
-frontend/
-├── _mock/                 # 独立开发用的 API 处理器与数据
-├── libs/ui/               # 项目持有的 Spartan Helm 组件
-├── src/app/
-│   ├── core/              # 应用级服务、认证、拦截器、启动、错误处理、应用级组件
-│   ├── features/<x>/      # 业务功能：components/<page>/widgets、services、dtos、models、guards、<x>.routes.ts
-│   ├── layout/            # 布局、导航与布局内组件
-│   ├── shared/            # 无状态的展示组件、指令、管道、工具与跨功能契约（dtos、models、constants、components、directives、pipes、utils）
-│   ├── app.config.ts、app.interceptors.ts、app.routes.ts、app.ts
-├── src/environments/      # 公共配置与各部署环境的覆盖
-└── public/                # 构建后映射到站点根的静态资源
-```
+功能目录按 `components/<page>/widgets`、`services`、`dtos`、`models`、`guards` 组织，页面内复用的组件放在该页的 `widgets/`，多个功能共用的有状态实现下沉到 `core`，无状态实现下沉到 `shared`。
 
-`frontend/eslint.config.mjs` 按解析出的真实文件检查依赖方向，规则以报错为准：`shared` 只依赖自身，`core` 只依赖 `core` 与 `shared`，`layout` 与各功能另可依赖自身，功能之间只有路由文件可经 `loadComponent`/`loadChildren` 懒加载；业务代码中只有应用装配点（`app.*.ts`）引入 `_mock`，各目录可读取 `environment`，测试文件可引用 `_mock`，不放开其他方向。导入路径写普通字符串字面量。
+`frontend/eslint.config.mjs` 校验依赖方向。`shared` 只依赖自身，`core` 另可依赖 `shared`，`layout` 与功能另可依赖 `core` 和自身。功能间仅允许路由文件通过 `loadComponent` 或 `loadChildren` 懒加载。应用装配文件（`app.*.ts`）与测试可以引用 `_mock`；各目录可读 `environment`。导入路径用字符串字面量。
 
-- 多个功能共用的服务或契约下沉：有状态或应用级的放 `core`，无状态的展示组件与契约放 `shared`。功能内复用的组件放该页面的 `widgets/`。
 - 业务代码判断请求是否走 Mock 时注入 `frontend/src/app/core/mock/mocked-url.ts` 的 `MOCKED_URL`（默认 `false`，Mock 构建由 `provideMock` 提供），不调用 `_mock` 中的函数。
 
 ## 3. 命名
@@ -62,19 +49,31 @@ selector 用 `app-` + kebab-case（eslint 检查）；API 请求/响应须有类
 
 ## 4. 分层与依赖注入
 
-- `services/*-service.ts` 封装 HTTP，返回 DTO `Observable`，不持有页面状态。
-- **应用级服务**（认证、主题、语言、设置上下文、启动）放 `core/services`，可持有自身状态与行为。
+- 功能服务封装 HTTP、返回 DTO `Observable`，页面状态由组件持有。应用级服务可持有会话状态。
 - 组件与简单父子状态用 Signals，页面状态优先放组件；复杂且有复用或生命周期收益时，才抽成组件级 `@Injectable()` 状态类，由组件 `providers` 提供。
 - **DTO 与模型**：API 契约放 `dtos/`，只有需要行为或派生字段时才在 `models/` 建前端模型并显式转换；不在 `models/` 放 DTO。
 - 路由守卫与按钮显隐只改善交互体验；服务端必须对每次请求校验权限。
 - **作用域选择**：跨页面共享或应用级单例用 `providedIn: 'root'`；随页面销毁的状态用组件 `providers`；需要跨子路由保留的用路由 `providers`（如 `provideTranslocoScope`）。
-- 依赖注入用 `inject()`。构造仅做属性赋值、需注入上下文的生命周期接线（`effect()`、`takeUntilDestroyed()`、随 `DestroyRef` 释放的订阅）及页面首次只读查询。写请求、多步流程与会话清理放 `ngOnInit`，构造不得改变服务端或会话状态；在注入上下文外（如 `ngOnInit`）调用上述 API 时须传 `destroyRef` 或 `{ injector }`。
+- 用 `inject()` 注入依赖。构造只做赋值、生命周期接线和页面首读。写请求、多步流程、清会话放 `ngOnInit`。在注入上下文外调用 `effect()` 或 `takeUntilDestroyed()` 时传 `{ injector }` 或 `destroyRef`。
 
 ## 5. 状态
 
 - 确认写用 `ConfirmService` 的 `action`，只放一次写请求：可取消的前置验证开框前完成，需再认证重试、接弹窗或跳转的不用。成功关框，调用方提示/刷新；失败由框 toast 并留框；入口防重入、无行内转圈。
 - 媒体查询（断点、系统暗色偏好）用 CDK `BreakpointObserver` 转成信号，不手写 `matchMedia`。
 - 启动流程、拦截器判断当前路由用 `frontend/src/app/core/routing/entry-route-service.ts`，不读 `Router.url`（初始导航前恒为 `/`）。
+
+### 会话级读取
+
+会话服务持有快照与在途读取，同范围站内导航复用已有结果。统计时按实际主体、工作区和请求语言区分。
+
+| 数据 | 启动及范围切换 | 前台及实时重连 | 写后及显式重读 |
+| --- | --- | --- | --- |
+| `/me` 与偏好 | 登录主体建立时取。工作区切换复用本人数据 | 回到前台、实时连接疑似 401 时重验，合并在途 | 资料和偏好用写响应。安全设置、再认证沿用既有重验 |
+| 权限 | 进入时按范围取。宿主深链可另读本人平台入口权限 | 无 | 角色授权与用户角色变更后按现有入口重读 |
+| 设置 | 进入时按范围预读。页面首读复用同主体、同范围、同语言的成功快照；缺失或失败由页面补读，本人范围独立 | 无直接读取。若重验改变界面语言，打开中的设置页随语言变化重读 | 设置写成与手动重试强制读取。偏好 PATCH 使用响应，语言变化按前列处理 |
+| 通知历史 | 铃铛首次消费时读，同一 SignalR 代次复用。切换工作区或登录主体后目标代次重新首读 | 无历史重取 | 已读和删除更新本地列表，显式重试重读 |
+
+启动失败重试重新执行启动流。目录在同一主体内复用，按工作区不可用恢复和授权变更入口刷新。
 
 ## 6. 错误处理
 
