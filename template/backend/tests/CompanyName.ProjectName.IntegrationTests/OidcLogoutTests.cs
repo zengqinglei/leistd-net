@@ -179,12 +179,9 @@ public sealed class OidcLogoutTests(ProjectWebApplicationFactory factory) : ICla
 
         using var replayed = await ConfirmAsync(session.Cookie, page, requestUri, confirmation);
 
-        // 退出完成时 request token 已兑现，OpenIddict 以本地协议错误拒绝重放。
-        Assert.Equal(HttpStatusCode.BadRequest, replayed.StatusCode);
-        Assert.Null(replayed.Headers.Location);
-        var error = await replayed.Content.ReadAsStringAsync();
-        Assert.Contains("error:invalid_token", error);
-        Assert.Contains("https://documentation.openiddict.com/errors/ID2013", error);
+        // 退出完成时 request token 已兑现：OpenIddict 直接拒绝这个 request_uri，不再回到依赖方
+        Assert.Equal(HttpStatusCode.Found, replayed.StatusCode);
+        Assert.Equal("/auth/logout-expired", replayed.Headers.Location?.OriginalString);
     }
 
     [Fact]
