@@ -1,10 +1,13 @@
-import { HttpClient, HttpContext } from '@angular/common/http';
-import { Injectable, Injector, inject, signal } from '@angular/core';
 //#if (RemoteTokenAuth)
-import { DOCUMENT, DestroyRef } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+//#endif
+import { HttpClient, HttpContext } from '@angular/common/http';
+//#if (RemoteTokenAuth)
+import { DestroyRef, Injectable, Injector, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Observable, defer, filter, fromEvent, lastValueFrom, take, tap } from 'rxjs';
 //#else
+import { Injectable, Injector, inject, signal } from '@angular/core';
 import { Observable, defer, lastValueFrom, tap } from 'rxjs';
 //#endif
 
