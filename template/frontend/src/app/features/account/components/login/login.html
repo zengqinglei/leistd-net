@@ -142,13 +142,25 @@
             error.message ?? t('validation.' + error.kind, error)
           }}</hlm-field-error>
         }
-        <!-- 找回入口紧跟口令框：忘记的正是它。套一层 div 的原因见租户区的重试按钮 -->
-        <div class="flex justify-end">
+        <div class="flex items-center justify-end gap-3">
+          @if (allowKeepSignedIn()) {
+            <div hlmField orientation="horizontal" class="min-w-0 flex-1">
+              <hlm-checkbox
+                inputId="login-keep-signed-in"
+                [checked]="keepSignedIn()"
+                [disabled]="isLoading() || passkeyBusy() || authBlocked()"
+                (checkedChange)="keepSignedIn.set($event)"
+              />
+              <label hlmFieldLabel for="login-keep-signed-in">{{
+                t('account.login.keepSignedIn')
+              }}</label>
+            </div>
+          }
           <a
             [routerLink]="['/auth/forgot-password']"
             [queryParams]="returnUrl ? { returnUrl: returnUrl } : null"
             [state]="forgotPasswordState()"
-            class="text-primary text-sm font-medium hover:underline"
+            class="text-primary shrink-0 text-sm font-medium hover:underline"
             data-testid="forgot-password"
             >{{ t('account.login.forgotPassword') }}</a
           >
@@ -162,19 +174,6 @@
         </div>
       }
 
-      @if (allowKeepSignedIn()) {
-        <div hlmField orientation="horizontal">
-          <hlm-checkbox
-            inputId="login-keep-signed-in"
-            [checked]="keepSignedIn()"
-            [disabled]="isLoading() || passkeyBusy() || authBlocked()"
-            (checkedChange)="keepSignedIn.set($event)"
-          />
-          <label hlmFieldLabel for="login-keep-signed-in">{{
-            t('account.login.keepSignedIn')
-          }}</label>
-        </div>
-      }
       <button
         hlmBtn
         type="submit"
