@@ -45,6 +45,7 @@ import {
   TwoFactorRecoveryCodesOutputDto,
   TwoFactorSetupOutputDto,
   //#if (OpenIddictServer)
+  InteractionApplicationOutputDto,
   LogoutConfirmationOutputDto,
   //#endif
 } from '../../src/app/features/account/dtos/account.dto';
@@ -64,7 +65,12 @@ import {
   TwoFactorMethod,
   UserOutputDto,
 } from '../../src/app/shared/dtos/auth.dto';
+//#if (OpenIddictServer)
+import { MockException, MockRequest, MockResponse } from '../core/models';
+import { OPEN_APPLICATIONS } from '../data/open-applications';
+//#else
 import { MockException, MockRequest } from '../core/models';
+//#endif
 import { ensureAcceptablePassword } from '../data/password-policy';
 //#if (ExternalLogin)
 import { availableExternalProviders, TENANT_SETTING_VALUES } from '../data/settings';
@@ -1577,6 +1583,21 @@ function endImpersonation(): 'ok' {
 //#endif
 //#if (OpenIddictServer)
 
+function getInteractionApplication(
+  req: MockRequest,
+): InteractionApplicationOutputDto | MockResponse {
+  const app = OPEN_APPLICATIONS.find((entry) => entry.clientId === req.queryParams['clientId']);
+  if (!app?.homeUrl) {
+    return new MockResponse({ status: 204 });
+  }
+
+  const language = req.headers.get('Accept-Language')?.split(',')[0] ?? '';
+  return {
+    displayName: app.displayNames?.[language] || app.displayName || app.clientId,
+    homeUrl: app.homeUrl,
+  };
+}
+
 function getLogoutConfirmation(req: MockRequest): LogoutConfirmationOutputDto {
   // Mock 没有协议端点：只要求确认页的两个引用都在，便于在开发态预览确认页
   return req.queryParams['request_uri'] && req.queryParams['confirmation']
@@ -2016,6 +2037,7 @@ export const AUTH_API = {
   'POST /api/v1/auth/register': (req: MockRequest) => register(req),
   'GET /api/v1/auth/security-config': (req: MockRequest) => getSecurityConfig(req),
   //#if (OpenIddictServer)
+  'GET /api/v1/auth/interaction-application': (req: MockRequest) => getInteractionApplication(req),
   'GET /api/v1/auth/logout-confirmation': (req: MockRequest) => getLogoutConfirmation(req),
   //#endif
   'GET /api/v1/auth/captcha': () => getCaptcha(),

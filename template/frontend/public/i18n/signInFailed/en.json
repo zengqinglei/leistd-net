@@ -1,0 +1,10 @@
+{
+  "expiredTitle": "Sign-in timed out",
+  "expiredDescription": "You stayed on the sign-in page too long and the sign-in did not finish. Please sign in again.",
+  "deniedTitle": "Sign-in was not completed",
+  "deniedDescription": "The sign-in was cancelled or refused. Sign in again to continue.",
+  "errorTitle": "Something went wrong while signing in",
+  "errorDescription": "The sign-in did not finish. Please sign in again. If it keeps failing, contact your administrator.",
+  "signInAgain": "Sign in again",
+  "backHome": "Back to home"
+}

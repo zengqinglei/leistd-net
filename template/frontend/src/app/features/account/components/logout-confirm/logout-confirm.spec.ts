@@ -41,7 +41,7 @@ describe('LogoutConfirm', () => {
     TestBed.configureTestingModule({
       imports: [LogoutConfirm],
       providers: [
-        provideRouter([]),
+        provideRouter([{ path: 'auth/logout-expired', children: [] }]),
         //#if (IncludeLocalization)
         ...provideTranslocoTesting(['en']),
         //#endif
@@ -95,10 +95,10 @@ describe('LogoutConfirm', () => {
     expect((fixture.nativeElement as HTMLElement).querySelector('hlm-spinner')).toBeNull();
   });
 
-  it('offers no confirmation when the request is no longer valid', async () => {
+  it('sends expired confirmation to the Identity sign-out recovery page', async () => {
     await render({ request_uri: 'urn:request', confirmation: 'stale' }, { isValid: false });
 
-    expect(element('logout-confirm-invalid')).not.toBeNull();
+    expect(TestBed.inject(Router).url).toBe('/auth/logout-expired');
     expect(element('logout-confirm-submit')).toBeNull();
   });
 
@@ -106,7 +106,7 @@ describe('LogoutConfirm', () => {
     await render({ request_uri: 'urn:request', confirmation: 'protected' }, new Error('offline'));
 
     expect(element('logout-confirm-failed')).not.toBeNull();
-    expect(element('logout-confirm-invalid')).toBeNull();
+    expect(TestBed.inject(Router).url).not.toBe('/auth/logout-expired');
     expect(element('logout-confirm-submit')).toBeNull();
 
     getLogoutConfirmation.mockReturnValue(
@@ -123,7 +123,7 @@ describe('LogoutConfirm', () => {
     await render({ confirmation: 'protected' }, { isValid: true });
 
     expect(getLogoutConfirmation).not.toHaveBeenCalled();
-    expect(element('logout-confirm-invalid')).not.toBeNull();
+    expect(TestBed.inject(Router).url).toBe('/auth/logout-expired');
   });
 
   it('stays signed in when cancelled', async () => {

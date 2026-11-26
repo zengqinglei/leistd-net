@@ -25,6 +25,7 @@ using Microsoft.Extensions.Time.Testing;
 using OpenIddict.Abstractions;
 using Leistd.Security.OpenIddict.Server.Pruning;
 using OpenIddict.Core;
+using OpenIddict.Server;
 using OpenIddict.EntityFrameworkCore;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
@@ -34,12 +35,14 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
 {
     private const string Callback = "https://localhost/oidc-test";
 
-    private async Task<string> CreatePublicClientAsync(HttpClient admin)
+    private async Task<string> CreatePublicClientAsync(HttpClient admin, string? homeUrl = null)
     {
         var id = $"prompt-{Guid.NewGuid():N}";
         var response = await admin.PostAsJsonAsync("/api/v1/open-applications", new
         {
             sessionBound = false,
+            displayName = "Example application",
+            homeUrl,
             clientId = id, applicationType = "web", clientType = "public", redirectUris = new[] { Callback },
             permissions = new[] { "ept:authorization", "ept:token", "gt:authorization_code", "gt:refresh_token", "rst:code", "scp:openid", "scp:email", $"scp:{new OAuthResourceOptions().Resource}" },
             requirements = new[] { "ft:pkce" }
@@ -194,6 +197,106 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
     }
 
     [Fact]
+    public async Task A_missing_pkce_challenge_returns_the_local_protocol_error()
+    {
+        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var client = await CreatePublicClientAsync(admin.Client);
+        using var browser = Browser();
+        using var response = await browser.GetAsync(
+            $"/connect/authorize?client_id={client}&redirect_uri={Uri.EscapeDataString(Callback)}" +
+            $"&response_type=code&scope=openid%20{new OAuthResourceOptions().Resource}");
+
+        Assert.True(response.StatusCode == HttpStatusCode.BadRequest,
+            $"Expected a local protocol error. Got {response.StatusCode} with Location {response.Headers.Location}.");
+        Assert.Null(response.Headers.Location);
+        Assert.Equal("text/plain", response.Content.Headers.ContentType?.MediaType);
+        var error = await response.Content.ReadAsStringAsync();
+        Assert.Contains("error:invalid_request", error);
+        Assert.Contains("code_challenge", error);
+    }
+
+    [Theory]
+    [InlineData(59, false)]
+    [InlineData(61, true)]
+    public async Task The_authorization_request_remains_usable_for_one_hour(int minutes, bool expired)
+    {
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var clientId = await CreatePublicClientAsync(admin.Client);
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.Configure<OpenIddictServerOptions>(options => options.TimeProvider = clock)));
+        using var browser = Browser(host);
+        using var cached = await browser.GetAsync(AuthorizationUrl(clientId, ""));
+        var returnUrl = OidcRequestCaching.CachedLocation(browser, cached, "/connect/authorize");
+
+        clock.Advance(TimeSpan.FromMinutes(minutes));
+        using var result = await browser.GetAsync(returnUrl);
+
+        Assert.True(result.StatusCode == HttpStatusCode.Found, await result.Content.ReadAsStringAsync());
+        if (expired)
+            Assert.Equal($"/auth/login-expired?client_id={clientId}", result.Headers.Location?.OriginalString);
+        else
+            Assert.StartsWith("/auth/login?", result.Headers.Location?.OriginalString);
+    }
+
+    [Theory]
+    [InlineData("registered", "https://app.example.test/home")]
+    [InlineData("registered", null)]
+    [InlineData("unknown", null)]
+    [InlineData(null, null)]
+    public async Task Recovery_returns_only_a_registered_application_destination(string? registration, string? homeUrl)
+    {
+        string? clientId = registration;
+        if (registration == "registered")
+        {
+            using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+            clientId = await CreatePublicClientAsync(admin.Client, homeUrl);
+        }
+
+        using var browser = Browser();
+        var path = "/api/v1/auth/interaction-application";
+        if (clientId is not null)
+            path = QueryHelpers.AddQueryString(path, "clientId", clientId);
+
+        using var response = await browser.GetAsync(path);
+        if (homeUrl is null)
+        {
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+            Assert.Empty(await response.Content.ReadAsStringAsync());
+            return;
+        }
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Example application", result.GetProperty("displayName").GetString());
+        Assert.Equal(homeUrl, result.GetProperty("homeUrl").GetString());
+    }
+
+    [Fact]
+    public async Task An_unsupported_grant_returns_the_oauth_json_error()
+    {
+        using var browser = Browser();
+        using var response = await browser.PostAsync("/connect/token", new FormUrlEncodedContent(
+            new Dictionary<string, string> { ["grant_type"] = "unsupported" }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        var error = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(Errors.UnsupportedGrantType, error.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task Userinfo_without_a_token_returns_a_bearer_challenge_without_a_body()
+    {
+        using var browser = Browser();
+        using var response = await browser.GetAsync("/connect/userinfo");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("Bearer", Assert.Single(response.Headers.WwwAuthenticate).Scheme);
+        Assert.Empty(await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task Prompt_none_without_a_session_returns_login_required_to_the_protocol_callback()
     {
         using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
@@ -261,8 +364,8 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         Assert.Contains("code=", completed.Headers.Location.Query);
         // 一次性：授权完成时 request token 已兑现，同一回跳地址不能再换出授权码
         using var replayed = await authenticated.GetAsync(returnUrl);
-        Assert.Equal(HttpStatusCode.BadRequest, replayed.StatusCode);
-        Assert.Null(replayed.Headers.Location);
+        Assert.Equal(HttpStatusCode.Found, replayed.StatusCode);
+        Assert.Equal($"/auth/login-expired?client_id={id}", replayed.Headers.Location?.OriginalString);
         Assert.Equal(HttpStatusCode.OK, (await authenticated.GetAsync("/api/v1/auth/me")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
     }

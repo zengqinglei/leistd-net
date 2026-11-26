@@ -1,0 +1,56 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  @let failure = reason();
+  <main class="flex min-h-svh items-center justify-center bg-background">
+    <div hlmEmpty class="p-4 sm:p-6">
+      <div hlmEmptyHeader>
+        <div hlmEmptyMedia variant="icon">
+          <ng-icon
+            [name]="
+              failure === 'expired'
+                ? 'lucideHourglass'
+                : failure === 'denied'
+                  ? 'lucideBan'
+                  : 'lucideTriangleAlert'
+            "
+          />
+        </div>
+        <h1 hlmEmptyTitle>
+          @switch (failure) {
+            @case ('expired') {
+              {{ t('signInFailed.expiredTitle') }}
+            }
+            @case ('denied') {
+              {{ t('signInFailed.deniedTitle') }}
+            }
+            @default {
+              {{ t('signInFailed.errorTitle') }}
+            }
+          }
+        </h1>
+        <p hlmEmptyDescription>
+          @switch (failure) {
+            @case ('expired') {
+              {{ t('signInFailed.expiredDescription') }}
+            }
+            @case ('denied') {
+              {{ t('signInFailed.deniedDescription') }}
+            }
+            @default {
+              {{ t('signInFailed.errorDescription') }}
+            }
+          }
+        </p>
+      </div>
+      <div hlmEmptyContent class="flex-wrap justify-center sm:flex-row">
+        <a hlmBtn href="/api/v1/auth/login">{{ t('signInFailed.signInAgain') }}</a>
+        @if (failure === 'denied') {
+          <a hlmBtn variant="outline" routerLink="/">{{ t('signInFailed.backHome') }}</a>
+        }
+      </div>
+    </div>
+  </main>
+</ng-container>

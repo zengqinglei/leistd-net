@@ -11,6 +11,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
+using static OpenIddict.Server.AspNetCore.OpenIddictServerAspNetCoreHandlerFilters;
+using static OpenIddict.Server.AspNetCore.OpenIddictServerAspNetCoreHandlers;
 
 namespace CompanyName.ProjectName.Api.Auth.OpenIddict;
 
@@ -82,6 +84,8 @@ public static class OpenIddictServerExtensions
                 options.AllowTokenExchangeFlow();
                 options.Configure(server =>
                 {
+                    // 与依赖方的 RemoteAuthenticationTimeout 保持一致，为改密码、绑定 MFA 等登录步骤留出时间。
+                    server.RequestTokenLifetime = TimeSpan.FromHours(1);
                     server.SubjectTokenTypes.Clear();
                     server.SubjectTokenTypes.Add(OpenIddictConstants.TokenTypeIdentifiers.AccessToken);
                     server.ActorTokenTypes.Clear();
@@ -116,6 +120,8 @@ public static class OpenIddictServerExtensions
                     .EnableTokenEndpointPassthrough()
                     .EnableUserInfoEndpointPassthrough()
                     .EnableEndSessionEndpointPassthrough();
+                AddRequestTokenErrorPassthrough<OpenIddictServerEvents.ApplyAuthorizationResponseContext>(options);
+                AddRequestTokenErrorPassthrough<OpenIddictServerEvents.ApplyEndSessionResponseContext>(options);
                 if (oauthOpts.DisableHttpsRequirement)
                 {
                     aspNetCore.DisableTransportSecurityRequirement();
@@ -143,6 +149,26 @@ public static class OpenIddictServerExtensions
             RecurringJobSchedule.DailyAt(new TimeOnly(3, 30)), RecurringJobScope.Cluster);
 
         return builder;
+    }
+
+    private static void AddRequestTokenErrorPassthrough<TContext>(OpenIddictServerBuilder options)
+        where TContext : OpenIddictServerEvents.BaseRequestContext
+    {
+        const string redeemedTokenErrorUri = "https://documentation.openiddict.com/errors/ID2013";
+        const string expiredTokenErrorUri = "https://documentation.openiddict.com/errors/ID2019";
+
+        // 先让官方处理器完成合法回调。仅把失效的请求令牌交给控制器，其余本地错误继续由官方处理器输出。
+        options.AddEventHandler<TContext>(handler => handler
+            .AddFilter<RequireHttpRequest>()
+            .SetOrder(ProcessStatusCodePagesErrorResponse<TContext>.Descriptor.Order - 500)
+            .UseInlineHandler(context =>
+            {
+                if (context.Transaction.Response is { Error: OpenIddictConstants.Errors.InvalidToken, ErrorUri: redeemedTokenErrorUri or expiredTokenErrorUri }
+                    && context.Transaction.Request?.RequestUri?.StartsWith(OpenIddictConstants.RequestUris.Prefixes.Generic, StringComparison.OrdinalIgnoreCase) == true)
+                    context.SkipRequest();
+
+                return ValueTask.CompletedTask;
+            }));
     }
 }
 #endif

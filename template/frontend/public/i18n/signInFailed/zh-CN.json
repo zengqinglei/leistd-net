@@ -1,0 +1,10 @@
+{
+  "expiredTitle": "登录已超时",
+  "expiredDescription": "在登录页停留的时间过长，这次登录没有完成。请重新登录。",
+  "deniedTitle": "登录没有完成",
+  "deniedDescription": "登录已被取消，或者 Identity 拒绝了这次登录。如果需要继续使用，请重新登录。",
+  "errorTitle": "登录时出现问题",
+  "errorDescription": "这次登录没有完成，请重新登录。如果多次失败，请联系管理员。",
+  "signInAgain": "重新登录",
+  "backHome": "返回首页"
+}

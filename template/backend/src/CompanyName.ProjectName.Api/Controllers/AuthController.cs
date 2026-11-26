@@ -16,6 +16,8 @@ using Microsoft.AspNetCore.Mvc;
 using CompanyName.ProjectName.Api.Auth.Sessions;
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Api.Auth.OpenIddict;
+using CompanyName.ProjectName.Application.OpenApplications;
+using System.Globalization;
 #endif
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;
@@ -127,6 +129,25 @@ public sealed class AuthController(
     }
 
 #if (OpenIddictServer)
+    /// <summary>读取授权请求失效后可返回的已登记应用首页。</summary>
+    [AllowAnonymous]
+    [HttpGet("interaction-application")]
+    public async Task<InteractionApplicationOutputDto?> GetInteractionApplicationAsync(
+        [FromQuery] string? clientId,
+        [FromServices] IOpenIddictApplicationManager applications,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(clientId) ||
+            await applications.FindByClientIdAsync(clientId, cancellationToken) is not { } application ||
+            OpenApplicationSettings.ReadHomeUrl(await applications.GetPropertiesAsync(application, cancellationToken)) is not { Length: > 0 } homeUrl)
+        {
+            return null;
+        }
+
+        var displayName = await applications.GetLocalizedDisplayNameAsync(application, CultureInfo.CurrentUICulture, cancellationToken) ?? clientId;
+        return new InteractionApplicationOutputDto(displayName, homeUrl);
+    }
+
     /// <summary>依赖方发起的退出需要确认时，确认页据此展示发起方并取得防伪令牌。</summary>
     /// <remarks>
     /// 只核对确认凭据与当前会话是否匹配，不结束会话；结束会话在 <c>/connect/logout</c> 的确认 POST 里完成。

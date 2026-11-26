@@ -61,6 +61,7 @@ import {
   TwoFactorRecoveryCodesOutputDto,
   TwoFactorSetupOutputDto,
   //#if (OpenIddictServer)
+  InteractionApplicationOutputDto,
   LogoutConfirmationOutputDto,
   //#endif
 } from '../dtos/account.dto';
@@ -75,6 +76,14 @@ export class AccountService {
   private readonly tenantContext = inject(TenantContextService);
   //#endif
   //#if (OpenIddictServer)
+
+  /** 授权请求失效后可返回的应用首页，由 Identity 查登记信息。 */
+  getInteractionApplication(clientId: string): Observable<InteractionApplicationOutputDto | null> {
+    return this.http.get<InteractionApplicationOutputDto | null>(
+      '/api/v1/auth/interaction-application',
+      { params: { clientId } },
+    );
+  }
 
   /** 依赖方发起的退出需要确认时，核对确认凭据并取得确认表单的防伪令牌。 */
   getLogoutConfirmation(
