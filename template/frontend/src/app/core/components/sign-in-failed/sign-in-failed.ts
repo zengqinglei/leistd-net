@@ -8,8 +8,8 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideBan, lucideHourglass, lucideTriangleAlert } from '@ng-icons/lucide';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmEmptyImports } from '@spartan-ng/helm/empty';
-
 //#if (!IncludeLocalization)
+
 import { englishText } from '../../../shared/utils/english-text';
 //#endif
 

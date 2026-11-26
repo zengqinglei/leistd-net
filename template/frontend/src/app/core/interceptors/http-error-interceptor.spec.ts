@@ -348,8 +348,8 @@ describe('httpErrorInterceptor', () => {
     expect(router.url).toBe('/');
     expectSingleReauthentication('/platform/users?page=2');
   });
-
   //#if (ResourceBrowserSession)
+
   it('keeps the query and fragment in the deep link from a 401', () => {
     const destination = '/platform/users?page=2#list';
     openAt(destination);
