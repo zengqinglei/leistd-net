@@ -53,14 +53,14 @@ export class IdentityExpired {
 const ENGLISH: Record<string, string> = {
   'identityExpiry.loginTitle': 'This sign-in request has expired',
   'identityExpiry.loginDescription':
-    'You stayed on the page for a while and this sign-in request is no longer valid. Go back to {{app}} and sign in again to start a new sign-in.',
+    'You stayed on this page too long, so this sign-in request is no longer valid. Go back to {{app}} and sign in again.',
   'identityExpiry.loginDescriptionUnknown':
     'This sign-in request is no longer valid. Go back to the app you were using and sign in again.',
   'identityExpiry.logoutTitle': 'This sign-out request has expired',
   'identityExpiry.logoutDescription':
-    'This sign-out request has expired and you may already be signed out. If you are still signed in, go back to {{app}} and sign out again.',
+    'You may already be signed out. If you are still signed in, go back to {{app}} and sign out again.',
   'identityExpiry.logoutDescriptionUnknown':
-    'This sign-out request has expired and you may already be signed out. If you are still signed in, go back to the app you were using and sign out again.',
+    'You may already be signed out. If you are still signed in, go back to the app you were using and sign out again.',
   'identityExpiry.signInAgain': 'Sign in to {{app}} again',
   'identityExpiry.backToApp': 'Back to {{app}}',
   'identityExpiry.backHome': 'Back to Identity home',
