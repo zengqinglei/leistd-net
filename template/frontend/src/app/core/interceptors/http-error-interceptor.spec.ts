@@ -349,6 +349,18 @@ describe('httpErrorInterceptor', () => {
     expectSingleReauthentication('/platform/users?page=2');
   });
 
+  //#if (ResourceBrowserSession)
+  it('keeps the query and fragment in the deep link from a 401', () => {
+    const destination = '/platform/users?page=2#list';
+    openAt(destination);
+
+    runInterceptor(httpError(401));
+
+    expect(sessionContext.clear).toHaveBeenCalledOnce();
+    expectSingleReauthentication(destination);
+  });
+  //#endif
+
   // 认证路由上不能再发起认证：OIDC 形态下回调页再授权会立刻带新 code 跳回，形成死循环。
   it('leaves the 401 entirely to the running auth flow while on an auth route', () => {
     openAt('/auth/callback?code=abc');
