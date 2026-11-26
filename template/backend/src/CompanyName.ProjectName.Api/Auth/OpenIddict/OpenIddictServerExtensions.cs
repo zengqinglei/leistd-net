@@ -77,13 +77,13 @@ public static class OpenIddictServerExtensions
                 // 重入是顶层 GET，Lax 会话 Cookie 随之送达；id_token_hint 也不再留在浏览器地址里。
                 options.EnableAuthorizationRequestCaching()
                     .EnableEndSessionRequestCaching();
-                // 与依赖方的 RemoteAuthenticationTimeout 保持一致，为改密码、绑定 MFA 等登录步骤留出时间。
-                options.SetRequestTokenLifetime(TimeSpan.FromHours(1));
                 options.AllowRefreshTokenFlow();
                 options.AllowClientCredentialsFlow();
                 options.AllowTokenExchangeFlow();
                 options.Configure(server =>
                 {
+                    // 与依赖方的 RemoteAuthenticationTimeout 保持一致，为改密码、绑定 MFA 等登录步骤留出时间。
+                    server.RequestTokenLifetime = TimeSpan.FromHours(1);
                     server.SubjectTokenTypes.Clear();
                     server.SubjectTokenTypes.Add(OpenIddictConstants.TokenTypeIdentifiers.AccessToken);
                     server.ActorTokenTypes.Clear();
