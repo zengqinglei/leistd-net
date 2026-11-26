@@ -20,6 +20,9 @@ import { SettingOutputDto } from '../settings/setting.dto';
 import { AccountPreferencesService, PreferenceRead } from './account-preferences-service';
 import { AuthService } from './auth-service';
 import { AuthorizationService } from './authorization-service';
+//#if (IncludeLocalization)
+import { LanguageService } from './language-service';
+//#endif
 //#if (IncludeNotifications || IncludeRealTime)
 import { SignalRService } from './signalr-service';
 //#endif
@@ -45,6 +48,9 @@ export class SessionContextService {
   //#endif
   private readonly authorizationService = inject(AuthorizationService);
   private readonly settingContext = inject(SettingContextService);
+  //#if (IncludeLocalization)
+  private readonly language = inject(LanguageService);
+  //#endif
   private readonly preferences = inject(AccountPreferencesService);
   private readonly router = inject(Router);
   /** 在途的重查：页签反复切换时不重复发请求。 */
@@ -141,17 +147,35 @@ export class SessionContextService {
     };
     const [permissions] = await Promise.allSettled([
       this.authorizationService.initialize(),
-      this.settingContext.load('entry'),
+      this.settingContext.load('entry', this.settingsKey()),
     ]);
     if (permissions.status === 'rejected') throw permissions.reason;
     return preference;
   }
 
   /**
-   * 重新载入设置，返回本次快照供调用方复用。晚到的旧载入与主体离开前发出的载入由设置上下文自带的代次作废。
+   * 页面首读可复用会话设置。显式刷新返回本次读取的快照。
    */
-  refreshSettings(): Promise<readonly SettingOutputDto[]> {
-    return this.settingContext.load();
+  refreshSettings(mode: 'initial' | 'refresh' = 'refresh'): Promise<readonly SettingOutputDto[]> {
+    const key = this.settingsKey();
+    return mode === 'initial'
+      ? this.settingContext.ensureLoaded(key)
+      : this.settingContext.load('refresh', key);
+  }
+
+  private settingsKey(): string {
+    // 主体离开由 clear() 作废快照；每次建立会话也会开始新的 entry 读取。
+    //#if (TenantWorkspace)
+    const workspace = this.workspace.requestScope()?.toLowerCase();
+    //#else
+    const workspace = null;
+    //#endif
+    //#if (IncludeLocalization)
+    const language = this.language.activeLang();
+    //#else
+    const language = null;
+    //#endif
+    return JSON.stringify([workspace, language]);
   }
 
   /**
