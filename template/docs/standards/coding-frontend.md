@@ -83,7 +83,7 @@ selector 用 `app-` + kebab-case（eslint 检查）；API 请求/响应须有类
 - 公开文案只取 Problem Details 里校验过的字段错误/`detail`/`title`（5xx 限带码读请求），不回落 `statusText`/正文/原始异常；其余按 `category` 用本地化兜底，附 `traceId`。拦截器传入方法：写请求遇到无响应、5xx 或 2xx 解析失败归为 `uncertain`，提示可能已完成、先核实，不自动重放。
 - `GlobalErrorHandler` 只兜底未处理的非 HTTP 错误，识别并忽略已归一化的 HTTP 错误。
 - 认证与协议层处置（401 跳转、受限会话的 403、启动时的未登录判定）由 `http-error-interceptor` 与 `startup-service` 按状态码处理，eslint 只对它们放行 `local/no-status-code-branch`；feature 使用归一化后的错误反馈，按稳定 `code` 分支处理业务交互。业务错误缺少 `code` 不构成 feature 按状态码分支的理由，应在后端补码。
-- 启动失败（非 401）时守卫取消导航并记下目标，重试成功后进入；`/forbidden` 与 404 页地址栏保留目标（刷新与前进/后退时的行为见[前端路由规范](./frontend-routing.md)）。
+- 启动重试与错误页的地址栏行为见[前端路由规范 §1](./frontend-routing.md#1-路由守卫与地址栏)。
 - `catchError` 只处理特定错误，不吞掉错误。
 - 前端不兼容框架可选的响应信封（`AddResponseWrapper()`），开启须同时改拦截器。
 
@@ -104,7 +104,7 @@ selector 用 `app-` + kebab-case（eslint 检查）；API 请求/响应须有类
 
 ## 9. 日期、时区与数字
 
-时间以 UTC 传输与存储，只在展示时按会话时区换算。业务日期用 `appDate` 管道（不用 Angular 的 `date`），业务数字用 `appNumber` 管道，非模板调用方用同一套 `formatAppDate`、`formatAppNumber`，不在组件里直接 new `Intl.*Format`。展示时区的判定、日历日、格式槽位与相对时间见 [前端时间、数字、图表与推送规范](./frontend-data.md)。
+见[前端时间、数字、图表与推送规范 §1](./frontend-data.md#1-日期时区与数字)。
 
 ## 10. 首屏性能
 

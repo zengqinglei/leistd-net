@@ -4,7 +4,7 @@
 
 ## 1. 日期、时区与数字
 
-时间以 UTC 传输与存储，只在展示时按会话时区换算。时区取自 `Display.TimeZone`（IANA 名，写入端已校验），按个人 → 组织 → 部署基线取值，都没有时用浏览器时区；书写方式取自界面语言（同一条链，最后是设备偏好）。两者由 `SettingContextService` 提供。
+时间以 UTC 传输与存储，只在展示时按会话时区换算。时区取自 `Display.TimeZone`（IANA 名，写入端已校验），按个人 → 组织 → 部署基线取值，都没有时用浏览器时区；书写方式取自界面语言（同一条链，最后是设备偏好）。两者由 `SettingContextService` 提供。组件不直接创建 `Intl.*Format`。
 
 - 实际生效的展示时区只有一处判定：`shared/utils/zoned-time` 的 `resolveDisplayTimeZone`（设置值能被当前 `Intl` 使用就用它，否则浏览器时区），`appDate` 与按时区请求数据的地方共用。请求按日历区间统计时带这个值（见[批量与统计接口 §2](./api-batch-statistics.md#2-按日历区间统计)），坐标轴与提示按响应回显的时区格式化。
 - 日历日用 `YYYY-MM-DD` 字符串表示；日期选择器给出的浏览器本地 `Date` 按年月日取，不经 `toISOString()`（那是 UTC，会折偏一天）。
@@ -15,16 +15,16 @@
   ```
 
 - 槽位（`full`、`short`、`date`、`time`、`monthDayTime`、`monthDay`）由调用点按用途定；locale 取当前界面语言，不由时区推导。精度与格式串不做成设置项，语种写法差异加在管道的 `WRITING_OVERRIDES`。图表坐标轴、区间按钮等非模板调用方用同一个 `formatAppDate`，不另写日期格式。
-- 时刻落在展示时区的哪一天用 `zonedCalendarDate`，日历日加减用 `addCalendarDays`；"刚刚 / N 分钟前 / 昨天 / N 天前"这类相对时间用 `shared/utils/relative-time` 的 `formatRelativeTime`（需要词条的种类交给模板翻译）。
-- 业务数字用 `appNumber` 管道（非模板调用方用同一个 `formatAppNumber`）：`integer` 带千分位，`compact` 写大数（完整整数放进提示），`change` 写变化率，`percent` 写占比（最多一位小数），`share` 写需保留原精度的份额（持股比例等，最多两位小数）；三者输入都是比例，乘 100 只在格式化处发生：0.29 用 `change` 写作 `+29%`，用 `percent` 或 `share` 写作 `29%`。locale 同样取界面语言；不在组件里直接 new `Intl.NumberFormat`。词条里的数字先格式化再作为参数传入。
+- 时刻落在展示时区的哪一天用 `zonedCalendarDate`，日历日加减用 `addCalendarDays`。
+- 业务数字用 `appNumber` 管道（非模板调用方用同一个 `formatAppNumber`）：`integer` 带千分位，`compact` 写大数（完整整数放进提示），`change` 写变化率，`percent` 写占比（最多一位小数），`share` 写需保留原精度的份额（持股比例等，最多两位小数）；三者输入都是比例，乘 100 只在格式化处发生：0.29 用 `change` 写作 `+29%`，用 `percent` 或 `share` 写作 `29%`。locale 同样取界面语言。词条里的数字先格式化再作为参数传入。
 - 时区候选项按"能否真的渲染"判定，不用 `Intl.supportedValuesOf('timeZone')` 过滤（它只列规范名，`UTC`、`Asia/Kolkata` 等可用值不在其中）。
-- **相对时间**（「刚刚」「N 分钟前」「N 小时前」「昨天 HH:mm」「N 天前」）只用在扫一眼即可的近期列表，按展示时区的日历日分档，一周以前只写日期（今年省略年份）；完整时刻放进 Tooltip，元素可键盘聚焦。审计、详情等需要对时的位置写绝对时间。
+- **相对时间**（「刚刚」「N 分钟前」「N 小时前」「昨天 HH:mm」「N 天前」）只用在扫一眼即可的近期列表，用 `shared/utils/relative-time` 的 `formatRelativeTime`，需词条的种类交给模板翻译。按展示时区的日历日分档，一周以前只写日期（今年省略年份）；完整时刻放进 Tooltip，元素可键盘聚焦。审计、详情等需要对时的位置写绝对时间。
 
 ## 2. 仪表盘与图表
 
-- **托盘卡**（`frontend/src/app/shared/components/stat-panel`）：灰底外框放标题与右侧操作，内层白卡放内容，用于仪表盘这类同屏多块数据；内卡圆角按嵌套规则取 `rounded-lg`（外框 `rounded-xl` 减去 4px 间距）。普通页面区块仍用 Spartan Card，不套托盘。
-- **图表**用 Spartan `chart`（TanStack Charts），序列颜色只取 `--chart-1…5` 令牌、主题用 `HLM_CHART_THEME`，不写色值；`chart` 只在用到它的懒加载页面里引入。主序列用 `--chart-1`，需要警惕的序列（失败、错误）用琥珀色 `--chart-3`；按时段的离散数据画直线、不做平滑；类目横轴（每个时段一个点）的刻度等间隔，用 `shared/utils/category-ticks` 的 `evenCategoryTicks` 按图表实际宽度（响应式 `defineChart({ chart: ({ width }) => … })`）从常用步长里取、从最近一个时段往前数，不只靠 `thin` 碰撞去重；主序列加自上而下淡出的渐变面积；图例是 2px 圆角方块；提示框写该时段的真实起止，逐行列出各序列的值并带色块；坐标轴与提示里的日期、钟点用 `formatAppDate`、数字用 `formatAppNumber` 的槽位，与其他页面同一写法（见 §1）。当前版本的网格没有虚线配置，保持实线。
-- **指标卡**放在托盘卡里：外框标题右侧是口径说明（键盘可达的按钮 + Tooltip，写清这项怎么算），内卡是数值、迷你趋势（同一 `chart`，`guides: false` 去掉坐标轴与网格）和环比徽章；没有按桶序列的指标不画迷你趋势。环比徽章后的口径说明写短说法、单行截断（「较前 7 天」「较昨天」），完整口径（「同一进度」「同一时段」）放进可聚焦元素的 Tooltip。
+- **托盘卡**（`frontend/src/app/shared/components/stat-panel`）：灰底外框放标题与右侧操作，内层白卡放内容，用于仪表盘这类同屏多块数据；内卡圆角见[同心圆角规则](./frontend-ui.md#26-视觉规范)。普通页面区块仍用 Spartan Card，不套托盘。
+- **图表**用 Spartan `chart`（TanStack Charts），序列颜色只取 `--chart-1…5` 令牌、主题用 `HLM_CHART_THEME`，不写色值；`chart` 只在用到它的懒加载页面里引入。主序列用 `--chart-1`，需要警惕的序列（失败、错误）用琥珀色 `--chart-3`；按时段的离散数据画直线、不做平滑；类目横轴（每个时段一个点）的刻度等间隔，用 `shared/utils/category-ticks` 的 `evenCategoryTicks` 按图表实际宽度（响应式 `defineChart({ chart: ({ width }) => … })`）从常用步长里取、从最近一个时段往前数，不只靠 `thin` 碰撞去重；主序列加自上而下淡出的渐变面积；图例是 2px 圆角方块；提示框写该时段的真实起止，逐行列出各序列的值并带色块；坐标轴与提示里的时间及数字沿用 §1 的格式化槽位。当前版本的网格没有虚线配置，保持实线。
+- **指标卡**放在托盘卡里：外框标题右侧是口径说明（键盘可达的按钮 + Tooltip，写清这项怎么算），内卡是数值、迷你趋势（同一 `chart`，`guides: false` 去掉坐标轴与网格）和环比徽章；没有按桶序列的指标不画迷你趋势。环比徽章后的口径说明用短标签（「较前 7 天」「较昨天」），完整口径（「同一进度」「同一时段」）放进 Tooltip，按[标签规则](./frontend-ui.md#1-设计原则)处理截断与聚焦。
 <!--#if (IncludeRealTime)-->
 
 ## 3. 资源订阅：推送只表示"该重新查询了"
