@@ -18,7 +18,7 @@
 ### 取舍依据
 
 - `docs/architecture/design-principles.md` §5。
-- **优先官方机制：** OpenIddict 的 `EnableErrorPassthrough()` 加 `GetOpenIddictServerResponse()`；ASP.NET Core OIDC 处理器的 `OnRemoteFailure` 和 `OnAccessDenied`。
+- **优先官方机制：** OpenIddict 的授权和退出响应事件只把 ID2019 交给控制器，由 `GetOpenIddictServerResponse()` 读取。依赖方使用 ASP.NET Core OIDC 的 `OnRemoteFailure` 和 `OnAccessDenied`。
 - **安全：** 「重新登录」的目标只取已登记的值，从不取请求参数，避免开放重定向；不复用过期请求里的任何状态，MFA 和 step-up 照常执行；不自动重新挑战，避免跳转循环。
 - **UI：** 沿用模板现有错误页的 Spartan Empty 写法（`template/docs/standards/frontend-ui.md`），按原型图实现。
   - 原型图：<https://claude.ai/artifact/7yTkUV7gXUP9Ayv5kFz1oP>
@@ -92,18 +92,17 @@
 
 本节描述 F4、F5 的兜底行为（见 R0）。
 
-- 启用 `UseAspNetCore().EnableErrorPassthrough()`。
-- 授权端点和退出端点的控制器，用 `HttpContext.GetOpenIddictServerResponse()` 读到错误后，按种类导向 Identity 前端的友好页。
-- 能合法回调依赖方的错误（`redirect_uri` 有效），照常由 OpenIddict 带着 OAuth 错误回调，不变。
-- 实施时要证明：`EnableErrorPassthrough` 只影响授权端点和退出端点。其他端点各自保持既有的协议约定：
+- 在授权和退出响应事件中，等待 OpenIddict 处理合法的协议回调，再仅将请求令牌过期或失效的 ID2019 交给控制器。控制器用 `HttpContext.GetOpenIddictServerResponse()` 读取并导向相应的友好页。
+- 其他无法安全回调的协议错误由 OpenIddict 输出原有的本地协议响应。缺少 PKCE challenge、未登记的退出回调地址均保持 HTTP 400 和原协议错误体。
+- 授权和退出以外的端点及合法授权回调各自保持既有的协议约定：
   - `/connect/token`：状态码和 JSON 错误体不变；
   - `/connect/userinfo`：质询的状态码、`WWW-Authenticate` 标头，以及空响应体都不变；
   - 能合法回调依赖方的授权错误：回调时带的错误码和 `state` 不变。
 
 | 种类 | 触发条件 | 原型图画板 |
 | --- | --- | --- |
-| `login-expired` | 授权端点：ID2019（request token 过期或无效），以及其他无法安全回调的浏览器协议错误 | `IdentityExpired`；无登记入口时为 `IdentityUnknownClient` |
-| `logout-expired` | 退出端点：退出请求缓存过期或无效；以及退出确认页的确认凭据失效（`isValid: false`） | 通常为无应用版本（见 R2） |
+| `login-expired` | 授权端点：ID2019（request token 过期或失效） | `IdentityExpired`；无登记入口时为 `IdentityUnknownClient` |
+| `logout-expired` | 退出端点：ID2019（退出请求缓存过期或失效）；以及退出确认页的确认凭据失效（`isValid: false`） | 通常为无应用版本（见 R2） |
 
 #### R2 「重新登录」与「返回」的目标
 
