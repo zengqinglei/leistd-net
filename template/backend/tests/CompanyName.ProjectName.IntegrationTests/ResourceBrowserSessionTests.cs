@@ -543,6 +543,24 @@ public sealed class ResourceBrowserSessionTests
     }
 
     [Fact]
+    public async Task Login_challenge_issues_a_correlation_cookie_valid_for_one_hour()
+    {
+        using var factory = new ProjectWebApplicationFactory { UseProductionAuthentication = true };
+        using var issuer = new Issuer();
+        using var host = Host(factory, issuer);
+        using var browser = Client(host);
+        var started = DateTimeOffset.UtcNow;
+        using var challenge = await browser.GetAsync("/api/v1/auth/login");
+        AuthorizationRequest(challenge);
+
+        var correlation = Assert.Single(challenge.Headers.GetValues("Set-Cookie"),
+            value => value.StartsWith(".AspNetCore.Correlation.", StringComparison.Ordinal));
+        var cookie = Microsoft.Net.Http.Headers.SetCookieHeaderValue.Parse(correlation);
+        Assert.NotNull(cookie.Expires);
+        Assert.InRange(cookie.Expires.Value, started.AddHours(1).AddSeconds(-1), DateTimeOffset.UtcNow.AddHours(1));
+    }
+
+    [Fact]
     public async Task Missing_correlation_cannot_create_a_session_and_cross_origin_writes_are_rejected()
     {
         using var factory = new ProjectWebApplicationFactory { UseProductionAuthentication = true };

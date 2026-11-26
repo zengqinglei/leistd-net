@@ -149,6 +149,47 @@ describe('AuthService', () => {
   //#endif
   //#if (RemoteTokenAuth)
 
+  it('waits for visibility and starts only one login with the original deep link', () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    const leave = vi
+      .spyOn(TestBed.inject(FullPageNavigationService), 'replace')
+      .mockImplementation(() => undefined);
+    const destination = '/workspace?tab=roles#top';
+
+    try {
+      service.startLogin(destination);
+      service.startLogin('/workspace/settings');
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(leave).not.toHaveBeenCalled();
+
+      visibility.mockReturnValue('visible');
+      document.dispatchEvent(new Event('visibilitychange'));
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(leave).toHaveBeenCalledExactlyOnceWith(
+        `/api/v1/auth/login?returnUrl=${encodeURIComponent(destination)}`,
+      );
+    } finally {
+      visibility.mockRestore();
+    }
+  });
+
+  it('starts login immediately when the page is visible', () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    const leave = vi
+      .spyOn(TestBed.inject(FullPageNavigationService), 'replace')
+      .mockImplementation(() => undefined);
+    const destination = '/workspace?tab=roles#top';
+
+    try {
+      service.startLogin(destination);
+      expect(leave).toHaveBeenCalledExactlyOnceWith(
+        `/api/v1/auth/login?returnUrl=${encodeURIComponent(destination)}`,
+      );
+    } finally {
+      visibility.mockRestore();
+    }
+  });
+
   // 整页表单退出：页面在提交之后才离开，主体留到那时
   it('keeps the user on screen while posting the sign-out form', () => {
     signIn();
