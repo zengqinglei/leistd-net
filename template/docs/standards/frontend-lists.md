@@ -1,26 +1,46 @@
 # 前端列表、表格与详情规范
 
-列表、表格和详情亦遵循[前端界面规范](./frontend-ui.md)。
+通用样式与交互见[前端界面规范](./frontend-ui.md)。
 
 ## 1. 状态与数据
 
-- 列表的分页、排序、筛选以 URL query params 为唯一来源（`queryParamMap` 派生 + `router.navigate({ queryParams })` 回写），非法参数回退默认，不存 localStorage。
-- 详情页的实体 id 只取路由参数，分段或标签选中项放 query params（可分享、可回退）。切换 id 重载并丢弃迟到响应，页面状态放组件。
-- 加载、失败与空状态按[设计原则](./frontend-ui.md#1-设计原则)区分；服务端分页参数与排序表达式见 [API 规范 §5](./api.md#5-分页规范)。
+- 分页、排序、筛选只取 `queryParamMap`，用 `router.navigate({ queryParams })` 回写，非法值回退默认，不存 localStorage。
+- 详情页 id 只取路由参数，分段／标签选中项放 query（可分享、可回退）；切 id 重载并丢弃迟到响应，状态留组件。
+- 加载、失败与空态见[界面规范](./frontend-ui.md#1-设计原则)，服务端分页与排序见 [API §5](./api.md#5-分页规范)。
 
 ## 2. 数据表格
 
-- 页面滚动列（`flex-1 overflow-y-auto`）加 `*:shrink-0`，免得 `overflow-hidden` 子项被压扁。
-- 表格用 TanStack Table（`@tanstack/angular-table`，服务端 `manualPagination`/`manualSorting`/`rowCount`）；分页与筛选复用 `frontend/src/app/shared/components/table-paginator`、`faceted-filter`。
-- 列按优先级（`primary`/`secondary`/`tertiary`）裁剪：视口档位（`tableViewportSignal()`）给上限，带吸附操作列的表格外框挂 `[appTableFit]="tableViewport()" [appTableFitContent]="rows()"`，放不下再降一档（更新数据须换新数组）。被裁的列由 TanStack 行展开补偿（按 `getRowId` 的实体 id 记），不另建展开状态。主列用 `TITLE_COLUMN_META` 与 `TITLE_CONTENT_CLASS`：最窄档截断长名称。
-- 数据列登记 `detail: true`。展开按定义顺序列出 `hiddenDetailColumns(table)`，复用表头的 `columnLabelKeys` 和同一份 `ng-template[appColumnValue]`（`mode` 为 `cell`/`detail`），展示全文与完整时刻。非列补偿放末尾，避免重复主行。
-- 有上界的标量、枚举、短文本随行返回，展开即渲染。无上界的快照、正文、JSON、日志或嵌套集合，列表仅返摘要，展开或开抽屉时按 id 读取单资源。分页子数据按需取，按行记状态并丢弃迟到响应。值带按钮时 `dl` 用 `items-baseline`，`dd` 用不折行的 `flex items-center gap-1`，值（`min-w-0 break-all`）在前、按钮（`shrink-0`）在后，空值写「-」。
-- 抽屉需在刷新或分享后还原时，用查询参数记录打开状态；长详情用右侧 Spartan Sheet，查询参数取打开的实体 id。顶部列全表格各列，补偿被裁列。
+- 滚动列 `flex-1 overflow-y-auto` 加 `*:shrink-0`，避免 `overflow-hidden` 子项被压扁。
+- 用 TanStack Table（`@tanstack/angular-table`，服务端 `manualPagination`/`manualSorting`/`rowCount`）、`app-table-paginator` 和 `app-faceted-filter`。
+- 列按优先级 `primary`/`secondary`/`tertiary` 裁剪，`tableViewportSignal()` 给档位上限；吸附操作列的外框挂 `[appTableFit]="tableViewport()" [appTableFitContent]="rows()"`，放不下再降档，更新数据换新数组。主列用 `TITLE_COLUMN_META`、`TITLE_CONTENT_CLASS`，最窄档截断长名。
+- 数据列标 `detail: true`；TanStack 按 `getRowId` 的实体 id 管展开，不另建状态；按定义顺序补 `hiddenDetailColumns(table)`，复用 `columnLabelKeys` 和 `ng-template[appColumnValue]`（`cell`/`detail`），显示全文和完整时刻；末尾补主行未列的额外字段。
+- 有界标量、枚举、短文本随行返回，展开即渲染；无上界的快照、正文、JSON、日志、嵌套集合只返摘要，展开或开抽屉时按 id 查详情。分页子数据按需取，按行记状态、丢弃迟到响应。
+- 值带按钮时 `dl` 加 `items-baseline`，`dd` 用 `flex items-center gap-1`，先值（`min-w-0 break-all`）后按钮（`shrink-0`），空值写「-」。
+- 抽屉要在刷新或分享后还原，状态写入 query；右侧 Spartan Sheet 展示长详情，query 取实体 id，顶部列齐表格各列。
 <!--#if (IncludeWebhooks)-->
 - 抽屉示例：Webhook 投递日志的投递详情。
 <!--#endif-->
-- 排序表头：能排序的列（`column.getCanSort()`）在表头格里直接放排序按钮，用官方 sort header 写法（`hlmBtn variant="ghost" size="sm"`），文字与单元格文字对齐。加载态用 `app-table-loading`，传各表真实行高。`[attr.aria-sort]` 取 `tableSortAria`，只有当前排序的列带值；表格 spec 调用 `expectAriaSortOnSortedHeaderOnly`，覆盖无排序、排序与换列。
-- 表头（含吸附操作列的表头格）统一 `bg-muted`，正文格跟随行表面与悬停态。单元格密度用 Spartan 默认（表头 `px-2`、单元格 `p-2`），只给首列加 `first:ps-4`，页面不另写横向内边距。时间列用 `appDate` 的 `short` 槽位，完整时刻（`full`）放进可聚焦元素的 Tooltip；审计类表格（操作记录）按秒对时，用 `full`。
-- 操作列按"常用优先、破坏性置后"排序：≤3 项桌面端平铺（icon 按钮 + tooltip），>3 项显示 2 个高频操作 + `…` 溢出菜单；`<sm` 一律收进 `…`，破坏性操作用 `variant="destructive"` 并以分隔线隔开。
-- 只读溢出列表用 `frontend/src/app/shared/components/readonly-list-popover`，整个摘要是入口、数量不截断；只读浮层要可聚焦、按视口限高；条目单行截断、不给键盘与触屏全文入口是它的例外（见组件注释），其他场景截断须给可访问的全文入口。
-- **禁用原因跟着被禁用的控件走，不进数据单元格**：本人行、内置超管行等不可操作的原因，行内按钮置灰并把 Tooltip 挂在外层（禁用按钮收不到悬停），溢出菜单里在该项下方用一行 `text-xs text-muted-foreground` 说明，均以 `aria-describedby` 关联。单元格里只放标记（如姓名后的「你」徽章，`shrink-0`、姓名截断），身份列保持两行。
+- 可排序列（`column.getCanSort()`）在表头放官方排序按钮 `hlmBtn variant="ghost" size="sm"`，文字与列对齐；`[attr.aria-sort]` 用 `tableSortAria`，只给排序列，spec 用 `expectAriaSortOnSortedHeaderOnly` 测无排序、排序与换列。
+- 骨架用 `app-table-loading`，传实际行高。表头（含吸附列）用 `bg-muted`，正文跟随行的常态与悬停；保留 Spartan 表头 `px-2`、正文格 `p-2`，只加首列 `first:ps-4`。时间列用 `appDate` 的 `short`，把 `full` 放入可聚焦 Tooltip；审计表格按秒对时，用 `full`。
+- 操作按常用在前、破坏性在后；桌面 ≤3 项平铺图标按钮加 Tooltip，>3 项留两项，其余进「…」，`<sm` 全收。破坏性项用 `variant="destructive"`，以分隔线隔开。
+- 只读溢出用 `readonly-list-popover`；摘要全可点、数量完整，浮层可聚焦并按视口限高。仅此处条目单行截断可免键盘与触屏全文入口。
+- 禁用原因跟随控件，以 `aria-describedby` 关联；置灰按钮的 Tooltip 挂外层，菜单说明放该项下方（`text-xs text-muted-foreground`）。原因不进数据格；身份列保留两行，姓名截断、「你」徽章 `shrink-0`。
+
+## 3. 后台列表页
+
+- 指标卡 → `hlm-tabs-list variant="line"`（外层 `border-b`）→ 工具栏 → 表格 → 分页；Tab 若带计数，只标待关注异常。
+- `app-stat-panel` 网格用 `grid-cols-2 @[54rem]:grid-cols-4`（三张卡用三列）；可下钻用按钮带筛选跳转。
+- 分布式事件异常数为正才用 `text-destructive`；Webhook 对比期超出保留期显示「无可比数据」，不补 0。
+- 工具栏右组依次放 `hlm-date-range-picker`、`secondary` 刷新、当前 Tab 的主操作（若有）；仅记录列表有时间范围，切 Tab 清除。
+- 状态用单选 `hlm-toggle-group`，再点回到全部；其他分类用分面筛选。
+- 恢复列表有勾选或筛到可批量操作状态才显示选择条；不可操作行保留禁用复选框，原因按 §2。
+- 恢复确认写条数、范围与后果，重放提示可能重复执行的副作用。
+- 整行和「详情」均可开抽屉，行内控件各自响应。
+
+## 4. 详情抽屉
+
+- 记录详情 Sheet 窄屏占满，用 `data-[side=right]:w-full data-[side=right]:sm:max-w-2xl`。
+- `hlmSheetTitle` 后紧接状态徽章，下行 `text-xs` 元信息和可复制 ID；操作贴标题行右侧，破坏性项收进「…」，按 §2 分隔。
+- 失败原因与下一步置于正文顶部 `hlmAlert`；正文纵排分区，不用 Tabs，标题行 `text-sm font-semibold border-b pb-3`。
+- `dl` 用 `grid-cols-[8rem_minmax(0,1fr)]` 对齐标签列；长标识用 `break-all` 等折行，不省略。
+- 原始长文本用 `pre`（`bg-muted rounded-md font-mono text-xs`）；独立滚动块用 `max-h-*` 与 `overflow-auto`，载荷复制有反馈。

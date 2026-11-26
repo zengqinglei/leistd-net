@@ -61,7 +61,7 @@
 | 14px | 分区标题 | `text-sm font-semibold` |
 | 14px | 正文、表格、按钮、输入 | `text-sm` |
 | 12px | 辅助说明、时间戳、徽章 | `text-xs` |
-| 30px | 仅仪表盘大数字 | `text-3xl` + `tabular-nums` |
+| 30px | 仪表盘与指标卡的大数字 | `text-3xl` + `tabular-nums` |
 
 - 营销页（着陆页、认证页品牌面板）可用 `text-4xl` 到 `text-6xl` 的展示字号、光晕、同心细环与渐变字，仍不用任意值。应用内仅工作台欢迎区例外：问候与搜索背后可有顶部居中的主色淡光晕（约12%），数据区仍用普通表面。
 - 列表页可从工具栏开始，因为面包屑与标签页已说明位置。
@@ -83,11 +83,11 @@
 - **页头一行同高32px**：照 shadcn 官方站点页头，页头及着陆页、认证页工具条的按钮用 `sm` / `icon-sm`，与默认头像、Logo、侧栏触发器同高，头像触发器按钮与头像同大；项间 `gap-3`，比官方 `gap-2` 略宽，是本模板的有意取舍。默认36px档留给表单与内容区，触屏44px由组件补足。
 - **间距**：兄弟元素之间用 `flex` / `grid` + `gap-*`，不用 `space-y-*` 与逐个元素的外边距。页面外框统一 `p-4 sm:p-6`。
 - **暗色**：表面分五层逐级提亮（`sidebar` < `background` < `card` < `popover` < `muted`），不用纯黑；层级都在 `styles.css` 里定好，页面不写 `dark:` 颜色覆盖。
-- **空态与首次加载失败用 Spartan Empty**，重试按钮放 content；表格放在 colspan 单元格内，保留错误语义。
+- **空态与首次加载失败用 Spartan Empty**，区分暂无数据、筛选无匹配与读取失败，重试放 content；表格用 colspan 单元格，保留错误语义。
 
 ### 2.7 弹窗生命周期
 
-本节对弹窗与抽屉（Sheet）同样适用；抽屉用官方 `hlmSheetHeader`/`hlmSheetFooter`。业务弹窗静态 `disableClose`、禁外点并隐藏内置关闭钮，由 `app-dialog-close` 的 `requestClose()` 统一处理遮罩点击、Esc、关闭与取消：无修改直接关，dirty/集合变化时确认放弃，busy 时拒绝用户退出。确认类对话框（`ConfirmService`、确认身份）要求明确作答，点遮罩不关；自写的确认类对话框给 `app-dialog-close` 设 `[closeOnBackdrop]="false"`。成功、父级强制关闭和销毁直接关闭；凭据不确认，关闭即清空。浏览器后退/前进视为离开页面：弹窗与抽屉随导航关闭（CDK 默认 `closeOnNavigation`），不经 `requestClose()` 确认，进行中的写请求照常完成；模板不提供路由级未保存守卫。抽屉打开状态的恢复见[列表与表格规范](./frontend-lists.md#2-数据表格)。
+弹窗与抽屉（Sheet）同用本节；抽屉用 `hlmSheetHeader`/`hlmSheetFooter`，只读抽屉沿用默认的遮罩点击关闭。业务弹窗静态 `disableClose`、禁外点并隐藏内置关闭钮，由 `app-dialog-close` 的 `requestClose()` 统一处理遮罩点击、Esc、关闭与取消：无修改直接关，dirty/集合变化时确认放弃，busy 时拒绝用户退出。确认类对话框（`ConfirmService`、确认身份）要求明确作答，点遮罩不关；自写的确认类对话框给 `app-dialog-close` 设 `[closeOnBackdrop]="false"`。成功、父级强制关闭和销毁直接关闭；凭据不确认，关闭即清空。浏览器后退/前进视为离开页面：弹窗与抽屉随导航关闭（CDK 默认 `closeOnNavigation`），不经 `requestClose()` 确认，进行中的写请求照常完成；模板不提供路由级未保存守卫。抽屉打开状态的恢复见[列表与表格规范](./frontend-lists.md#2-数据表格)。
 
 同步内容聚焦主输入；异步先聚焦标题，`appDialogFocus` 仅在焦点仍留在标题时迁入输入。关闭后回焦业务入口，验证菜单项销毁及弹窗接力场景。正文标 `data-dialog-body`，限高、单层滚动；页脚在正文外且不收缩，服务动态打开的公共弹窗同样适用；自定义关闭按钮不占布局位置。打开后内容会变（异步加载、切换形态、增减字段）的弹窗定高、保持居中，取容纳各状态的最小档（`h-96`/`h-120`/`h-160`），加载、失败、空态按 §1 占满正文；内容固定的短弹窗自适应。
 
