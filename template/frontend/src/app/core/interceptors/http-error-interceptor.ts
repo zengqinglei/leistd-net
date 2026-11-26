@@ -94,7 +94,7 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
           void router.navigate(['/auth/login'], { queryParams: { returnUrl: entryRoute.url() } });
           //#else
           // 服务端已尝试刷新；401 表示会话无法续期或已撤销，重新发起整页认证。
-          authService.startLogin(entryRoute.url());
+          authService.startLogin(entryRoute.url(true));
           //#endif
         }
       }

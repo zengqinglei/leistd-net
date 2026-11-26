@@ -31,15 +31,15 @@ export class EntryRouteService {
   }
 
   /**
-   * 应用内 URL，保留查询串（用作落地地址）。扣着导航目标时返回该目标。
+   * 应用内 URL，保留查询串；整页重新登录时可一并取片段。扣着导航目标时返回该目标。
    *
    * `Location.path()` 对站点根给出 `''`、对带查询串的根给出 `?a=1`，这里统一补成以 `/` 开头。
    */
-  url(): string {
+  url(includeFragment = false): string {
     if (this.heldTarget) {
       return this.heldTarget;
     }
-    const path = this.location.path();
+    const path = this.location.path(includeFragment);
     return path.startsWith('/') ? path : `/${path}`;
   }
 

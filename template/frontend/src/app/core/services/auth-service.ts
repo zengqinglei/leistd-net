@@ -1,6 +1,12 @@
 import { HttpClient, HttpContext } from '@angular/common/http';
 import { Injectable, Injector, inject, signal } from '@angular/core';
+//#if (RemoteTokenAuth)
+import { DOCUMENT, DestroyRef } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Observable, defer, filter, fromEvent, lastValueFrom, take, tap } from 'rxjs';
+//#else
 import { Observable, defer, lastValueFrom, tap } from 'rxjs';
+//#endif
 
 //#if (LocalIdentity)
 import { PasskeyOptionsOutputDto } from '../../shared/dtos/account-security.dto';
@@ -49,6 +55,9 @@ export class AuthService {
   //#endif
   //#if (RemoteTokenAuth)
   private readonly isMockedUrl = inject(MOCKED_URL);
+  private readonly document = inject(DOCUMENT);
+  private readonly destroyRef = inject(DestroyRef);
+  private waitingForVisibleLogin = false;
   //#endif
 
   private readonly _currentUser = signal<User | null>(null);
@@ -205,6 +214,23 @@ export class AuthService {
   //#if (RemoteTokenAuth)
 
   startLogin(returnUrl = '/workspace'): void {
+    if (this.waitingForVisibleLogin) return;
+
+    if (this.document.visibilityState !== 'visible') {
+      this.waitingForVisibleLogin = true;
+      fromEvent(this.document, 'visibilitychange')
+        .pipe(
+          filter(() => this.document.visibilityState === 'visible'),
+          take(1),
+          takeUntilDestroyed(this.destroyRef),
+        )
+        .subscribe(() => {
+          this.waitingForVisibleLogin = false;
+          this.startLogin(returnUrl);
+        });
+      return;
+    }
+
     if (this.isMockedUrl('/api/v1/auth/login')) {
       this.http.post('/api/v1/auth/login', {}).subscribe(() => this.fullPage.replace(returnUrl));
       return;
